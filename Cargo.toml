@@ -12,12 +12,14 @@ readme = "README.md"
 [dependencies]
 base64 = "0.12.2"
 chrono = "0.4.11"
+log = "0.4.8"
 opentelemetry = "0.6.0"
 serde = { version = "1.0.113", features = ["derive"] }
 serde_json = "1.0.55"
 ureq = { version = "1.2.0", features = ["json"] }
 
 [dev-dependencies]
+env_logger = "0.7.1"
 tokio = { version = "0.2.21", features = ["macros", "process", "time"] }
 tracing = "0.1.15"
 tracing-attributes = "0.1.8"

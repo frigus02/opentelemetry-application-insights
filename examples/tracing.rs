@@ -29,7 +29,7 @@ async fn spawn_child_process(process_name: &str) {
     let child = Command::new(process_name)
         .arg(
             carrier
-                .remove("traceparent".into())
+                .remove("traceparent")
                 .expect("popagator should inject traceparent"),
         )
         .spawn();

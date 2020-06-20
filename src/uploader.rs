@@ -1,4 +1,5 @@
 use crate::models::Envelope;
+use log::debug;
 use serde::Deserialize;
 
 const URL: &str = "https://dc.services.visualstudio.com/v2/track";
@@ -39,38 +40,55 @@ pub(crate) fn send(items: Vec<Envelope>) -> Response {
         Err(_) => return Response::NoRetry,
     };
     let response = ureq::post(URL)
-        .timeout_connect(10_000)
+        .timeout_connect(5_000)
         .timeout_read(10_000)
+        .timeout_write(10_000)
         .send_json(payload);
     match response.status() {
-        STATUS_OK => Response::Success,
-        STATUS_PARTIAL_CONTENT => {
+        STATUS_OK => {
+            debug!("Upload successful");
+            Response::Success
+        }
+        status @ STATUS_PARTIAL_CONTENT => {
             let content: Transmission = match response.into_json_deserialize() {
                 Ok(content) => content,
                 Err(_err) => return Response::NoRetry,
             };
             if content.items_received == content.items_accepted {
+                debug!("Upload successful");
                 Response::Success
             } else if content.errors.iter().any(|item| can_retry_item(item)) {
+                debug!("Upload error {}. Some items may be retried", status);
                 Response::Retry
             } else {
+                debug!("Upload error {}. No retry possible", status);
                 Response::NoRetry
             }
         }
-        STATUS_TOO_MANY_REQUESTS | STATUS_REQUEST_TIMEOUT => Response::Retry,
-        STATUS_SERVICE_UNAVAILABLE => Response::Retry,
-        STATUS_INTERNAL_SERVER_ERROR => {
+        status @ STATUS_TOO_MANY_REQUESTS
+        | status @ STATUS_REQUEST_TIMEOUT
+        | status @ STATUS_SERVICE_UNAVAILABLE => {
+            debug!("Upload error {}. Retry possible", status);
+            Response::Retry
+        }
+        status @ STATUS_INTERNAL_SERVER_ERROR => {
             if let Ok(content) = response.into_json_deserialize::<Transmission>() {
                 if content.errors.iter().any(|item| can_retry_item(item)) {
+                    debug!("Upload error {}. Some items may be retried", status);
                     Response::Retry
                 } else {
+                    debug!("Upload error {}. No retry possible", status);
                     Response::NoRetry
                 }
             } else {
+                debug!("Upload error {}. Some items may be retried", status);
                 Response::Retry
             }
         }
-        _ => Response::NoRetry,
+        status => {
+            debug!("Upload error {}. No retry possible", status);
+            Response::NoRetry
+        }
     }
 }
 

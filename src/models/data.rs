@@ -5,7 +5,10 @@ use serde::Serialize;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "baseType", content = "baseData")]
 pub(crate) enum Data {
-    MessageData(MessageData),
-    RemoteDependencyData(RemoteDependencyData),
-    RequestData(RequestData),
+    #[serde(rename = "MessageData")]
+    Message(MessageData),
+    #[serde(rename = "RemoteDependencyData")]
+    RemoteDependency(RemoteDependencyData),
+    #[serde(rename = "RequestData")]
+    Request(RequestData),
 }

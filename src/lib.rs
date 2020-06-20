@@ -9,13 +9,10 @@
 //! use opentelemetry::{global, sdk};
 //!
 //! fn init_tracer() {
-//!     let exporter = opentelemetry_application_insights::Exporter::new("...");
+//!     let instrumentation_key = "...".to_string();
+//!     let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
 //!     let provider = sdk::Provider::builder()
 //!         .with_simple_exporter(exporter)
-//!         .with_config(sdk::Config {
-//!             default_sampler: Box::new(sdk::Sampler::AlwaysOn),
-//!             ..Default::default()
-//!         })
 //!         .build();
 //!     global::set_provider(provider);
 //! }
@@ -27,7 +24,7 @@ mod models;
 mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use models::{Base, Data, Envelope, MessageData, RemoteDependencyData, RequestData};
+use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData};
 use opentelemetry::api::{Event, Key, KeyValue, SpanId, SpanKind, StatusCode, TraceId, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::sdk::EvictedHashMap;
@@ -185,7 +182,7 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
 
     RequestAttributes {
         source,
-        response_code: response_code.unwrap_or_else(|| "".into()),
+        response_code: response_code.unwrap_or_else(|| "none".into()),
         url,
         properties: if properties.is_empty() {
             None
@@ -259,7 +256,7 @@ fn new_envelope(
     span: &Arc<trace::SpanData>,
     name: String,
     instrumentation_key: String,
-    data: Base,
+    data: Data,
 ) -> Envelope {
     Envelope {
         name,
@@ -276,7 +273,7 @@ fn new_envelope_for_event(
     span: &Arc<trace::SpanData>,
     name: String,
     instrumentation_key: String,
-    data: Base,
+    data: Data,
 ) -> Envelope {
     Envelope {
         name,
@@ -293,7 +290,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
     result.push(match span.span_kind {
         SpanKind::Client | SpanKind::Producer => {
             let attrs = extract_dependency_attrs(&span.attributes);
-            let data = Base::Data(Data::RemoteDependencyData(RemoteDependencyData {
+            let data = Data::RemoteDependency(RemoteDependencyData {
                 id: Some(span_id_to_string(span.span_context.span_id())),
                 name: span.name.clone(),
                 result_code: attrs.result_code,
@@ -308,7 +305,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 type_: attrs.type_,
                 properties: attrs.properties,
                 ..RemoteDependencyData::default()
-            }));
+            });
             new_envelope(
                 &span,
                 "Microsoft.ApplicationInsights.RemoteDependency".into(),
@@ -318,7 +315,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
         }
         SpanKind::Server | SpanKind::Consumer | SpanKind::Internal => {
             let attrs = extract_request_attrs(&span.attributes);
-            let data = Base::Data(Data::RequestData(RequestData {
+            let data = Data::Request(RequestData {
                 id: span_id_to_string(span.span_context.span_id()),
                 source: attrs.source,
                 name: Some(span.name.clone()),
@@ -332,7 +329,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 url: attrs.url,
                 properties: attrs.properties,
                 ..RequestData::default()
-            }));
+            });
             new_envelope(
                 &span,
                 "Microsoft.ApplicationInsights.Request".into(),
@@ -344,11 +341,11 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
 
     for event in span.message_events.iter() {
         let attrs = extract_trace_attrs(&event.attributes);
-        let data = Base::Data(Data::MessageData(MessageData {
+        let data = Data::Message(MessageData {
             message: event.name.clone(),
             properties: attrs.properties,
             ..MessageData::default()
-        }));
+        });
         result.push(new_envelope_for_event(
             &event,
             &span,

@@ -31,7 +31,7 @@ async fn spawn_child_process(process_name: &str) {
         .span_builder("spawn_child_process")
         .with_kind(SpanKind::Server)
         .start(&tracer);
-    span.set_attribute(Key::new("process_name").string(process_name.clone()));
+    span.set_attribute(Key::new("process_name").string(process_name.to_string()));
     let cx = Context::current_with_span(span);
 
     let mut carrier = HashMap::new();
@@ -40,7 +40,7 @@ async fn spawn_child_process(process_name: &str) {
     let child = Command::new(process_name)
         .arg(
             carrier
-                .remove("traceparent".into())
+                .remove("traceparent")
                 .expect("popagator should inject traceparent"),
         )
         .spawn();
@@ -60,6 +60,8 @@ async fn run_in_child_process() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let mut iter = env::args();
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();

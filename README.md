@@ -21,20 +21,16 @@ Configure the exporter:
 use opentelemetry::{global, sdk};
 
 fn init_tracer() {
-    let instrumentation_key = "...";
+    let instrumentation_key = "...".to_string();
     let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
     let provider = sdk::Provider::builder()
         .with_simple_exporter(exporter)
-        .with_config(sdk::Config {
-            default_sampler: Box::new(sdk::Sampler::AlwaysOn),
-            ..Default::default()
-        })
         .build();
     global::set_provider(provider);
 }
 ```
 
-Then follow documentation of the[opentracing](https://github.com/open-telemetry/opentelemetry-rust) library to submit spans and events.
+Then follow documentation of the [opentelemetry](https://github.com/open-telemetry/opentelemetry-rust) library to submit spans and events.
 
 ## Attribute mapping
 

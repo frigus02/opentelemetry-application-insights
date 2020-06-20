@@ -1,4 +1,4 @@
-use crate::models::Base;
+use crate::models::Data;
 use serde::Serialize;
 
 /// System variables for a telemetry item.
@@ -13,7 +13,7 @@ pub(crate) struct Envelope {
     pub(crate) i_key: Option<String>,
     pub(crate) flags: Option<i64>,
     pub(crate) tags: Option<std::collections::BTreeMap<String, String>>,
-    pub(crate) data: Option<Base>,
+    pub(crate) data: Option<Data>,
 }
 
 impl Default for Envelope {
