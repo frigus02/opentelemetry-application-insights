@@ -121,10 +121,12 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
     if span.span_kind == SpanKind::Internal {
         map.insert("ai.operation.name".into(), "OPERATION".into());
     }
-    map.insert(
-        "ai.operation.parentId".into(),
-        span_id_to_string(span.parent_span_id),
-    );
+    if span.parent_span_id != SpanId::invalid() {
+        map.insert(
+            "ai.operation.parentId".into(),
+            span_id_to_string(span.parent_span_id),
+        );
+    }
     // ai.operation.syntheticSource
     // ai.operation.correlationVector
     // ai.session.id

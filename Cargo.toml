@@ -15,3 +15,7 @@ chrono = "0.4.11"
 opentelemetry = "0.6.0"
 reqwest = { version = "0.10.6", features = ["blocking", "json"] }
 serde = { version = "1.0.113", features = ["derive"] }
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["macros", "process"] }
+opentelemetry-jaeger = "0.5.0"

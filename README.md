@@ -1,5 +1,9 @@
 # opentelemetry-application-insights
 
+## Todo
+
+- [ ] Support semantic conventions: https://github.com/open-telemetry/opentelemetry-specification/tree/d46c3618552e70676c92e2a8d1552e77770c0cce/specification/trace/semantic_conventions
+
 ## Application Insights integration
 
 The integration is based on resources mentioned here:
