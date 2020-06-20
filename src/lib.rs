@@ -27,7 +27,7 @@ mod contracts;
 mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use contracts::{Base, Data, Envelope, RemoteDependencyData};
+use contracts::{Base, Data, Envelope, RemoteDependencyData, RequestData};
 use opentelemetry::api::trace::span::SpanKind;
 use opentelemetry::api::trace::span_context::{SpanId, TraceId};
 use opentelemetry::api::{Key, Value};
@@ -58,13 +58,6 @@ impl Exporter {
 impl trace::SpanExporter for Exporter {
     /// Export spans to Application Insights
     fn export(&self, batch: Vec<Arc<trace::SpanData>>) -> trace::ExportResult {
-        //match self.uploader.lock() {
-        //    Ok(mut uploader) => {
-        //        let jaeger_spans = batch.into_iter().map(Into::into).collect();
-        //        uploader.upload(jaeger::Batch::new(self.process.clone(), jaeger_spans))
-        //    }
-        //    Err(_) => trace::ExportResult::FailedNotRetryable,
-        //}
         let envelopes = batch
             .into_iter()
             .flat_map(|span| into_envelopes(span, self.instrumentation_key.clone()))
@@ -124,7 +117,9 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
         "ai.operation.id".into(),
         trace_id_to_string(span.span_context.trace_id()),
     );
-    // ai.operation.name
+    if span.span_kind == SpanKind::Internal {
+        map.insert("ai.operation.name", "OPERATION");
+    }
     map.insert(
         "ai.operation.parentId".into(),
         span_id_to_string(span.parent_span_id),
@@ -146,11 +141,59 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
     map
 }
 
+const ATTR_REQUEST_SOURCE: &str = "request.source";
+const ATTR_REQUEST_RESPONSE_CODE: &str = "request.response_code";
+const ATTR_REQUEST_SUCCESS: &str = "request.success";
+const ATTR_REQUEST_URL: &str = "request.url";
 const ATTR_DEPENDENCY_RESULT_CODE: &str = "dependency.result_code";
 const ATTR_DEPENDENCY_SUCCESS: &str = "dependency.success";
 const ATTR_DEPENDENCY_DATA: &str = "dependency.data";
 const ATTR_DEPENDENCY_TARGET: &str = "dependency.target";
 const ATTR_DEPENDENCY_TYPE: &str = "dependency.type";
+
+struct RequestAttributes {
+    source: Option<String>,
+    response_code: String,
+    success: bool,
+    url: Option<String>,
+    properties: Option<BTreeMap<String, String>>,
+}
+
+fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
+    let mut source = None;
+    let mut response_code = None;
+    let mut success = None;
+    let mut url = None;
+    let mut properties = BTreeMap::new();
+    for (key, value) in attrs.iter() {
+        if key == &Key::new(ATTR_REQUEST_SOURCE) {
+            source = Some(value_to_string(value));
+        } else if key == &Key::new(ATTR_REQUEST_RESPONSE_CODE) {
+            response_code = Some(value_to_string(value));
+        } else if key == &Key::new(ATTR_REQUEST_SUCCESS) {
+            success = Some(match value {
+                Value::Bool(v) => v.to_owned(),
+                _ => false,
+            });
+        } else if key == &Key::new(ATTR_REQUEST_URL) {
+            url = Some(value_to_string(value));
+        } else {
+            properties.insert(key.as_str().to_string(), value_to_string(value));
+        }
+    }
+
+    RequestAttributes {
+        source,
+        response_code: response_code.unwrap_or_else(|| "-1".into()),
+        success: success.unwrap_or(false),
+        url,
+        properties: if properties.is_empty() {
+            None
+        } else {
+            Some(properties)
+        },
+    }
+}
 
 struct DependencyAttributes {
     result_code: Option<String>,
@@ -223,8 +266,8 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
         SpanKind::Client | SpanKind::Producer => {
             let attrs = extract_dependency_attrs(&span.attributes);
             let data = Base::Data(Data::RemoteDependencyData(RemoteDependencyData {
-                name: span.name.clone(),
                 id: Some(span_id_to_string(span.span_context.span_id())),
+                name: span.name.clone(),
                 result_code: attrs.result_code,
                 duration: duration_to_string(
                     span.end_time
@@ -245,14 +288,30 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 data,
             )
         }
-        SpanKind::Server | SpanKind::Consumer => Envelope {
-            // request, page view
-            ..Envelope::default()
-        },
-        SpanKind::Internal => Envelope {
-            //trace
-            ..Envelope::default()
-        },
+        SpanKind::Server | SpanKind::Consumer | SpanKind::Internal => {
+            let attrs = extract_request_attrs(&span.attributes);
+            let data = Base::Data(Data::RequestData(RequestData {
+                id: span_id_to_string(span.span_context.span_id()),
+                source: attrs.source,
+                name: Some(span.name.clone()),
+                duration: duration_to_string(
+                    span.end_time
+                        .duration_since(span.start_time)
+                        .expect("start time should be before end time"),
+                ),
+                response_code: attrs.response_code,
+                success: attrs.success,
+                url: attrs.url,
+                properties: attrs.properties,
+                ..RequestData::default()
+            }));
+            new_envelope(
+                span,
+                "Microsoft.ApplicationInsights.Request".into(),
+                instrumentation_key,
+                data,
+            )
+        }
     });
 
     result
