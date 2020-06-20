@@ -23,24 +23,22 @@
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 
-mod contracts;
+mod models;
 mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use contracts::{Base, Data, Envelope, MessageData, RemoteDependencyData, RequestData};
+use models::{Base, Data, Envelope, MessageData, RemoteDependencyData, RequestData};
 use opentelemetry::api::{Event, Key, KeyValue, SpanId, SpanKind, StatusCode, TraceId, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::sdk::EvictedHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use uploader::Uploader;
 
 /// Application Insights span exporter
 #[derive(Debug)]
 pub struct Exporter {
     instrumentation_key: String,
-    uploader: Uploader,
 }
 
 impl Exporter {
@@ -48,7 +46,6 @@ impl Exporter {
     pub fn new(instrumentation_key: String) -> Self {
         Self {
             instrumentation_key,
-            uploader: Uploader::new(),
         }
     }
 }
@@ -60,7 +57,7 @@ impl trace::SpanExporter for Exporter {
             .into_iter()
             .flat_map(|span| into_envelopes(span, self.instrumentation_key.clone()))
             .collect();
-        self.uploader.send(envelopes).into()
+        uploader::send(envelopes).into()
     }
 
     fn shutdown(&self) {}

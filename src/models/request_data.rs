@@ -1,22 +1,19 @@
-use crate::contracts::*;
 use serde::Serialize;
-
-// NOTE: This file was automatically generated.
 
 /// An instance of Request represents completion of an external request to the application to do work and contains a summary of that request execution and the results.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RequestData {
-    pub ver: i32,
-    pub id: String,
-    pub source: Option<String>,
-    pub name: Option<String>,
-    pub duration: String,
-    pub response_code: String,
-    pub success: bool,
-    pub url: Option<String>,
-    pub properties: Option<std::collections::BTreeMap<String, String>>,
-    pub measurements: Option<std::collections::BTreeMap<String, f64>>,
+pub(crate) struct RequestData {
+    pub(crate) ver: i32,
+    pub(crate) id: String,
+    pub(crate) source: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) duration: String,
+    pub(crate) response_code: String,
+    pub(crate) success: bool,
+    pub(crate) url: Option<String>,
+    pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
+    pub(crate) measurements: Option<std::collections::BTreeMap<String, f64>>,
 }
 
 impl Default for RequestData {

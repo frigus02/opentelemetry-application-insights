@@ -1,21 +1,19 @@
-use crate::contracts::*;
+use crate::models::Base;
 use serde::Serialize;
-
-// NOTE: This file was automatically generated.
 
 /// System variables for a telemetry item.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Envelope {
-    pub ver: Option<i32>,
-    pub name: String,
-    pub time: String,
-    pub sample_rate: Option<f64>,
-    pub seq: Option<String>,
-    pub i_key: Option<String>,
-    pub flags: Option<i64>,
-    pub tags: Option<std::collections::BTreeMap<String, String>>,
-    pub data: Option<Base>,
+pub(crate) struct Envelope {
+    pub(crate) ver: Option<i32>,
+    pub(crate) name: String,
+    pub(crate) time: String,
+    pub(crate) sample_rate: Option<f64>,
+    pub(crate) seq: Option<String>,
+    pub(crate) i_key: Option<String>,
+    pub(crate) flags: Option<i64>,
+    pub(crate) tags: Option<std::collections::BTreeMap<String, String>>,
+    pub(crate) data: Option<Base>,
 }
 
 impl Default for Envelope {

@@ -1,23 +1,20 @@
-use crate::contracts::*;
 use serde::Serialize;
-
-// NOTE: This file was automatically generated.
 
 /// An instance of Remote Dependency represents an interaction of the monitored component with a remote component/service like SQL or an HTTP endpoint.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RemoteDependencyData {
-    pub ver: i32,
-    pub name: String,
-    pub id: Option<String>,
-    pub result_code: Option<String>,
-    pub duration: String,
-    pub success: Option<bool>,
-    pub data: Option<String>,
-    pub target: Option<String>,
-    pub type_: Option<String>,
-    pub properties: Option<std::collections::BTreeMap<String, String>>,
-    pub measurements: Option<std::collections::BTreeMap<String, f64>>,
+pub(crate) struct RemoteDependencyData {
+    pub(crate) ver: i32,
+    pub(crate) name: String,
+    pub(crate) id: Option<String>,
+    pub(crate) result_code: Option<String>,
+    pub(crate) duration: String,
+    pub(crate) success: Option<bool>,
+    pub(crate) data: Option<String>,
+    pub(crate) target: Option<String>,
+    pub(crate) type_: Option<String>,
+    pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
+    pub(crate) measurements: Option<std::collections::BTreeMap<String, f64>>,
 }
 
 impl Default for RemoteDependencyData {

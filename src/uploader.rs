@@ -1,4 +1,4 @@
-use crate::contracts::Envelope;
+use crate::models::Envelope;
 use serde::Deserialize;
 
 const URL: &str = "https://dc.services.visualstudio.com/v2/track";
@@ -10,15 +10,11 @@ const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
 const STATUS_SERVICE_UNAVAILABLE: u16 = 503;
 
 #[derive(Debug, PartialEq)]
-pub enum Response {
+pub(crate) enum Response {
     Success,
     Retry,
     NoRetry,
 }
-
-/// Sends telemetry items to the server.
-#[derive(Debug)]
-pub(crate) struct Uploader {}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,52 +32,45 @@ struct TransmissionItem {
     message: String,
 }
 
-impl Uploader {
-    /// Creates a new instance of telemetry items sender.
-    pub(crate) fn new() -> Self {
-        Self {}
-    }
-
-    /// Sends a telemetry items to the server.
-    pub(crate) fn send(&self, items: Vec<Envelope>) -> Response {
-        let payload = match serde_json::to_value(items) {
-            Ok(payload) => payload,
-            Err(_) => return Response::NoRetry,
-        };
-        let response = ureq::post(URL)
-            .timeout_connect(10_000)
-            .timeout_read(10_000)
-            .send_json(payload);
-        match response.status() {
-            STATUS_OK => Response::Success,
-            STATUS_PARTIAL_CONTENT => {
-                let content: Transmission = match response.into_json_deserialize() {
-                    Ok(content) => content,
-                    Err(_err) => return Response::NoRetry,
-                };
-                if content.items_received == content.items_accepted {
-                    Response::Success
-                } else if content.errors.iter().any(|item| can_retry_item(item)) {
+/// Sends a telemetry items to the server.
+pub(crate) fn send(items: Vec<Envelope>) -> Response {
+    let payload = match serde_json::to_value(items) {
+        Ok(payload) => payload,
+        Err(_) => return Response::NoRetry,
+    };
+    let response = ureq::post(URL)
+        .timeout_connect(10_000)
+        .timeout_read(10_000)
+        .send_json(payload);
+    match response.status() {
+        STATUS_OK => Response::Success,
+        STATUS_PARTIAL_CONTENT => {
+            let content: Transmission = match response.into_json_deserialize() {
+                Ok(content) => content,
+                Err(_err) => return Response::NoRetry,
+            };
+            if content.items_received == content.items_accepted {
+                Response::Success
+            } else if content.errors.iter().any(|item| can_retry_item(item)) {
+                Response::Retry
+            } else {
+                Response::NoRetry
+            }
+        }
+        STATUS_TOO_MANY_REQUESTS | STATUS_REQUEST_TIMEOUT => Response::Retry,
+        STATUS_SERVICE_UNAVAILABLE => Response::Retry,
+        STATUS_INTERNAL_SERVER_ERROR => {
+            if let Ok(content) = response.into_json_deserialize::<Transmission>() {
+                if content.errors.iter().any(|item| can_retry_item(item)) {
                     Response::Retry
                 } else {
                     Response::NoRetry
                 }
+            } else {
+                Response::Retry
             }
-            STATUS_TOO_MANY_REQUESTS | STATUS_REQUEST_TIMEOUT => Response::Retry,
-            STATUS_SERVICE_UNAVAILABLE => Response::Retry,
-            STATUS_INTERNAL_SERVER_ERROR => {
-                if let Ok(content) = response.into_json_deserialize::<Transmission>() {
-                    if content.errors.iter().any(|item| can_retry_item(item)) {
-                        Response::Retry
-                    } else {
-                        Response::NoRetry
-                    }
-                } else {
-                    Response::Retry
-                }
-            }
-            _ => Response::NoRetry,
         }
+        _ => Response::NoRetry,
     }
 }
 
