@@ -25,25 +25,42 @@ mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData};
-use opentelemetry::api::{Event, Key, KeyValue, SpanId, SpanKind, StatusCode, TraceId, Value};
+use opentelemetry::api::{Key, KeyValue, SpanId, SpanKind, StatusCode, TraceId, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::sdk::EvictedHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 /// Application Insights span exporter
 #[derive(Debug)]
 pub struct Exporter {
     instrumentation_key: String,
+    common_tags: BTreeMap<String, String>,
 }
 
 impl Exporter {
     /// Create a new exporter builder.
     pub fn new(instrumentation_key: String) -> Self {
+        let mut common_tags = BTreeMap::new();
+        common_tags.insert(
+            "ai.internal.sdkVersion".into(),
+            format!(
+                "{}:{}",
+                std::env!("CARGO_PKG_NAME"),
+                std::env!("CARGO_PKG_VERSION")
+            ),
+        );
         Self {
             instrumentation_key,
+            common_tags,
         }
+    }
+
+    /// Adds specified application version to all telemetry items.
+    pub fn with_application_version(mut self, ver: String) -> Self {
+        self.common_tags.insert("ai.application.ver".into(), ver);
+        self
     }
 }
 
@@ -52,7 +69,7 @@ impl trace::SpanExporter for Exporter {
     fn export(&self, batch: Vec<Arc<trace::SpanData>>) -> trace::ExportResult {
         let envelopes = batch
             .into_iter()
-            .flat_map(|span| into_envelopes(span, self.instrumentation_key.clone()))
+            .flat_map(|span| into_envelopes(span, &self.instrumentation_key, &self.common_tags))
             .collect();
         uploader::send(envelopes).into()
     }
@@ -81,6 +98,10 @@ fn duration_to_string(duration: Duration) -> String {
     )
 }
 
+fn time_to_string(time: SystemTime) -> String {
+    DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
 fn value_to_string(value: &Value) -> String {
     match value {
         Value::Bool(v) => v.to_string(),
@@ -92,19 +113,8 @@ fn value_to_string(value: &Value) -> String {
     }
 }
 
-fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
+fn get_tags_from_span(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
-    // ai.application.ver
-    // ai.device.id
-    // ai.device.locale
-    // ai.device.model
-    // ai.device.oemName
-    // ai.device.osVersion
-    // ai.device.type
-    // ai.location.ip
-    // ai.location.country
-    // ai.location.province
-    // ai.location.city
     map.insert(
         "ai.operation.id".into(),
         trace_id_to_string(span.span_context.trace_id()),
@@ -118,24 +128,10 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
             span_id_to_string(span.parent_span_id),
         );
     }
-    // ai.operation.syntheticSource
-    // ai.operation.correlationVector
-    // ai.session.id
-    // ai.session.isFirst
-    // ai.user.accountId
-    // ai.user.id
-    // au.user.authUserId
-    // ai.cloud.role
-    // ai.cloud.roleVer
-    // ai.cloud.roleInstance
-    // ai.cloud.location
-    // ai.internal.sdkVersion
-    // ai.internal.agentVersion
-    // ai.internal.nodeName
     map
 }
 
-fn extract_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
+fn get_tags_from_span_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     map.insert(
         "ai.operation.id".into(),
@@ -148,18 +144,34 @@ fn extract_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<String, Strin
     map
 }
 
-const ATTR_REQUEST_SOURCE: &str = "request.source";
-const ATTR_REQUEST_RESPONSE_CODE: &str = "request.response_code";
-const ATTR_REQUEST_URL: &str = "request.url";
-const ATTR_DEPENDENCY_RESULT_CODE: &str = "dependency.result_code";
-const ATTR_DEPENDENCY_DATA: &str = "dependency.data";
-const ATTR_DEPENDENCY_TARGET: &str = "dependency.target";
-const ATTR_DEPENDENCY_TYPE: &str = "dependency.type";
+fn get_tag_key_from_attribute_key(key: &Key) -> Option<String> {
+    match key.as_str() {
+        // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
+        // better?
+        "enduser.id" => Some("ai.user.authUserId".into()),
+        "net.host.name" => Some("ai.cloud.roleInstance".into()),
+        _ => None,
+    }
+}
+
+fn merge_tags(
+    common_tags: &BTreeMap<String, String>,
+    span_tags: BTreeMap<String, String>,
+    attr_tags: BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    common_tags
+        .to_owned()
+        .into_iter()
+        .chain(span_tags)
+        .chain(attr_tags)
+        .collect()
+}
 
 struct RequestAttributes {
     source: Option<String>,
     response_code: String,
     url: Option<String>,
+    tags: BTreeMap<String, String>,
     properties: Option<BTreeMap<String, String>>,
 }
 
@@ -168,13 +180,16 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
     let mut response_code = None;
     let mut url = None;
     let mut properties = BTreeMap::new();
+    let mut tags = BTreeMap::new();
     for (key, value) in attrs.iter() {
-        if key == &Key::new(ATTR_REQUEST_SOURCE) {
+        if key.as_str() == "net.peer.ip" {
             source = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_REQUEST_RESPONSE_CODE) {
+        } else if key.as_str() == "http.status_code" {
             response_code = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_REQUEST_URL) {
+        } else if key.as_str() == "http.target" || key.as_str() == "http.url" {
             url = Some(value_to_string(value));
+        } else if let Some(tag) = get_tag_key_from_attribute_key(key) {
+            tags.insert(tag, value_to_string(value));
         } else {
             properties.insert(key.as_str().to_string(), value_to_string(value));
         }
@@ -184,6 +199,7 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
         source,
         response_code: response_code.unwrap_or_else(|| "none".into()),
         url,
+        tags,
         properties: if properties.is_empty() {
             None
         } else {
@@ -197,6 +213,7 @@ struct DependencyAttributes {
     data: Option<String>,
     target: Option<String>,
     type_: Option<String>,
+    tags: BTreeMap<String, String>,
     properties: Option<BTreeMap<String, String>>,
 }
 
@@ -205,19 +222,34 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
     let mut data = None;
     let mut target = None;
     let mut type_ = None;
+    let mut tags = BTreeMap::new();
     let mut properties = BTreeMap::new();
+    let mut is_http = false;
     for (key, value) in attrs.iter() {
-        if key == &Key::new(ATTR_DEPENDENCY_RESULT_CODE) {
+        if key.as_str().starts_with("http.") {
+            is_http = true;
+        }
+
+        if key.as_str() == "http.status_code" {
             result_code = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_DEPENDENCY_DATA) {
+        } else if key.as_str() == "http.url" || key.as_str() == "db.statement" {
             data = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_DEPENDENCY_TARGET) {
+        } else if key.as_str() == "net.peer.ip"
+            || key.as_str() == "net.peer.name"
+            || key.as_str() == "http.host"
+        {
             target = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_DEPENDENCY_TYPE) {
+        } else if key.as_str() == "db.type" || key.as_str() == "messaging.system" {
             type_ = Some(value_to_string(value));
+        } else if let Some(tag) = get_tag_key_from_attribute_key(key) {
+            tags.insert(tag, value_to_string(value));
         } else {
             properties.insert(key.as_str().to_string(), value_to_string(value));
         }
+    }
+
+    if type_.is_none() && is_http {
+        type_ = Some("HTTP".into());
     }
 
     DependencyAttributes {
@@ -225,6 +257,7 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
         data,
         target,
         type_,
+        tags,
         properties: if properties.is_empty() {
             None
         } else {
@@ -234,16 +267,23 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
 }
 
 struct TraceAttributes {
+    tags: BTreeMap<String, String>,
     properties: Option<BTreeMap<String, String>>,
 }
 
 fn extract_trace_attrs(attrs: &[KeyValue]) -> TraceAttributes {
+    let mut tags = BTreeMap::new();
     let mut properties = BTreeMap::new();
     for KeyValue { key, value } in attrs {
-        properties.insert(key.as_str().to_string(), value_to_string(value));
+        if let Some(tag) = get_tag_key_from_attribute_key(key) {
+            tags.insert(tag, value_to_string(value));
+        } else {
+            properties.insert(key.as_str().to_string(), value_to_string(value));
+        }
     }
 
     TraceAttributes {
+        tags,
         properties: if properties.is_empty() {
             None
         } else {
@@ -252,40 +292,11 @@ fn extract_trace_attrs(attrs: &[KeyValue]) -> TraceAttributes {
     }
 }
 
-fn new_envelope(
-    span: &Arc<trace::SpanData>,
-    name: String,
-    instrumentation_key: String,
-    data: Data,
-) -> Envelope {
-    Envelope {
-        name,
-        time: DateTime::<Utc>::from(span.start_time).to_rfc3339_opts(SecondsFormat::Millis, true),
-        i_key: Some(instrumentation_key),
-        tags: Some(extract_tags(span)),
-        data: Some(data),
-        ..Envelope::default()
-    }
-}
-
-fn new_envelope_for_event(
-    event: &Event,
-    span: &Arc<trace::SpanData>,
-    name: String,
-    instrumentation_key: String,
-    data: Data,
-) -> Envelope {
-    Envelope {
-        name,
-        time: DateTime::<Utc>::from(event.timestamp).to_rfc3339_opts(SecondsFormat::Millis, true),
-        i_key: Some(instrumentation_key),
-        tags: Some(extract_tags_for_event(span)),
-        data: Some(data),
-        ..Envelope::default()
-    }
-}
-
-fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Vec<Envelope> {
+fn into_envelopes(
+    span: Arc<trace::SpanData>,
+    instrumentation_key: &str,
+    common_tags: &BTreeMap<String, String>,
+) -> Vec<Envelope> {
     let mut result = Vec::with_capacity(1 + span.message_events.len());
     result.push(match span.span_kind {
         SpanKind::Client | SpanKind::Producer => {
@@ -306,12 +317,18 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 properties: attrs.properties,
                 ..RemoteDependencyData::default()
             });
-            new_envelope(
-                &span,
-                "Microsoft.ApplicationInsights.RemoteDependency".into(),
-                instrumentation_key.clone(),
-                data,
-            )
+            Envelope {
+                name: "Microsoft.ApplicationInsights.RemoteDependency".into(),
+                time: time_to_string(span.start_time),
+                i_key: Some(instrumentation_key.to_string()),
+                tags: Some(merge_tags(
+                    common_tags,
+                    get_tags_from_span(&span),
+                    attrs.tags,
+                )),
+                data: Some(data),
+                ..Envelope::default()
+            }
         }
         SpanKind::Server | SpanKind::Consumer | SpanKind::Internal => {
             let attrs = extract_request_attrs(&span.attributes);
@@ -330,12 +347,18 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 properties: attrs.properties,
                 ..RequestData::default()
             });
-            new_envelope(
-                &span,
-                "Microsoft.ApplicationInsights.Request".into(),
-                instrumentation_key.clone(),
-                data,
-            )
+            Envelope {
+                name: "Microsoft.ApplicationInsights.Request".into(),
+                time: time_to_string(span.start_time),
+                i_key: Some(instrumentation_key.to_string()),
+                tags: Some(merge_tags(
+                    common_tags,
+                    get_tags_from_span(&span),
+                    attrs.tags,
+                )),
+                data: Some(data),
+                ..Envelope::default()
+            }
         }
     });
 
@@ -346,13 +369,18 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
             properties: attrs.properties,
             ..MessageData::default()
         });
-        result.push(new_envelope_for_event(
-            &event,
-            &span,
-            "Microsoft.ApplicationInsights.Message".into(),
-            instrumentation_key.clone(),
-            data,
-        ));
+        result.push(Envelope {
+            name: "Microsoft.ApplicationInsights.Message".into(),
+            time: time_to_string(event.timestamp),
+            i_key: Some(instrumentation_key.to_string()),
+            tags: Some(merge_tags(
+                common_tags,
+                get_tags_from_span_for_event(&span),
+                attrs.tags,
+            )),
+            data: Some(data),
+            ..Envelope::default()
+        });
     }
 
     result
