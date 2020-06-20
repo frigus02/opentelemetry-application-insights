@@ -9,7 +9,6 @@ use serde::Serialize;
 pub struct MessageData {
     pub ver: i32,
     pub message: String,
-    pub severity_level: Option<SeverityLevel>,
     pub properties: Option<std::collections::BTreeMap<String, String>>,
     pub measurements: Option<std::collections::BTreeMap<String, f64>>,
 }
@@ -19,7 +18,6 @@ impl Default for MessageData {
         Self {
             ver: 2,
             message: String::default(),
-            severity_level: Option::default(),
             properties: Option::default(),
             measurements: Option::default(),
         }

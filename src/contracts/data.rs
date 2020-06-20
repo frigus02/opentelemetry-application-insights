@@ -7,12 +7,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "baseType", content = "baseData")]
 pub enum Data {
-    AvailabilityData(AvailabilityData),
-    EventData(EventData),
-    ExceptionData(ExceptionData),
     MessageData(MessageData),
-    MetricData(MetricData),
-    PageViewData(PageViewData),
     RemoteDependencyData(RemoteDependencyData),
     RequestData(RequestData),
 }

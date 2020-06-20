@@ -27,10 +27,11 @@ mod contracts;
 mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use contracts::{Base, Data, Envelope, RemoteDependencyData, RequestData};
+use contracts::{Base, Data, Envelope, MessageData, RemoteDependencyData, RequestData};
+use opentelemetry::api::trace::event::Event;
 use opentelemetry::api::trace::span::SpanKind;
 use opentelemetry::api::trace::span_context::{SpanId, TraceId};
-use opentelemetry::api::{Key, Value};
+use opentelemetry::api::{Key, KeyValue, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::sdk::trace::evicted_hash_map::EvictedHashMap;
 use std::collections::BTreeMap;
@@ -118,7 +119,7 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
         trace_id_to_string(span.span_context.trace_id()),
     );
     if span.span_kind == SpanKind::Internal {
-        map.insert("ai.operation.name", "OPERATION");
+        map.insert("ai.operation.name".into(), "OPERATION".into());
     }
     map.insert(
         "ai.operation.parentId".into(),
@@ -138,6 +139,19 @@ fn extract_tags(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
     // ai.internal.sdkVersion
     // ai.internal.agentVersion
     // ai.internal.nodeName
+    map
+}
+
+fn extract_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    map.insert(
+        "ai.operation.id".into(),
+        trace_id_to_string(span.span_context.trace_id()),
+    );
+    map.insert(
+        "ai.operation.parentId".into(),
+        span_id_to_string(span.span_context.span_id()),
+    );
     map
 }
 
@@ -244,8 +258,27 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
     }
 }
 
+struct TraceAttributes {
+    properties: Option<BTreeMap<String, String>>,
+}
+
+fn extract_trace_attrs(attrs: &[KeyValue]) -> TraceAttributes {
+    let mut properties = BTreeMap::new();
+    for KeyValue { key, value } in attrs {
+        properties.insert(key.as_str().to_string(), value_to_string(value));
+    }
+
+    TraceAttributes {
+        properties: if properties.is_empty() {
+            None
+        } else {
+            Some(properties)
+        },
+    }
+}
+
 fn new_envelope(
-    span: Arc<trace::SpanData>,
+    span: &Arc<trace::SpanData>,
     name: String,
     instrumentation_key: String,
     data: Base,
@@ -254,7 +287,24 @@ fn new_envelope(
         name,
         time: DateTime::<Utc>::from(span.start_time).to_rfc3339_opts(SecondsFormat::Millis, true),
         i_key: Some(instrumentation_key),
-        tags: Some(extract_tags(&span)),
+        tags: Some(extract_tags(span)),
+        data: Some(data),
+        ..Envelope::default()
+    }
+}
+
+fn new_envelope_for_event(
+    event: &Event,
+    span: &Arc<trace::SpanData>,
+    name: String,
+    instrumentation_key: String,
+    data: Base,
+) -> Envelope {
+    Envelope {
+        name,
+        time: DateTime::<Utc>::from(event.timestamp).to_rfc3339_opts(SecondsFormat::Millis, true),
+        i_key: Some(instrumentation_key),
+        tags: Some(extract_tags_for_event(span)),
         data: Some(data),
         ..Envelope::default()
     }
@@ -282,9 +332,9 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 ..RemoteDependencyData::default()
             }));
             new_envelope(
-                span,
+                &span,
                 "Microsoft.ApplicationInsights.RemoteDependency".into(),
-                instrumentation_key,
+                instrumentation_key.clone(),
                 data,
             )
         }
@@ -306,13 +356,29 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                 ..RequestData::default()
             }));
             new_envelope(
-                span,
+                &span,
                 "Microsoft.ApplicationInsights.Request".into(),
-                instrumentation_key,
+                instrumentation_key.clone(),
                 data,
             )
         }
     });
+
+    for event in span.message_events.iter() {
+        let attrs = extract_trace_attrs(&event.attributes);
+        let data = Base::Data(Data::MessageData(MessageData {
+            message: event.name.clone(),
+            properties: attrs.properties,
+            ..MessageData::default()
+        }));
+        result.push(new_envelope_for_event(
+            &event,
+            &span,
+            "Microsoft.ApplicationInsights.Message".into(),
+            instrumentation_key.clone(),
+            data,
+        ));
+    }
 
     result
 }
