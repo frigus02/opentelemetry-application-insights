@@ -10,3 +10,8 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
+base64 = "0.12.2"
+chrono = "0.4.11"
+opentelemetry = "0.6.0"
+reqwest = { version = "0.10.6", features = ["blocking", "json"] }
+serde = { version = "1.0.113", features = ["derive"] }
