@@ -17,5 +17,10 @@ reqwest = { version = "0.10.6", features = ["blocking", "json"] }
 serde = { version = "1.0.113", features = ["derive"] }
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["macros", "process"] }
 opentelemetry-jaeger = "0.5.0"
+tokio = { version = "0.2.21", features = ["macros", "process"] }
+tracing = "0.1.15"
+tracing-attributes = "0.1.8"
+tracing-futures = "0.2.4"
+tracing-opentelemetry = "0.5.0"
+tracing-subscriber = "0.2.6"

@@ -1,6 +1,6 @@
 use opentelemetry::{
     api::{
-        trace::futures::FutureExt, Context, HttpTextFormat, Span, SpanKind, TraceContextExt,
+        trace::futures::FutureExt, Context, HttpTextFormat, Key, Span, SpanKind, TraceContextExt,
         TraceContextPropagator, Tracer,
     },
     global, sdk,
@@ -14,7 +14,9 @@ use tokio::time::delay_for;
 
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
-    let span = tracer.start("spawn loop");
+    let span = tracer.start("spawn_children");
+    span.set_attribute(Key::new("n").u64(n.into()));
+    span.set_attribute(Key::new("process_name").string(process_name.clone()));
     let cx = Context::current_with_span(span);
     for _ in 0..n {
         spawn_child_process(&process_name)
@@ -26,9 +28,10 @@ async fn spawn_children(n: u32, process_name: String) {
 async fn spawn_child_process(process_name: &str) {
     let tracer = global::tracer("spawn_child_process");
     let span = tracer
-        .span_builder("spawning")
+        .span_builder("spawn_child_process")
         .with_kind(SpanKind::Server)
         .start(&tracer);
+    span.set_attribute(Key::new("process_name").string(process_name.clone()));
     let cx = Context::current_with_span(span);
 
     let mut carrier = HashMap::new();
@@ -51,7 +54,7 @@ async fn spawn_child_process(process_name: &str) {
 async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
     let span = tracer
-        .span_builder("running")
+        .span_builder("run_in_child_process")
         .with_kind(SpanKind::Client)
         .start(&tracer);
     span.add_event("leaf fn".into(), vec![]);
@@ -70,7 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let exporter = opentelemetry_jaeger::Exporter::builder()
         .with_agent_endpoint("127.0.0.1:6831".parse().unwrap())
         .with_process(opentelemetry_jaeger::Process {
-            service_name: "trace-demo".to_string(),
+            service_name: "example-opentelemetry".to_string(),
             tags: vec![],
         })
         .init()?;
@@ -84,11 +87,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let mut carrier = HashMap::new();
             carrier.insert("traceparent".to_string(), traceparent);
             let propagator = TraceContextPropagator::new();
-            let cx = propagator.extract(&carrier);
+            let _guard = propagator.extract(&carrier).attach();
+            let tracer = global::tracer("example-opentelemetry");
+            let span = tracer.start("child");
+            let cx = Context::current_with_span(span);
             run_in_child_process().with_context(cx).await;
         }
         _ => {
-            let tracer = global::tracer("opentelemetry_example");
+            let tracer = global::tracer("example-opentelemetry");
             let span = tracer.start("root");
             let cx = Context::current_with_span(span);
             spawn_children(5, process_name).with_context(cx).await;
