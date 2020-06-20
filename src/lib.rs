@@ -28,12 +28,9 @@ mod uploader;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use contracts::{Base, Data, Envelope, MessageData, RemoteDependencyData, RequestData};
-use opentelemetry::api::trace::event::Event;
-use opentelemetry::api::trace::span::SpanKind;
-use opentelemetry::api::trace::span_context::{SpanId, TraceId};
-use opentelemetry::api::{Key, KeyValue, Value};
+use opentelemetry::api::{Event, Key, KeyValue, SpanId, SpanKind, StatusCode, TraceId, Value};
 use opentelemetry::exporter::trace;
-use opentelemetry::sdk::trace::evicted_hash_map::EvictedHashMap;
+use opentelemetry::sdk::EvictedHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -159,10 +156,8 @@ fn extract_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<String, Strin
 
 const ATTR_REQUEST_SOURCE: &str = "request.source";
 const ATTR_REQUEST_RESPONSE_CODE: &str = "request.response_code";
-const ATTR_REQUEST_SUCCESS: &str = "request.success";
 const ATTR_REQUEST_URL: &str = "request.url";
 const ATTR_DEPENDENCY_RESULT_CODE: &str = "dependency.result_code";
-const ATTR_DEPENDENCY_SUCCESS: &str = "dependency.success";
 const ATTR_DEPENDENCY_DATA: &str = "dependency.data";
 const ATTR_DEPENDENCY_TARGET: &str = "dependency.target";
 const ATTR_DEPENDENCY_TYPE: &str = "dependency.type";
@@ -170,7 +165,6 @@ const ATTR_DEPENDENCY_TYPE: &str = "dependency.type";
 struct RequestAttributes {
     source: Option<String>,
     response_code: String,
-    success: bool,
     url: Option<String>,
     properties: Option<BTreeMap<String, String>>,
 }
@@ -178,7 +172,6 @@ struct RequestAttributes {
 fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
     let mut source = None;
     let mut response_code = None;
-    let mut success = None;
     let mut url = None;
     let mut properties = BTreeMap::new();
     for (key, value) in attrs.iter() {
@@ -186,11 +179,6 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
             source = Some(value_to_string(value));
         } else if key == &Key::new(ATTR_REQUEST_RESPONSE_CODE) {
             response_code = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_REQUEST_SUCCESS) {
-            success = Some(match value {
-                Value::Bool(v) => v.to_owned(),
-                _ => false,
-            });
         } else if key == &Key::new(ATTR_REQUEST_URL) {
             url = Some(value_to_string(value));
         } else {
@@ -200,8 +188,7 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
 
     RequestAttributes {
         source,
-        response_code: response_code.unwrap_or_else(|| "-1".into()),
-        success: success.unwrap_or(false),
+        response_code: response_code.unwrap_or_else(|| "".into()),
         url,
         properties: if properties.is_empty() {
             None
@@ -213,7 +200,6 @@ fn extract_request_attrs(attrs: &EvictedHashMap) -> RequestAttributes {
 
 struct DependencyAttributes {
     result_code: Option<String>,
-    success: Option<bool>,
     data: Option<String>,
     target: Option<String>,
     type_: Option<String>,
@@ -222,7 +208,6 @@ struct DependencyAttributes {
 
 fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
     let mut result_code = None;
-    let mut success = None;
     let mut data = None;
     let mut target = None;
     let mut type_ = None;
@@ -230,11 +215,6 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
     for (key, value) in attrs.iter() {
         if key == &Key::new(ATTR_DEPENDENCY_RESULT_CODE) {
             result_code = Some(value_to_string(value));
-        } else if key == &Key::new(ATTR_DEPENDENCY_SUCCESS) {
-            success = Some(match value {
-                Value::Bool(v) => v.to_owned(),
-                _ => false,
-            });
         } else if key == &Key::new(ATTR_DEPENDENCY_DATA) {
             data = Some(value_to_string(value));
         } else if key == &Key::new(ATTR_DEPENDENCY_TARGET) {
@@ -248,7 +228,6 @@ fn extract_dependency_attrs(attrs: &EvictedHashMap) -> DependencyAttributes {
 
     DependencyAttributes {
         result_code,
-        success,
         data,
         target,
         type_,
@@ -326,7 +305,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                         .duration_since(span.start_time)
                         .expect("start time should be before end time"),
                 ),
-                success: attrs.success,
+                success: Some(span.status_code == StatusCode::OK),
                 data: attrs.data,
                 target: attrs.target,
                 type_: attrs.type_,
@@ -352,7 +331,7 @@ fn into_envelopes(span: Arc<trace::SpanData>, instrumentation_key: String) -> Ve
                         .expect("start time should be before end time"),
                 ),
                 response_code: attrs.response_code,
-                success: attrs.success,
+                success: span.status_code == StatusCode::OK,
                 url: attrs.url,
                 properties: attrs.properties,
                 ..RequestData::default()

@@ -49,16 +49,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
 
-    //let instrumentation_key =
-    //    env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    //let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let exporter = opentelemetry_jaeger::Exporter::builder()
-        .with_agent_endpoint("127.0.0.1:6831".parse().unwrap())
-        .with_process(opentelemetry_jaeger::Process {
-            service_name: "example-tracing".to_string(),
-            tags: vec![],
-        })
-        .init()?;
+    let instrumentation_key =
+        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
     let provider = sdk::Provider::builder()
         .with_simple_exporter(exporter)
         .build();

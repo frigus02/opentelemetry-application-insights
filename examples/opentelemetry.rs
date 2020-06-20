@@ -53,10 +53,7 @@ async fn spawn_child_process(process_name: &str) {
 
 async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
-    let span = tracer
-        .span_builder("run_in_child_process")
-        .with_kind(SpanKind::Client)
-        .start(&tracer);
+    let span = tracer.start("run_in_child_process");
     span.add_event("leaf fn".into(), vec![]);
     delay_for(Duration::from_millis(50)).await
 }
@@ -67,16 +64,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
 
-    //let instrumentation_key =
-    //    env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    //let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let exporter = opentelemetry_jaeger::Exporter::builder()
-        .with_agent_endpoint("127.0.0.1:6831".parse().unwrap())
-        .with_process(opentelemetry_jaeger::Process {
-            service_name: "example-opentelemetry".to_string(),
-            tags: vec![],
-        })
-        .init()?;
+    let instrumentation_key =
+        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
     let provider = sdk::Provider::builder()
         .with_simple_exporter(exporter)
         .build();
@@ -89,7 +79,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let propagator = TraceContextPropagator::new();
             let _guard = propagator.extract(&carrier).attach();
             let tracer = global::tracer("example-opentelemetry");
-            let span = tracer.start("child");
+            let span = tracer
+                .span_builder("child")
+                .with_kind(SpanKind::Client)
+                .start(&tracer);
             let cx = Context::current_with_span(span);
             run_in_child_process().with_context(cx).await;
         }

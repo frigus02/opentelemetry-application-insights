@@ -1,8 +1,13 @@
 use crate::contracts::Envelope;
-use reqwest::{blocking::Client, StatusCode};
 use serde::Deserialize;
 
 const URL: &str = "https://dc.services.visualstudio.com/v2/track";
+const STATUS_OK: u16 = 200;
+const STATUS_PARTIAL_CONTENT: u16 = 206;
+const STATUS_REQUEST_TIMEOUT: u16 = 408;
+const STATUS_TOO_MANY_REQUESTS: u16 = 429;
+const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
+const STATUS_SERVICE_UNAVAILABLE: u16 = 503;
 
 #[derive(Debug, PartialEq)]
 pub enum Response {
@@ -13,9 +18,7 @@ pub enum Response {
 
 /// Sends telemetry items to the server.
 #[derive(Debug)]
-pub(crate) struct Uploader {
-    client: Client,
-}
+pub(crate) struct Uploader {}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,20 +39,23 @@ struct TransmissionItem {
 impl Uploader {
     /// Creates a new instance of telemetry items sender.
     pub(crate) fn new() -> Self {
-        let client = Client::new();
-        Self { client }
+        Self {}
     }
 
     /// Sends a telemetry items to the server.
     pub(crate) fn send(&self, items: Vec<Envelope>) -> Response {
-        let response = match self.client.post(URL).json(&items).send() {
-            Ok(response) => response,
-            Err(_err) => return Response::NoRetry,
+        let payload = match serde_json::to_value(items) {
+            Ok(payload) => payload,
+            Err(_) => return Response::NoRetry,
         };
+        let response = ureq::post(URL)
+            .timeout_connect(10_000)
+            .timeout_read(10_000)
+            .send_json(payload);
         match response.status() {
-            StatusCode::OK => Response::Success,
-            StatusCode::PARTIAL_CONTENT => {
-                let content: Transmission = match response.json() {
+            STATUS_OK => Response::Success,
+            STATUS_PARTIAL_CONTENT => {
+                let content: Transmission = match response.into_json_deserialize() {
                     Ok(content) => content,
                     Err(_err) => return Response::NoRetry,
                 };
@@ -61,10 +67,10 @@ impl Uploader {
                     Response::NoRetry
                 }
             }
-            StatusCode::TOO_MANY_REQUESTS | StatusCode::REQUEST_TIMEOUT => Response::Retry,
-            StatusCode::SERVICE_UNAVAILABLE => Response::Retry,
-            StatusCode::INTERNAL_SERVER_ERROR => {
-                if let Ok(content) = response.json::<Transmission>() {
+            STATUS_TOO_MANY_REQUESTS | STATUS_REQUEST_TIMEOUT => Response::Retry,
+            STATUS_SERVICE_UNAVAILABLE => Response::Retry,
+            STATUS_INTERNAL_SERVER_ERROR => {
+                if let Ok(content) = response.into_json_deserialize::<Transmission>() {
                     if content.errors.iter().any(|item| can_retry_item(item)) {
                         Response::Retry
                     } else {
@@ -82,9 +88,9 @@ impl Uploader {
 /// Determines that a telemetry item can be re-send corresponding to this submission status
 /// descriptor.
 fn can_retry_item(item: &TransmissionItem) -> bool {
-    item.status_code == StatusCode::PARTIAL_CONTENT
-        || item.status_code == StatusCode::REQUEST_TIMEOUT
-        || item.status_code == StatusCode::INTERNAL_SERVER_ERROR
-        || item.status_code == StatusCode::SERVICE_UNAVAILABLE
-        || item.status_code == StatusCode::TOO_MANY_REQUESTS
+    item.status_code == STATUS_PARTIAL_CONTENT
+        || item.status_code == STATUS_REQUEST_TIMEOUT
+        || item.status_code == STATUS_INTERNAL_SERVER_ERROR
+        || item.status_code == STATUS_SERVICE_UNAVAILABLE
+        || item.status_code == STATUS_TOO_MANY_REQUESTS
 }
