@@ -16,7 +16,7 @@ pub(crate) fn duration_to_string(duration: Duration) -> String {
     let m = micros / 1_000_000 / 60 % 60;
     let h = micros / 1_000_000 / 60 / 60 % 24;
     let d = micros / 1_000_000 / 60 / 60 / 24;
-    let micros_remaining = micros / 1_000_000;
+    let micros_remaining = micros % 1_000_000;
     format!(
         "{}.{:0>2}:{:0>2}:{:0>2}.{:0>7}",
         d, h, m, s, micros_remaining
@@ -35,5 +35,30 @@ pub(crate) fn value_to_string(value: &Value) -> String {
         Value::F64(v) => v.to_string(),
         Value::String(v) => v.to_owned(),
         Value::Bytes(v) => base64::encode(&v),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case(TraceId::invalid(),            "00000000000000000000000000000000" ; "zero")]
+    #[test_case(TraceId::from_u128(314),       "0000000000000000000000000000013a" ; "some number")]
+    #[test_case(TraceId::from_u128(u128::MAX), "ffffffffffffffffffffffffffffffff" ; "max")]
+    fn trace_id(id: TraceId, expected: &'static str) {
+        assert_eq!(expected.to_string(), trace_id_to_string(id));
+    }
+
+    #[test_case(SpanId::invalid(),          "0000000000000000" ; "zero")]
+    #[test_case(SpanId::from_u64(314),      "000000000000013a" ; "some number")]
+    #[test_case(SpanId::from_u64(u64::MAX), "ffffffffffffffff" ; "max")]
+    fn span_id(id: SpanId, expected: &'static str) {
+        assert_eq!(expected.to_string(), span_id_to_string(id));
+    }
+
+    #[test_case(Duration::from_micros(123456789123), "1.10:17:36.0789123" ; "all")]
+    fn duration(duration: Duration, expected: &'static str) {
+        assert_eq!(expected.to_string(), duration_to_string(duration));
     }
 }

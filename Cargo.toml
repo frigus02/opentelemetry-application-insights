@@ -20,6 +20,7 @@ ureq = { version = "1.2.0", features = ["json"] }
 
 [dev-dependencies]
 env_logger = "0.7.1"
+test-case = "1.0.0"
 tokio = { version = "0.2.21", features = ["macros", "process", "time"] }
 tracing = "0.1.15"
 tracing-attributes = "0.1.8"
