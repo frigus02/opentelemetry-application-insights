@@ -60,6 +60,7 @@
 //! | `http.status_code`                       | Request Response code          |
 //!
 //! All other attributes are be directly converted to custom properties.
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.1.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 
