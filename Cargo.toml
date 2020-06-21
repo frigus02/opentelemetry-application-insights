@@ -13,6 +13,10 @@ categories = [
     "development-tools::profiling",
     "asynchronous",
 ]
+exclude = [
+    ".github/*",
+    "README.tpl",
+]
 
 [dependencies]
 base64 = "0.12"
