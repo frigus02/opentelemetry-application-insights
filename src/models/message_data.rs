@@ -8,17 +8,4 @@ pub(crate) struct MessageData {
     pub(crate) message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) measurements: Option<std::collections::BTreeMap<String, f64>>,
-}
-
-impl Default for MessageData {
-    fn default() -> Self {
-        Self {
-            ver: 2,
-            message: String::default(),
-            properties: Option::default(),
-            measurements: Option::default(),
-        }
-    }
 }

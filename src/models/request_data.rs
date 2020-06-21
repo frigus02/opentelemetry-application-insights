@@ -17,23 +17,4 @@ pub(crate) struct RequestData {
     pub(crate) url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) measurements: Option<std::collections::BTreeMap<String, f64>>,
-}
-
-impl Default for RequestData {
-    fn default() -> Self {
-        Self {
-            ver: 2,
-            id: String::default(),
-            source: Option::default(),
-            name: Option::default(),
-            duration: String::default(),
-            response_code: String::default(),
-            success: true,
-            url: Option::default(),
-            properties: Option::default(),
-            measurements: Option::default(),
-        }
-    }
 }

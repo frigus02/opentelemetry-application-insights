@@ -17,11 +17,19 @@ mod tests {
     #[test]
     fn serialization_format() {
         let envelope = Envelope {
-            data: Some(Data::Message(MessageData::default())),
-            ..Envelope::default()
+            name: "Test".into(),
+            time: "2020-06-21:10:40:00Z".into(),
+            sample_rate: Some(100.0),
+            i_key: None,
+            tags: None,
+            data: Some(Data::Message(MessageData {
+                ver: 2,
+                message: "hello world".into(),
+                properties: None,
+            })),
         };
         let serialized = serde_json::to_string(&envelope).unwrap();
-        let expected = "{\"name\":\"\",\"time\":\"\",\"sampleRate\":100.0,\"data\":{\"baseType\":\"MessageData\",\"baseData\":{\"ver\":2,\"message\":\"\"}}}";
+        let expected = "{\"name\":\"Test\",\"time\":\"2020-06-21:10:40:00Z\",\"sampleRate\":100.0,\"data\":{\"baseType\":\"MessageData\",\"baseData\":{\"ver\":2,\"message\":\"hello world\"}}}";
         assert_eq!(expected, serialized);
     }
 }

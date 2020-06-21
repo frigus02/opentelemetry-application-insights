@@ -21,24 +21,4 @@ pub(crate) struct RemoteDependencyData {
     pub(crate) type_: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) measurements: Option<std::collections::BTreeMap<String, f64>>,
-}
-
-impl Default for RemoteDependencyData {
-    fn default() -> Self {
-        Self {
-            ver: 2,
-            name: String::default(),
-            id: Option::default(),
-            result_code: Option::default(),
-            duration: String::default(),
-            success: Some(true),
-            data: Option::default(),
-            target: Option::default(),
-            type_: Option::default(),
-            properties: Option::default(),
-            measurements: Option::default(),
-        }
-    }
 }
