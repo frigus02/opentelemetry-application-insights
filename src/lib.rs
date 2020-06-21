@@ -1,9 +1,10 @@
-//! # OpenTelemetry Application Insights Exporter
+//! An [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) exporter implementation for [OpenTelemetry Rust](https://github.com/open-telemetry/opentelemetry-rust).
 //!
-//! Collects OpenTelemetry spans and reports them to a Azure Application
-//! Insights.
+//! **Disclaimer**: This is not an official Microsoft product.
 //!
-//! ## Example
+//! # Usage
+//!
+//! Configure the exporter:
 //!
 //! ```rust,no_run
 //! use opentelemetry::{global, sdk};
@@ -17,6 +18,48 @@
 //!     global::set_provider(provider);
 //! }
 //! ```
+//!
+//! Then follow the documentation of [opentelemetry](https://github.com/open-telemetry/opentelemetry-rust) to create spans and events.
+//!
+//! # Attribute mapping
+//!
+//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's best to map OpenTelemetry fields to their correct Application Insights pendant.
+//!
+//! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
+//! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
+//!
+//! The OpenTelemetry SpanKind determines the Application Insights telemetry type:
+//!
+//! | OpenTelemetry SpanKind           | Application Insights telemetry type |
+//! | -------------------------------- | ----------------------------------- |
+//! | `CLIENT`, `PRODUCER`             | Dependency                          |
+//! | `SERVER`, `CONSUMER`, `INTERNAL` | Request                             |
+//!
+//! The Span's list of Events are converted to Trace telemetry.
+//!
+//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if the status is `OK`; otherwise `false`.
+//!
+//! The following of the Span's attributes map to special fields in Application Insights (the mapping tries to follow [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions)).
+//!
+//! | OpenTelemetry attribute key              | Application Insights field     |
+//! | ---------------------------------------- | ------------------------------ |
+//! | `enduser.id`                             | Context: Authenticated user id |
+//! | `net.host.name`                          | Context: Cloud role instance   |
+//! | `http.url`                               | Dependency Data                |
+//! | `db.statement`                           | Dependency Data                |
+//! | `net.peer.ip`                            | Dependency Target              |
+//! | `net.peer.name`                          | Dependency Target              |
+//! | `http.host`                              | Dependency Target              |
+//! | `http.status_code`                       | Dependency Result code         |
+//! | `db.type`                                | Dependency Type                |
+//! | `messaging.system`                       | Dependency Type                |
+//! | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
+//! | `http.target`                            | Request Url                    |
+//! | `http.url`                               | Request Url                    |
+//! | `net.peer.ip`                            | Request Source                 |
+//! | `http.status_code`                       | Request Response code          |
+//!
+//! All other attributes are be directly converted to custom properties.
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 
@@ -32,6 +75,7 @@ use opentelemetry::exporter::trace;
 use opentelemetry::sdk::EvictedHashMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tags::{
     get_tag_key_from_attribute_key, get_tags_from_span, get_tags_from_span_for_event, merge_tags,
 };
@@ -45,7 +89,7 @@ pub struct Exporter {
 }
 
 impl Exporter {
-    /// Create a new exporter builder.
+    /// Create a new exporter.
     pub fn new(instrumentation_key: String) -> Self {
         let mut common_tags = BTreeMap::new();
         common_tags.insert(
@@ -63,16 +107,38 @@ impl Exporter {
         }
     }
 
-    /// Add specified application version to all telemetry items.
+    /// Add an application version to all telemetry items.
+    ///
+    /// ```
+    /// let exporter = opentelemetry_application_insights::Exporter::new("...".into())
+    ///     .with_application_version(std::env!("CARGO_PKG_VERSION").into());
+    /// ```
     pub fn with_application_version(mut self, ver: String) -> Self {
         self.common_tags.insert("ai.application.ver".into(), ver);
         self
     }
 
-    /// Set sample rate, which is passed through to Application Insights. It
-    /// should match the rate given to sampler.
+    /// Set sample rate, which is passed through to Application Insights. It should be a value
+    /// between 0 and 1 and match the rate given to the sampler.
+    ///
+    /// Default: 1.0
+    ///
+    /// ```
+    /// # use opentelemetry::{global, sdk};
+    /// let sample_rate = 0.3;
+    /// let exporter = opentelemetry_application_insights::Exporter::new("...".into())
+    ///     .with_sample_rate(sample_rate);
+    /// let provider = sdk::Provider::builder()
+    ///     .with_simple_exporter(exporter)
+    ///     .with_config(sdk::Config {
+    ///         default_sampler: Box::new(sdk::Sampler::Probability(sample_rate)),
+    ///         ..Default::default()
+    ///     })
+    ///     .build();
+    /// ```
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
-        self.sample_rate = sample_rate;
+        // Application Insights expects the sample rate as a percentage.
+        self.sample_rate = sample_rate * 100.0;
         self
     }
 
@@ -89,7 +155,7 @@ impl Exporter {
                     duration: duration_to_string(
                         span.end_time
                             .duration_since(span.start_time)
-                            .expect("start time should be before end time"),
+                            .unwrap_or(Duration::from_secs(0)),
                     ),
                     success: Some(span.status_code == StatusCode::OK),
                     data: attrs.data,
@@ -120,7 +186,7 @@ impl Exporter {
                     duration: duration_to_string(
                         span.end_time
                             .duration_since(span.start_time)
-                            .expect("start time should be before end time"),
+                            .unwrap_or(Duration::from_secs(0)),
                     ),
                     response_code: attrs.response_code,
                     success: span.status_code == StatusCode::OK,
