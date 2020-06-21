@@ -2,7 +2,7 @@ use crate::models::{MessageData, RemoteDependencyData, RequestData};
 use serde::Serialize;
 
 /// Data struct to contain both B and C sections.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "baseType", content = "baseData")]
 pub(crate) enum Data {
     #[serde(rename = "MessageData")]

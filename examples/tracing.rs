@@ -45,6 +45,8 @@ async fn run_in_child_process() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     let mut iter = env::args();
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
@@ -55,8 +57,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let provider = sdk::Provider::builder()
         .with_simple_exporter(exporter)
         .build();
-    let tracer = provider.get_tracer("example-tracing");
 
+    let tracer = provider.get_tracer("example-tracing");
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");

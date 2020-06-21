@@ -21,7 +21,7 @@ mod tests {
             ..Envelope::default()
         };
         let serialized = serde_json::to_string(&envelope).unwrap();
-        let expected = "{\"ver\":1,\"name\":\"\",\"time\":\"\",\"sampleRate\":100.0,\"seq\":null,\"iKey\":null,\"flags\":null,\"tags\":null,\"data\":{\"baseType\":\"MessageData\",\"baseData\":{\"ver\":2,\"message\":\"\",\"properties\":null,\"measurements\":null}}}";
+        let expected = "{\"name\":\"\",\"time\":\"\",\"sampleRate\":100.0,\"data\":{\"baseType\":\"MessageData\",\"baseData\":{\"ver\":2,\"message\":\"\"}}}";
         assert_eq!(expected, serialized);
     }
 }
