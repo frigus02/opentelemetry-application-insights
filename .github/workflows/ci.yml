@@ -6,17 +6,17 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: actions-rs/cargo@v1
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
         with:
           command: test
-      - uses: actions-rs/cargo@v1
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
         with:
           command: clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
