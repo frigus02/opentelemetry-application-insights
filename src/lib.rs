@@ -289,7 +289,11 @@ impl Exporter {
         for event in span.message_events.iter() {
             let data = MessageData {
                 ver: 2,
-                message: event.name.clone(),
+                message: if event.name.is_empty() {
+                    "<no message>".into()
+                } else {
+                    event.name.clone()
+                },
                 properties: Some(
                     event
                         .attributes

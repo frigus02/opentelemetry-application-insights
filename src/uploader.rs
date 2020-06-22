@@ -61,7 +61,7 @@ pub(crate) fn send(items: Vec<Envelope>) -> Response {
                 debug!("Upload error {}. Some items may be retried", status);
                 Response::Retry
             } else {
-                debug!("Upload error {}. No retry possible", status);
+                debug!("Upload error {}. No retry possible. Response: {:?}", status, content);
                 Response::NoRetry
             }
         }
