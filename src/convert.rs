@@ -1,5 +1,7 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use opentelemetry::api::{SpanId, TraceId, Value};
+use opentelemetry::sdk::EvictedHashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
@@ -36,6 +38,26 @@ pub(crate) fn value_to_string(value: &Value) -> String {
         Value::String(v) => v.to_owned(),
         Value::Bytes(v) => base64::encode(&v),
     }
+}
+
+pub(crate) fn evictedhashmap_to_hashmap<'a>(
+    from: &'a EvictedHashMap,
+) -> HashMap<&'a str, &'a Value> {
+    from.iter().map(|(k, v)| (k.as_str(), v)).collect()
+}
+
+pub(crate) fn attrs_to_properties(
+    mut attrs: HashMap<&str, &Value>,
+    ignored_keys: &HashSet<&str>,
+) -> Option<BTreeMap<String, String>> {
+    Some(
+        attrs
+            .drain()
+            .filter(|(k, _v)| !ignored_keys.contains(k))
+            .map(|(k, v)| (k.to_string(), value_to_string(v)))
+            .collect(),
+    )
+    .filter(|x: &BTreeMap<String, String>| !x.is_empty())
 }
 
 #[cfg(test)]
