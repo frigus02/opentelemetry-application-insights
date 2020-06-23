@@ -38,12 +38,14 @@ The OpenTelemetry SpanKind determines the Application Insights telemetry type:
 
 | OpenTelemetry SpanKind           | Application Insights telemetry type |
 | -------------------------------- | ----------------------------------- |
-| `CLIENT`, `PRODUCER`             | Dependency                          |
-| `SERVER`, `CONSUMER`, `INTERNAL` | Request                             |
+| `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
+| `SERVER`, `CONSUMER`             | Request                             |
 
 The Span's list of Events are converted to Trace telemetry.
 
 The Span's status determines the Success field of a Dependency or Request. Success is `true` if the status is `OK`; otherwise `false`.
+
+For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
 
 The following of the Span's attributes map to special fields in Application Insights (the mapping tries to follow [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions)).
 
@@ -53,19 +55,21 @@ The following of the Span's attributes map to special fields in Application Insi
 | `net.host.name`                          | Context: Cloud role instance   |
 | `http.url`                               | Dependency Data                |
 | `db.statement`                           | Dependency Data                |
-| `net.peer.ip`                            | Dependency Target              |
-| `net.peer.name`                          | Dependency Target              |
 | `http.host`                              | Dependency Target              |
+| `net.peer.name`                          | Dependency Target              |
+| `db.instance`                            | Dependency Target              |
 | `http.status_code`                       | Dependency Result code         |
 | `db.type`                                | Dependency Type                |
 | `messaging.system`                       | Dependency Type                |
 | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
-| `http.target`                            | Request Url                    |
+| `"DB"` if any `db.` attribute exists     | Dependency Type                |
 | `http.url`                               | Request Url                    |
-| `net.peer.ip`                            | Request Source                 |
+| `http.target`                            | Request Url                    |
 | `http.status_code`                       | Request Response code          |
 
 All other attributes are be directly converted to custom properties.
+
+For Requests the attributes `http.method` and `http.route` override the Name.
 
 ## Thanks
 
