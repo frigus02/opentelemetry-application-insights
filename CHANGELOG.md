@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Populate the cloud role tag from the current process name.
+
 ### Changed
 
 - Aligned attribute mapping with Azure Monitor exporter for [Python](https://github.com/microsoft/opentelemetry-azure-monitor-python) and [JavaScript](https://github.com/microsoft/opentelemetry-azure-monitor-js). Most notably, `INTERNAL` spans now create a Dependency.
+- Populate cloud role instance tag from machine hostname instead of using the `net.host.name` attribute.
 
 ### Fixed
 

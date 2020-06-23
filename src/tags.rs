@@ -1,9 +1,39 @@
 use crate::convert::{span_id_to_string, trace_id_to_string, value_to_string};
+use log::debug;
 use opentelemetry::api::{SpanId, SpanKind, Value};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+pub(crate) fn get_common_tags() -> BTreeMap<String, String> {
+    let mut tags = BTreeMap::new();
+    tags.insert(
+        "ai.internal.sdkVersion".into(),
+        format!("rust:ot:ext{}", std::env!("CARGO_PKG_VERSION")),
+    );
+    tags.insert(
+        "ai.cloud.role".into(),
+        std::env::args()
+            .next()
+            .and_then(|process_name| {
+                std::path::Path::new(&process_name)
+                    .file_stem()
+                    .and_then(|file_stem| file_stem.to_str())
+                    .map(|file_stem| file_stem.to_string())
+            })
+            .unwrap_or_else(|| "Rust Application".into()),
+    );
+    match gethostname::gethostname().into_string() {
+        Ok(hostname) => {
+            tags.insert("ai.cloud.roleInstance".into(), hostname);
+        }
+        Err(_) => {
+            debug!("Failed to read hostname. Cloud role instance tags will be be set.");
+        }
+    }
+    tags
+}
 
 pub(crate) fn get_tags_for_span(
     span: &Arc<trace::SpanData>,
@@ -37,9 +67,6 @@ pub(crate) fn get_tags_for_span(
         // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
         // better?
         map.insert("ai.user.authUserId".into(), value_to_string(user_id));
-    }
-    if let Some(hostname) = attrs.get("net.host.name") {
-        map.insert("ai.cloud.roleInstance".into(), value_to_string(hostname));
     }
 
     map

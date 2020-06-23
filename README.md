@@ -52,7 +52,6 @@ The following of the Span's attributes map to special fields in Application Insi
 | OpenTelemetry attribute key              | Application Insights field     |
 | ---------------------------------------- | ------------------------------ |
 | `enduser.id`                             | Context: Authenticated user id |
-| `net.host.name`                          | Context: Cloud role instance   |
 | `http.url`                               | Dependency Data                |
 | `db.statement`                           | Dependency Data                |
 | `http.host`                              | Dependency Target              |

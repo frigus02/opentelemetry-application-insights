@@ -46,7 +46,6 @@
 //! | OpenTelemetry attribute key              | Application Insights field     |
 //! | ---------------------------------------- | ------------------------------ |
 //! | `enduser.id`                             | Context: Authenticated user id |
-//! | `net.host.name`                          | Context: Cloud role instance   |
 //! | `http.url`                               | Dependency Data                |
 //! | `db.statement`                           | Dependency Data                |
 //! | `http.host`                              | Dependency Target              |
@@ -83,7 +82,7 @@ use opentelemetry::exporter::trace;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use tags::{get_tags_for_event, get_tags_for_span, merge_tags};
+use tags::{get_common_tags, get_tags_for_event, get_tags_for_span, merge_tags};
 
 /// Application Insights span exporter
 #[derive(Debug)]
@@ -98,18 +97,9 @@ pub struct Exporter {
 impl Exporter {
     /// Create a new exporter.
     pub fn new(instrumentation_key: String) -> Self {
-        let mut common_tags = BTreeMap::new();
-        common_tags.insert(
-            "ai.internal.sdkVersion".into(),
-            format!(
-                "{}:{}",
-                std::env!("CARGO_PKG_NAME"),
-                std::env!("CARGO_PKG_VERSION")
-            ),
-        );
+        let common_tags = get_common_tags();
         let request_ignored_properties: HashSet<&'static str> = [
             "enduser.id",
-            "net.host.name",
             "http.method",
             "http.route",
             "http.status_code",
@@ -121,7 +111,6 @@ impl Exporter {
         .collect();
         let dependency_ignored_properties: HashSet<&'static str> = [
             "enduser.id",
-            "net.host.name",
             "http.status_code",
             "http.url",
             "db.statement",
