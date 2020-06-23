@@ -7,6 +7,7 @@ const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
 const STATUS_REQUEST_TIMEOUT: u16 = 408;
 const STATUS_TOO_MANY_REQUESTS: u16 = 429;
+const STATUS_APPLICATION_INACTIVE: u16 = 439; // Quota
 const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
 const STATUS_SERVICE_UNAVAILABLE: u16 = 503;
 
@@ -61,12 +62,16 @@ pub(crate) fn send(items: Vec<Envelope>) -> Response {
                 debug!("Upload error {}. Some items may be retried", status);
                 Response::Retry
             } else {
-                debug!("Upload error {}. No retry possible. Response: {:?}", status, content);
+                debug!(
+                    "Upload error {}. No retry possible. Response: {:?}",
+                    status, content
+                );
                 Response::NoRetry
             }
         }
-        status @ STATUS_TOO_MANY_REQUESTS
-        | status @ STATUS_REQUEST_TIMEOUT
+        status @ STATUS_REQUEST_TIMEOUT
+        | status @ STATUS_TOO_MANY_REQUESTS
+        | status @ STATUS_APPLICATION_INACTIVE
         | status @ STATUS_SERVICE_UNAVAILABLE => {
             debug!("Upload error {}. Retry possible", status);
             Response::Retry
@@ -97,7 +102,8 @@ pub(crate) fn send(items: Vec<Envelope>) -> Response {
 fn can_retry_item(item: &TransmissionItem) -> bool {
     item.status_code == STATUS_PARTIAL_CONTENT
         || item.status_code == STATUS_REQUEST_TIMEOUT
+        || item.status_code == STATUS_TOO_MANY_REQUESTS
+        || item.status_code == STATUS_APPLICATION_INACTIVE
         || item.status_code == STATUS_INTERNAL_SERVER_ERROR
         || item.status_code == STATUS_SERVICE_UNAVAILABLE
-        || item.status_code == STATUS_TOO_MANY_REQUESTS
 }
