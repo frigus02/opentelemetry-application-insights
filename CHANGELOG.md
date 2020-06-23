@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1] - 2020-06-23
+
 ### Added
 
 - Populate the cloud role tag from the current process name.
@@ -20,10 +22,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Support events with empty messages. They now get the default message `"<no message>`.
 
-## 0.1.0 - 2020-06-22
+## 0.1.0 - 2020-06-21
 
 ### Added
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...0.1.1
