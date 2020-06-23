@@ -174,7 +174,7 @@ impl Exporter {
                 let mut data = RequestData {
                     ver: 2,
                     id: span_id_to_string(span.span_context.span_id()),
-                    name: Some(span.name.clone()).filter(|x| x.is_empty()),
+                    name: Some(span.name.clone()).filter(|x| !x.is_empty()),
                     duration: duration_to_string(
                         span.end_time
                             .duration_since(span.start_time)

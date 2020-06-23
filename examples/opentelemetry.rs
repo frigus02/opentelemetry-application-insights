@@ -29,7 +29,7 @@ async fn spawn_child_process(process_name: &str) {
     let tracer = global::tracer("spawn_child_process");
     let span = tracer
         .span_builder("spawn_child_process")
-        .with_kind(SpanKind::Server)
+        .with_kind(SpanKind::Client)
         .start(&tracer);
     span.set_attribute(Key::new("process_name").string(process_name.to_string()));
     let cx = Context::current_with_span(span);
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let tracer = global::tracer("example-opentelemetry");
             let span = tracer
                 .span_builder("child")
-                .with_kind(SpanKind::Client)
+                .with_kind(SpanKind::Server)
                 .start(&tracer);
             let cx = Context::current_with_span(span);
             run_in_child_process().with_context(cx).await;
