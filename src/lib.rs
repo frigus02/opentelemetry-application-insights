@@ -294,6 +294,7 @@ impl Exporter {
                         .attributes
                         .iter()
                         .map(|kv| (kv.key.as_str().to_string(), value_to_string(&kv.value)))
+                        .chain(span.resource.iter().map(|(k, v)| (k.as_str().to_string(), value_to_string(v))))
                         .collect(),
                 )
                 .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
