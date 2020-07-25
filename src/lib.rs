@@ -186,7 +186,10 @@ impl Exporter {
                     url: None,
                     properties: None,
                 };
-                let attrs = evictedhashmap_to_hashmap(&span.attributes);
+                let mut attrs = evictedhashmap_to_hashmap(&span.attributes);
+                for (k, v) in span.resource.iter() {
+                    attrs.insert(k.as_str(), v);
+                }
                 let tags = merge_tags(self.common_tags.clone(), get_tags_for_span(&span, &attrs));
                 if let Some(method) = attrs.get("http.method") {
                     if let Some(route) = attrs.get("http.route") {
@@ -234,7 +237,10 @@ impl Exporter {
                     type_: None,
                     properties: None,
                 };
-                let attrs = evictedhashmap_to_hashmap(&span.attributes);
+                let mut attrs = evictedhashmap_to_hashmap(&span.attributes);
+                for (k, v) in span.resource.iter() {
+                    attrs.insert(k.as_str(), v);
+                }
                 let tags = merge_tags(self.common_tags.clone(), get_tags_for_span(&span, &attrs));
                 if let Some(status_code) = attrs.get("http.status_code") {
                     data.result_code = Some(value_to_string(status_code));
@@ -288,6 +294,7 @@ impl Exporter {
                         .attributes
                         .iter()
                         .map(|kv| (kv.key.as_str().to_string(), value_to_string(&kv.value)))
+                        .chain(span.resource.iter().map(|(k, v)| (k.as_str().to_string(), value_to_string(v))))
                         .collect(),
                 )
                 .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
