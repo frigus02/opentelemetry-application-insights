@@ -1,6 +1,6 @@
 [package]
 name = "opentelemetry-application-insights"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
 description = "OpenTelemetry exporter for Azure Application Insights"
