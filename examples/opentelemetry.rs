@@ -41,7 +41,7 @@ async fn spawn_child_process(process_name: &str) {
         .arg(
             carrier
                 .remove("traceparent")
-                .expect("popagator should inject traceparent"),
+                .expect("propagator should inject traceparent"),
         )
         .spawn();
     let future = child.expect("failed to spawn");
