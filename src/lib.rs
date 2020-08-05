@@ -63,7 +63,7 @@
 //! All other attributes are be directly converted to custom properties.
 //!
 //! For Requests the attributes `http.method` and `http.route` override the Name.
-#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.2.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 
