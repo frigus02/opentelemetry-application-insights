@@ -19,7 +19,6 @@ exclude = [
 ]
 
 [dependencies]
-base64 = "0.12"
 chrono = "0.4"
 log = "0.4"
 opentelemetry = "0.7"
