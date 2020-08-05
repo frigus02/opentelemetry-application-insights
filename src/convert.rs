@@ -29,17 +29,6 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
     DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-pub(crate) fn value_to_string(value: &Value) -> String {
-    match value {
-        Value::Bool(v) => v.to_string(),
-        Value::I64(v) => v.to_string(),
-        Value::U64(v) => v.to_string(),
-        Value::F64(v) => v.to_string(),
-        Value::String(v) => v.to_owned(),
-        Value::Bytes(v) => base64::encode(&v),
-    }
-}
-
 pub(crate) fn evictedhashmap_to_hashmap<'a>(
     from: &'a EvictedHashMap,
 ) -> HashMap<&'a str, &'a Value> {
@@ -54,7 +43,7 @@ pub(crate) fn attrs_to_properties(
         attrs
             .drain()
             .filter(|(k, _v)| !ignored_keys.contains(k))
-            .map(|(k, v)| (k.to_string(), value_to_string(v)))
+            .map(|(k, v)| (k.to_string(), v.into()))
             .collect(),
     )
     .filter(|x: &BTreeMap<String, String>| !x.is_empty())

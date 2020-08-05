@@ -1,4 +1,4 @@
-use crate::convert::{span_id_to_string, trace_id_to_string, value_to_string};
+use crate::convert::{span_id_to_string, trace_id_to_string};
 use log::debug;
 use opentelemetry::api::{SpanId, SpanKind, Value};
 use opentelemetry::exporter::trace;
@@ -57,7 +57,7 @@ pub(crate) fn get_tags_for_span(
             if let Some(route) = attrs.get("http.route") {
                 map.insert(
                     "ai.operation.name".into(),
-                    format!("{} {}", value_to_string(method), value_to_string(route)),
+                    format!("{} {}", String::from(*method), String::from(*route)),
                 );
             }
         }
@@ -66,7 +66,7 @@ pub(crate) fn get_tags_for_span(
     if let Some(user_id) = attrs.get("enduser.id") {
         // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
         // better?
-        map.insert("ai.user.authUserId".into(), value_to_string(user_id));
+        map.insert("ai.user.authUserId".into(), (*user_id).into());
     }
 
     map

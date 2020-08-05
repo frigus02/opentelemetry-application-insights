@@ -74,7 +74,7 @@ mod uploader;
 
 use convert::{
     attrs_to_properties, duration_to_string, evictedhashmap_to_hashmap, span_id_to_string,
-    time_to_string, value_to_string,
+    time_to_string,
 };
 use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData};
 use opentelemetry::api::{SpanKind, StatusCode};
@@ -195,20 +195,20 @@ impl Exporter {
                     if let Some(route) = attrs.get("http.route") {
                         data.name = Some(format!(
                             "{} {}",
-                            value_to_string(method),
-                            value_to_string(route)
+                            String::from(*method),
+                            String::from(*route)
                         ));
                     } else {
-                        data.name = Some(value_to_string(method));
+                        data.name = Some(String::from(*method));
                     }
                 }
                 if let Some(status_code) = attrs.get("http.status_code") {
-                    data.response_code = value_to_string(status_code);
+                    data.response_code = String::from(*status_code);
                 }
                 if let Some(url) = attrs.get("http.url") {
-                    data.url = Some(value_to_string(url));
+                    data.url = Some(String::from(*url));
                 } else if let Some(target) = attrs.get("http.target") {
-                    data.url = Some(value_to_string(target));
+                    data.url = Some(String::from(*target));
                 }
                 data.properties = attrs_to_properties(attrs, &self.request_ignored_properties);
                 Envelope {
@@ -243,27 +243,27 @@ impl Exporter {
                 }
                 let tags = merge_tags(self.common_tags.clone(), get_tags_for_span(&span, &attrs));
                 if let Some(status_code) = attrs.get("http.status_code") {
-                    data.result_code = Some(value_to_string(status_code));
+                    data.result_code = Some(String::from(*status_code));
                 }
                 if let Some(url) = attrs.get("http.url") {
-                    data.data = Some(value_to_string(url));
+                    data.data = Some(String::from(*url));
                 } else if let Some(statement) = attrs.get("db.statement") {
-                    data.data = Some(value_to_string(statement));
+                    data.data = Some(String::from(*statement));
                 }
                 if let Some(host) = attrs.get("http.host") {
-                    data.target = Some(value_to_string(host));
+                    data.target = Some(String::from(*host));
                 } else if let Some(peer_name) = attrs.get("net.peer.name") {
-                    data.target = Some(value_to_string(peer_name));
+                    data.target = Some(String::from(*peer_name));
                 } else if let Some(db_instance) = attrs.get("db.instance") {
-                    data.target = Some(value_to_string(db_instance));
+                    data.target = Some(String::from(*db_instance));
                 }
                 if span.span_kind == SpanKind::Internal {
                     data.type_ = Some("InProc".into());
                     data.success = Some(true);
                 } else if let Some(db_type) = attrs.get("db.type") {
-                    data.type_ = Some(value_to_string(db_type));
+                    data.type_ = Some(String::from(*db_type));
                 } else if let Some(messaging_system) = attrs.get("messaging.system") {
-                    data.type_ = Some(value_to_string(messaging_system));
+                    data.type_ = Some(String::from(*messaging_system));
                 } else if attrs.keys().any(|x| x.starts_with("http.")) {
                     data.type_ = Some("HTTP".into());
                 } else if attrs.keys().any(|x| x.starts_with("db.")) {
@@ -293,11 +293,11 @@ impl Exporter {
                     event
                         .attributes
                         .iter()
-                        .map(|kv| (kv.key.as_str().to_string(), value_to_string(&kv.value)))
+                        .map(|kv| (kv.key.as_str().to_string(), String::from(&kv.value)))
                         .chain(
                             span.resource
                                 .iter()
-                                .map(|(k, v)| (k.as_str().to_string(), value_to_string(v))),
+                                .map(|(k, v)| (k.as_str().to_string(), v.into())),
                         )
                         .collect(),
                 )
