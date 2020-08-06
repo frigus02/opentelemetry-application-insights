@@ -1,9 +1,7 @@
 use crate::convert::{span_id_to_string, trace_id_to_string};
-use log::debug;
-use opentelemetry::api::{SpanId, SpanKind, Value};
+use opentelemetry::api::{SpanId, SpanKind};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub(crate) fn get_common_tags() -> BTreeMap<String, String> {
@@ -12,32 +10,12 @@ pub(crate) fn get_common_tags() -> BTreeMap<String, String> {
         "ai.internal.sdkVersion".into(),
         format!("rust:ot:ext{}", std::env!("CARGO_PKG_VERSION")),
     );
-    tags.insert(
-        "ai.cloud.role".into(),
-        std::env::args()
-            .next()
-            .and_then(|process_name| {
-                std::path::Path::new(&process_name)
-                    .file_stem()
-                    .and_then(|file_stem| file_stem.to_str())
-                    .map(|file_stem| file_stem.to_string())
-            })
-            .unwrap_or_else(|| "Rust Application".into()),
-    );
-    match gethostname::gethostname().into_string() {
-        Ok(hostname) => {
-            tags.insert("ai.cloud.roleInstance".into(), hostname);
-        }
-        Err(_) => {
-            debug!("Failed to read hostname. Cloud role instance tags will be be set.");
-        }
-    }
     tags
 }
 
 pub(crate) fn get_tags_for_span(
-    span: &Arc<trace::SpanData>,
-    attrs: &HashMap<&str, &Value>,
+    span: &trace::SpanData,
+    properties: &Option<BTreeMap<String, String>>,
 ) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
 
@@ -52,21 +30,34 @@ pub(crate) fn get_tags_for_span(
         );
     }
 
-    if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
-        if let Some(method) = attrs.get("http.method") {
-            if let Some(route) = attrs.get("http.route") {
-                map.insert(
-                    "ai.operation.name".into(),
-                    format!("{} {}", String::from(*method), String::from(*route)),
-                );
+    if let Some(properties) = properties {
+        if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
+            if let Some(method) = properties.get("http.method") {
+                if let Some(route) = properties.get("http.route") {
+                    map.insert("ai.operation.name".into(), format!("{} {}", method, route));
+                }
             }
         }
-    }
 
-    if let Some(user_id) = attrs.get("enduser.id") {
-        // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
-        // better?
-        map.insert("ai.user.authUserId".into(), (*user_id).into());
+        if let Some(user_id) = properties.get("enduser.id") {
+            // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
+            // better?
+            map.insert("ai.user.authUserId".into(), user_id.to_owned());
+        }
+
+        if let Some(service_name) = properties.get("service.name") {
+            let mut cloud_role: String = service_name.to_owned();
+            if let Some(service_namespace) = properties.get("service.namespace") {
+                cloud_role.insert_str(0, ".");
+                cloud_role.insert_str(0, service_namespace);
+            }
+
+            map.insert("ai.cloud.role".into(), cloud_role);
+        }
+
+        if let Some(service_instance) = properties.get("service.instance.id") {
+            map.insert("ai.cloud.roleInstance".into(), service_instance.to_owned());
+        }
     }
 
     map

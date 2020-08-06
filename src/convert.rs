@@ -1,7 +1,7 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use opentelemetry::api::{SpanId, TraceId, Value};
-use opentelemetry::sdk::EvictedHashMap;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use opentelemetry::sdk::{EvictedHashMap, Resource};
+use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
@@ -29,20 +29,23 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
     DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-pub(crate) fn evictedhashmap_to_hashmap<'a>(
-    from: &'a EvictedHashMap,
+pub(crate) fn collect_attrs<'a>(
+    attributes: &'a EvictedHashMap,
+    resource: &'a Resource,
 ) -> HashMap<&'a str, &'a Value> {
-    from.iter().map(|(k, v)| (k.as_str(), v)).collect()
+    attributes
+        .iter()
+        .map(|(k, v)| (k.as_str(), v))
+        .chain(resource.iter().map(|(k, v)| (k.as_str(), v)))
+        .collect()
 }
 
 pub(crate) fn attrs_to_properties(
     mut attrs: HashMap<&str, &Value>,
-    ignored_keys: &HashSet<&str>,
 ) -> Option<BTreeMap<String, String>> {
     Some(
         attrs
             .drain()
-            .filter(|(k, _v)| !ignored_keys.contains(k))
             .map(|(k, v)| (k.to_string(), v.into()))
             .collect(),
     )
