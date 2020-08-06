@@ -75,7 +75,7 @@ mod uploader;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData};
+use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
 use opentelemetry::api::{Event, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
@@ -142,8 +142,9 @@ impl Exporter {
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let data: RequestData = span.as_ref().into();
+                let mut data: RequestData = span.as_ref().into();
                 let tags = get_tags_for_span(&span, &data.properties);
+                data.sanitize();
                 (
                     Data::Request(data),
                     tags,
@@ -151,8 +152,9 @@ impl Exporter {
                 )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let data: RemoteDependencyData = span.as_ref().into();
+                let mut data: RemoteDependencyData = span.as_ref().into();
                 let tags = get_tags_for_span(&span, &data.properties);
+                data.sanitize();
                 (
                     Data::RemoteDependency(data),
                     tags,
@@ -162,27 +164,35 @@ impl Exporter {
         };
         result.push({
             let tags = merge_tags(self.common_tags.clone(), tags);
-            Envelope {
+            let mut envelope = Envelope {
                 name: name.into(),
                 time: time_to_string(span.start_time),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone()),
                 tags: Some(tags),
                 data: Some(data),
-            }
+            };
+            envelope.sanitize();
+            envelope
         });
 
         for event in span.message_events.iter() {
-            result.push(Envelope {
-                name: "Microsoft.ApplicationInsights.Message".into(),
-                time: time_to_string(event.timestamp),
-                sample_rate: Some(self.sample_rate),
-                i_key: Some(self.instrumentation_key.clone()),
-                tags: Some(merge_tags(
-                    self.common_tags.clone(),
-                    get_tags_for_event(&span),
-                )),
-                data: Some(Data::Message(event.into())),
+            result.push({
+                let mut data: MessageData = event.into();
+                data.sanitize();
+                let mut envelope = Envelope {
+                    name: "Microsoft.ApplicationInsights.Message".into(),
+                    time: time_to_string(event.timestamp),
+                    sample_rate: Some(self.sample_rate),
+                    i_key: Some(self.instrumentation_key.clone()),
+                    tags: Some(merge_tags(
+                        self.common_tags.clone(),
+                        get_tags_for_event(&span),
+                    )),
+                    data: Some(Data::Message(data)),
+                };
+                envelope.sanitize();
+                envelope
             });
         }
 
