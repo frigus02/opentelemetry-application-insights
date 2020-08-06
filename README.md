@@ -56,9 +56,9 @@ The following of the Span's attributes map to special fields in Application Insi
 | `db.statement`                           | Dependency Data                |
 | `http.host`                              | Dependency Target              |
 | `net.peer.name`                          | Dependency Target              |
-| `db.instance`                            | Dependency Target              |
+| `db.name`                                | Dependency Target              |
 | `http.status_code`                       | Dependency Result code         |
-| `db.type`                                | Dependency Type                |
+| `db.system`                              | Dependency Type                |
 | `messaging.system`                       | Dependency Type                |
 | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
 | `"DB"` if any `db.` attribute exists     | Dependency Type                |

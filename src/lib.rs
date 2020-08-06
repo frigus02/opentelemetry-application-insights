@@ -50,9 +50,9 @@
 //! | `db.statement`                           | Dependency Data                |
 //! | `http.host`                              | Dependency Target              |
 //! | `net.peer.name`                          | Dependency Target              |
-//! | `db.instance`                            | Dependency Target              |
+//! | `db.name`                                | Dependency Target              |
 //! | `http.status_code`                       | Dependency Result code         |
-//! | `db.type`                                | Dependency Type                |
+//! | `db.system`                              | Dependency Type                |
 //! | `messaging.system`                       | Dependency Type                |
 //! | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
 //! | `"DB"` if any `db.` attribute exists     | Dependency Type                |
@@ -116,8 +116,8 @@ impl Exporter {
             "db.statement",
             "http.host",
             "net.peer.name",
-            "db.instance",
-            "db.type",
+            "db.name",
+            "db.system",
             "messaging.system",
         ]
         .iter()
@@ -254,14 +254,14 @@ impl Exporter {
                     data.target = Some(String::from(*host));
                 } else if let Some(peer_name) = attrs.get("net.peer.name") {
                     data.target = Some(String::from(*peer_name));
-                } else if let Some(db_instance) = attrs.get("db.instance") {
-                    data.target = Some(String::from(*db_instance));
+                } else if let Some(db_name) = attrs.get("db.name") {
+                    data.target = Some(String::from(*db_name));
                 }
                 if span.span_kind == SpanKind::Internal {
                     data.type_ = Some("InProc".into());
                     data.success = Some(true);
-                } else if let Some(db_type) = attrs.get("db.type") {
-                    data.type_ = Some(String::from(*db_type));
+                } else if let Some(db_system) = attrs.get("db.system") {
+                    data.type_ = Some(String::from(*db_system));
                 } else if let Some(messaging_system) = attrs.get("messaging.system") {
                     data.type_ = Some(String::from(*messaging_system));
                 } else if attrs.keys().any(|x| x.starts_with("http.")) {
