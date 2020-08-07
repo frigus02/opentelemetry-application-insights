@@ -41,8 +41,8 @@ pub(crate) fn get_tags_for_span(
         }
 
         if let Some(user_id) = properties.get("enduser.id") {
-            // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id) fit
-            // better?
+            // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
+            // fit better?
             map.insert(tags::USER_AUTH_USER_ID, user_id.to_owned());
         }
 

@@ -1,4 +1,7 @@
-//! An [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) exporter implementation for [OpenTelemetry Rust](https://github.com/open-telemetry/opentelemetry-rust).
+//! An [Azure Application Insights] exporter implementation for [OpenTelemetry Rust].
+//!
+//! [Azure Application Insights]: https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview
+//! [OpenTelemetry Rust]: https://github.com/open-telemetry/opentelemetry-rust
 //!
 //! **Disclaimer**: This is not an official Microsoft product.
 //!
@@ -19,11 +22,14 @@
 //! }
 //! ```
 //!
-//! Then follow the documentation of [opentelemetry](https://github.com/open-telemetry/opentelemetry-rust) to create spans and events.
+//! Then follow the documentation of [opentelemetry] to create spans and events.
+//!
+//! [opentelemetry]: https://github.com/open-telemetry/opentelemetry-rust
 //!
 //! # Attribute mapping
 //!
-//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's best to map OpenTelemetry fields to their correct Application Insights pendant.
+//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's
+//! best to map OpenTelemetry fields to their correct Application Insights pendant.
 //!
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
 //! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
@@ -37,11 +43,15 @@
 //!
 //! The Span's list of Events are converted to Trace telemetry.
 //!
-//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if the status is `OK`; otherwise `false`.
+//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if
+//! the status is `OK`; otherwise `false`.
 //!
 //! For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
 //!
-//! The following of the Span's attributes map to special fields in Application Insights (the mapping tries to follow [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions)).
+//! The following of the Span's attributes map to special fields in Application Insights (the
+//! mapping tries to follow [OpenTelemetry semantic conventions]).
+//!
+//! [OpenTelemetry semantic conventions]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 //!
 //! | OpenTelemetry attribute key              | Application Insights field     |
 //! | ---------------------------------------- | ------------------------------ |
