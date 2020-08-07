@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Update attribute mapping based on new semantic conventions. The Dependency Target is now filled from `db.name` (before `db.instance`) and the Dependency Type is now filled from `db.system` (before `db.type`). Thanks [@johnchildren](https://github.com/johnchildren).
+
 ## [0.2.0] - 2020-08-05
 
 ### Changed
