@@ -1,8 +1,9 @@
 use opentelemetry::{
-    api::{KeyValue, SpanKind, Tracer},
+    api::{KeyValue, Provider, SpanKind, Tracer},
     global, sdk,
 };
 use std::env;
+use std::sync::Arc;
 
 fn log() {
     global::tracer("log").get_active_span(|span| {
@@ -18,30 +19,36 @@ fn main() {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
+
+    let client_exporter =
+        opentelemetry_application_insights::Exporter::new(instrumentation_key.clone());
+    let client_provider = sdk::Provider::builder()
+        .with_simple_exporter(client_exporter)
+        .with_config(sdk::Config {
+            resource: Arc::new(sdk::Resource::new(vec![
+                KeyValue::new("service.namespace", "example-attributes"),
+                KeyValue::new("service.name", "client"),
+            ])),
+            ..sdk::Config::default()
+        })
         .build();
-    global::set_provider(provider);
+    let client_tracer = client_provider.get_tracer("example-attributes");
 
-    let tracer = global::tracer("example-attributes");
+    let server_exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
+    let server_provider = sdk::Provider::builder()
+        .with_simple_exporter(server_exporter)
+        .with_config(sdk::Config {
+            resource: Arc::new(sdk::Resource::new(vec![
+                KeyValue::new("service.namespace", "example-attributes"),
+                KeyValue::new("service.name", "server"),
+            ])),
+            ..sdk::Config::default()
+        })
+        .build();
+    let server_tracer = server_provider.get_tracer("example-attributes");
 
-    let span = tracer
-        .span_builder("request")
-        .with_kind(SpanKind::Server)
-        .with_attributes(vec![
-            KeyValue::new("enduser.id", "marry"),
-            KeyValue::new("net.host.name", "localhost"),
-            KeyValue::new("net.peer.ip", "10.1.2.3"),
-            KeyValue::new("http.target", "/hello/world?name=marry"),
-            KeyValue::new("http.status_code", "200"),
-        ])
-        .start(&tracer);
-    tracer.with_span(span, |_cx| {
-        log();
-    });
-
-    let span = tracer
+    // An HTTP client make a request
+    let span = client_tracer
         .span_builder("dependency")
         .with_kind(SpanKind::Client)
         .with_attributes(vec![
@@ -51,8 +58,22 @@ fn main() {
             KeyValue::new("http.url", "http://10.1.2.4/hello/world?name=marry"),
             KeyValue::new("http.status_code", "200"),
         ])
-        .start(&tracer);
-    tracer.with_span(span, |_cx| {
-        log();
+        .start(&client_tracer);
+    client_tracer.with_span(span, |cx| {
+        // The server receives the request
+        let builder = server_tracer
+            .span_builder("request")
+            .with_kind(SpanKind::Server)
+            .with_attributes(vec![
+                KeyValue::new("enduser.id", "marry"),
+                KeyValue::new("net.host.name", "localhost"),
+                KeyValue::new("net.peer.ip", "10.1.2.3"),
+                KeyValue::new("http.target", "/hello/world?name=marry"),
+                KeyValue::new("http.status_code", "200"),
+            ]);
+        let span = server_tracer.build_with_context(builder, &cx);
+        server_tracer.with_span(span, |_cx| {
+            log();
+        });
     });
 }
