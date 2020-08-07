@@ -75,7 +75,10 @@ mod uploader;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
+use models::{
+    context_tag_keys::ContextTagKey, context_tag_keys::APPLICATION_VERSION, Data, Envelope,
+    MessageData, RemoteDependencyData, RequestData, Sanitize,
+};
 use opentelemetry::api::{Event, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
@@ -87,7 +90,7 @@ use tags::{get_common_tags, get_tags_for_event, get_tags_for_span, merge_tags};
 #[derive(Debug)]
 pub struct Exporter {
     instrumentation_key: String,
-    common_tags: BTreeMap<String, String>,
+    common_tags: BTreeMap<ContextTagKey, String>,
     sample_rate: f64,
 }
 
@@ -109,7 +112,7 @@ impl Exporter {
     ///     .with_application_version(std::env!("CARGO_PKG_VERSION").into());
     /// ```
     pub fn with_application_version(mut self, ver: String) -> Self {
-        self.common_tags.insert("ai.application.ver".into(), ver);
+        self.common_tags.insert(APPLICATION_VERSION, ver);
         self
     }
 

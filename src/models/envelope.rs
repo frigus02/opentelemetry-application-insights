@@ -1,3 +1,4 @@
+use crate::models::context_tag_keys::ContextTagKey;
 use crate::models::Data;
 use crate::models::Sanitize;
 use serde::Serialize;
@@ -32,7 +33,7 @@ pub(crate) struct Envelope {
     /// Key/value collection of context properties. See ContextTagKeys for information on available
     /// properties.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) tags: Option<std::collections::BTreeMap<String, String>>,
+    pub(crate) tags: Option<std::collections::BTreeMap<ContextTagKey, String>>,
 
     /// Telemetry data item.
     #[serde(skip_serializing_if = "Option::is_none")]
