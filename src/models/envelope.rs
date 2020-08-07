@@ -1,4 +1,4 @@
-use crate::models::context_tag_keys::ContextTagKey;
+use crate::models::context_tag_keys::{sanitize_tags, ContextTagKey};
 use crate::models::Data;
 use crate::models::Sanitize;
 use serde::Serialize;
@@ -47,5 +47,6 @@ impl Sanitize for Envelope {
         if let Some(i_key) = self.i_key.as_mut() {
             i_key.truncate(40);
         }
+        sanitize_tags(&mut self.tags);
     }
 }
