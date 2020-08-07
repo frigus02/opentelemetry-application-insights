@@ -53,22 +53,26 @@
 //!
 //! [OpenTelemetry semantic conventions]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 //!
-//! | OpenTelemetry attribute key              | Application Insights field     |
-//! | ---------------------------------------- | ------------------------------ |
-//! | `enduser.id`                             | Context: Authenticated user id |
-//! | `http.url`                               | Dependency Data                |
-//! | `db.statement`                           | Dependency Data                |
-//! | `http.host`                              | Dependency Target              |
-//! | `net.peer.name`                          | Dependency Target              |
-//! | `db.name`                                | Dependency Target              |
-//! | `http.status_code`                       | Dependency Result code         |
-//! | `db.system`                              | Dependency Type                |
-//! | `messaging.system`                       | Dependency Type                |
-//! | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
-//! | `"DB"` if any `db.` attribute exists     | Dependency Type                |
-//! | `http.url`                               | Request Url                    |
-//! | `http.target`                            | Request Url                    |
-//! | `http.status_code`                       | Request Response code          |
+//! | OpenTelemetry attribute key                 | Application Insights field     |
+//! | ------------------------------------------- | ------------------------------ |
+//! | `enduser.id`                                | Context: Authenticated user id |
+//! | `http.url`                                  | Dependency Data                |
+//! | `db.statement`                              | Dependency Data                |
+//! | `http.host`                                 | Dependency Target              |
+//! | `net.peer.name` + `net.peer.port`           | Dependency Target              |
+//! | `net.peer.ip` + `net.peer.port`             | Dependency Target              |
+//! | `db.name`                                   | Dependency Target              |
+//! | `http.status_code`                          | Dependency Result code         |
+//! | `db.system`                                 | Dependency Type                |
+//! | `messaging.system`                          | Dependency Type                |
+//! | `rpc.system`                                | Dependency Type                |
+//! | `"HTTP"` if any `http.` attribute exists    | Dependency Type                |
+//! | `"DB"` if any `db.` attribute exists        | Dependency Type                |
+//! | `http.url`                                  | Request Url                    |
+//! | `http.scheme` + `http.host` + `http.target` | Request Url                    |
+//! | `http.client_ip`                            | Request Source                 |
+//! | `net.peer.ip`                               | Request Source                 |
+//! | `http.status_code`                          | Request Response code          |
 //!
 //! All other attributes are be directly converted to custom properties.
 //!
@@ -257,15 +261,11 @@ impl From<&trace::SpanData> for RequestData {
         let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
 
         if let Some(method) = attrs.get("http.method") {
-            if let Some(route) = attrs.get("http.route") {
-                data.name = Some(format!(
-                    "{} {}",
-                    String::from(*method),
-                    String::from(*route)
-                ));
+            data.name = Some(if let Some(route) = attrs.get("http.route") {
+                format!("{} {}", String::from(*method), String::from(*route))
             } else {
-                data.name = Some(String::from(*method));
-            }
+                String::from(*method)
+            });
         }
 
         if let Some(status_code) = attrs.get("http.status_code") {
@@ -275,7 +275,28 @@ impl From<&trace::SpanData> for RequestData {
         if let Some(url) = attrs.get("http.url") {
             data.url = Some(String::from(*url));
         } else if let Some(target) = attrs.get("http.target") {
-            data.url = Some(String::from(*target));
+            let mut target = String::from(*target);
+            if !target.starts_with('/') {
+                target.insert(0, '/');
+            }
+
+            if let Some((scheme, host)) = opt_zip(attrs.get("http.scheme"), attrs.get("http.host"))
+            {
+                data.url = Some(format!(
+                    "{}://{}{}",
+                    String::from(*scheme),
+                    String::from(*host),
+                    target
+                ));
+            } else {
+                data.url = Some(target);
+            }
+        }
+
+        if let Some(client_ip) = attrs.get("http.client_ip") {
+            data.source = Some(String::from(*client_ip));
+        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
+            data.source = Some(String::from(*peer_ip));
         }
 
         data.properties = attrs_to_properties(attrs);
@@ -317,7 +338,25 @@ impl From<&trace::SpanData> for RemoteDependencyData {
         if let Some(host) = attrs.get("http.host") {
             data.target = Some(String::from(*host));
         } else if let Some(peer_name) = attrs.get("net.peer.name") {
-            data.target = Some(String::from(*peer_name));
+            if let Some(peer_port) = attrs.get("net.peer.port") {
+                data.target = Some(format!(
+                    "{}:{}",
+                    String::from(*peer_name),
+                    String::from(*peer_port)
+                ));
+            } else {
+                data.target = Some(String::from(*peer_name));
+            }
+        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
+            if let Some(peer_port) = attrs.get("net.peer.port") {
+                data.target = Some(format!(
+                    "{}:{}",
+                    String::from(*peer_ip),
+                    String::from(*peer_port)
+                ));
+            } else {
+                data.target = Some(String::from(*peer_ip));
+            }
         } else if let Some(db_name) = attrs.get("db.name") {
             data.target = Some(String::from(*db_name));
         }
@@ -329,6 +368,8 @@ impl From<&trace::SpanData> for RemoteDependencyData {
             data.type_ = Some(String::from(*db_system));
         } else if let Some(messaging_system) = attrs.get("messaging.system") {
             data.type_ = Some(String::from(*messaging_system));
+        } else if let Some(rpc_system) = attrs.get("rpc.system") {
+            data.type_ = Some(String::from(*rpc_system));
         } else if attrs.keys().any(|x| x.starts_with("http.")) {
             data.type_ = Some("HTTP".into());
         } else if attrs.keys().any(|x| x.starts_with("db.")) {
@@ -358,5 +399,12 @@ impl From<&Event> for MessageData {
             )
             .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
         }
+    }
+}
+
+fn opt_zip<T1, T2>(o1: Option<T1>, o2: Option<T2>) -> Option<(T1, T2)> {
+    match (o1, o2) {
+        (Some(v1), Some(v2)) => Some((v1, v2)),
+        _ => None,
     }
 }

@@ -59,22 +59,26 @@ mapping tries to follow [OpenTelemetry semantic conventions]).
 
 [OpenTelemetry semantic conventions]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 
-| OpenTelemetry attribute key              | Application Insights field     |
-| ---------------------------------------- | ------------------------------ |
-| `enduser.id`                             | Context: Authenticated user id |
-| `http.url`                               | Dependency Data                |
-| `db.statement`                           | Dependency Data                |
-| `http.host`                              | Dependency Target              |
-| `net.peer.name`                          | Dependency Target              |
-| `db.name`                                | Dependency Target              |
-| `http.status_code`                       | Dependency Result code         |
-| `db.system`                              | Dependency Type                |
-| `messaging.system`                       | Dependency Type                |
-| `"HTTP"` if any `http.` attribute exists | Dependency Type                |
-| `"DB"` if any `db.` attribute exists     | Dependency Type                |
-| `http.url`                               | Request Url                    |
-| `http.target`                            | Request Url                    |
-| `http.status_code`                       | Request Response code          |
+| OpenTelemetry attribute key                 | Application Insights field     |
+| ------------------------------------------- | ------------------------------ |
+| `enduser.id`                                | Context: Authenticated user id |
+| `http.url`                                  | Dependency Data                |
+| `db.statement`                              | Dependency Data                |
+| `http.host`                                 | Dependency Target              |
+| `net.peer.name` + `net.peer.port`           | Dependency Target              |
+| `net.peer.ip` + `net.peer.port`             | Dependency Target              |
+| `db.name`                                   | Dependency Target              |
+| `http.status_code`                          | Dependency Result code         |
+| `db.system`                                 | Dependency Type                |
+| `messaging.system`                          | Dependency Type                |
+| `rpc.system`                                | Dependency Type                |
+| `"HTTP"` if any `http.` attribute exists    | Dependency Type                |
+| `"DB"` if any `db.` attribute exists        | Dependency Type                |
+| `http.url`                                  | Request Url                    |
+| `http.scheme` + `http.host` + `http.target` | Request Url                    |
+| `http.client_ip`                            | Request Source                 |
+| `net.peer.ip`                               | Request Source                 |
+| `http.status_code`                          | Request Response code          |
 
 All other attributes are be directly converted to custom properties.
 
