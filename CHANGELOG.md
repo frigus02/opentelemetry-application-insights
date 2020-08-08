@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Automatically truncate any values that are too long for Application Insight.
+- Request Url is now additionally constructed from `http.scheme`, `http.host` and `http.target` if all three are available.
+- Request Source is now filled from`http.client_ip` or `net.peer.ip`.
+- Dependency Target now includes the port from `net.peer.port` and falls back to `net.peer.ip` if the name is not available.
+- Dependency Type now additionally looks into `rpc.system`.
+
 ### Changed
 
 - Update attribute mapping based on new semantic conventions. The Dependency Target is now filled from `db.name` (before `db.instance`) and the Dependency Type is now filled from `db.system` (before `db.type`). Thanks [@johnchildren](https://github.com/johnchildren).
+- Cloud Role is now filled from the resource attributes `service.namespace` and `service.name` (before it was autimatically filled from the current process executable name). This follows the OpenTelemetry specification and gives users of the exporter more flexibility.
+- Cloud Role Instance is now filled from the resource attribute `service.instance.id` (before it was filled automatically from the machine's hostname). This follows the OpenTelemetry specification and gives users of the exporter more flexibility.
 
 ## [0.2.0] - 2020-08-05
 

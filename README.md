@@ -62,6 +62,8 @@ mapping tries to follow [OpenTelemetry semantic conventions]).
 | OpenTelemetry attribute key                 | Application Insights field     |
 | ------------------------------------------- | ------------------------------ |
 | `enduser.id`                                | Context: Authenticated user id |
+| `service.namespace` + `service.name`        | Context: Cloud role            |
+| `service.instance.id`                       | Context: Cloud role instance   |
 | `http.url`                                  | Dependency Data                |
 | `db.statement`                              | Dependency Data                |
 | `http.host`                                 | Dependency Target              |
