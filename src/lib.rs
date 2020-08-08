@@ -1,4 +1,7 @@
-//! An [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) exporter implementation for [OpenTelemetry Rust](https://github.com/open-telemetry/opentelemetry-rust).
+//! An [Azure Application Insights] exporter implementation for [OpenTelemetry Rust].
+//!
+//! [Azure Application Insights]: https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview
+//! [OpenTelemetry Rust]: https://github.com/open-telemetry/opentelemetry-rust
 //!
 //! **Disclaimer**: This is not an official Microsoft product.
 //!
@@ -19,11 +22,14 @@
 //! }
 //! ```
 //!
-//! Then follow the documentation of [opentelemetry](https://github.com/open-telemetry/opentelemetry-rust) to create spans and events.
+//! Then follow the documentation of [opentelemetry] to create spans and events.
+//!
+//! [opentelemetry]: https://github.com/open-telemetry/opentelemetry-rust
 //!
 //! # Attribute mapping
 //!
-//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's best to map OpenTelemetry fields to their correct Application Insights pendant.
+//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's
+//! best to map OpenTelemetry fields to their correct Application Insights pendant.
 //!
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
 //! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
@@ -37,28 +43,38 @@
 //!
 //! The Span's list of Events are converted to Trace telemetry.
 //!
-//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if the status is `OK`; otherwise `false`.
+//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if
+//! the status is `OK`; otherwise `false`.
 //!
 //! For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
 //!
-//! The following of the Span's attributes map to special fields in Application Insights (the mapping tries to follow [OpenTelemetry semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions)).
+//! The following of the Span's attributes map to special fields in Application Insights (the
+//! mapping tries to follow [OpenTelemetry semantic conventions]).
 //!
-//! | OpenTelemetry attribute key              | Application Insights field     |
-//! | ---------------------------------------- | ------------------------------ |
-//! | `enduser.id`                             | Context: Authenticated user id |
-//! | `http.url`                               | Dependency Data                |
-//! | `db.statement`                           | Dependency Data                |
-//! | `http.host`                              | Dependency Target              |
-//! | `net.peer.name`                          | Dependency Target              |
-//! | `db.name`                                | Dependency Target              |
-//! | `http.status_code`                       | Dependency Result code         |
-//! | `db.system`                              | Dependency Type                |
-//! | `messaging.system`                       | Dependency Type                |
-//! | `"HTTP"` if any `http.` attribute exists | Dependency Type                |
-//! | `"DB"` if any `db.` attribute exists     | Dependency Type                |
-//! | `http.url`                               | Request Url                    |
-//! | `http.target`                            | Request Url                    |
-//! | `http.status_code`                       | Request Response code          |
+//! [OpenTelemetry semantic conventions]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
+//!
+//! | OpenTelemetry attribute key                 | Application Insights field     |
+//! | ------------------------------------------- | ------------------------------ |
+//! | `enduser.id`                                | Context: Authenticated user id |
+//! | `service.namespace` + `service.name`        | Context: Cloud role            |
+//! | `service.instance.id`                       | Context: Cloud role instance   |
+//! | `http.url`                                  | Dependency Data                |
+//! | `db.statement`                              | Dependency Data                |
+//! | `http.host`                                 | Dependency Target              |
+//! | `net.peer.name` + `net.peer.port`           | Dependency Target              |
+//! | `net.peer.ip` + `net.peer.port`             | Dependency Target              |
+//! | `db.name`                                   | Dependency Target              |
+//! | `http.status_code`                          | Dependency Result code         |
+//! | `db.system`                                 | Dependency Type                |
+//! | `messaging.system`                          | Dependency Type                |
+//! | `rpc.system`                                | Dependency Type                |
+//! | `"HTTP"` if any `http.` attribute exists    | Dependency Type                |
+//! | `"DB"` if any `db.` attribute exists        | Dependency Type                |
+//! | `http.url`                                  | Request Url                    |
+//! | `http.scheme` + `http.host` + `http.target` | Request Url                    |
+//! | `http.client_ip`                            | Request Source                 |
+//! | `net.peer.ip`                               | Request Source                 |
+//! | `http.status_code`                          | Request Response code          |
 //!
 //! All other attributes are be directly converted to custom properties.
 //!
@@ -73,13 +89,15 @@ mod tags;
 mod uploader;
 
 use convert::{
-    attrs_to_properties, duration_to_string, evictedhashmap_to_hashmap, span_id_to_string,
-    time_to_string,
+    attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData};
-use opentelemetry::api::{SpanKind, StatusCode};
+use models::{
+    context_tag_keys::ContextTagKey, context_tag_keys::APPLICATION_VERSION, Data, Envelope,
+    MessageData, RemoteDependencyData, RequestData, Sanitize,
+};
+use opentelemetry::api::{Event, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tags::{get_common_tags, get_tags_for_event, get_tags_for_span, merge_tags};
@@ -88,47 +106,18 @@ use tags::{get_common_tags, get_tags_for_event, get_tags_for_span, merge_tags};
 #[derive(Debug)]
 pub struct Exporter {
     instrumentation_key: String,
-    common_tags: BTreeMap<String, String>,
+    common_tags: BTreeMap<ContextTagKey, String>,
     sample_rate: f64,
-    request_ignored_properties: HashSet<&'static str>,
-    dependency_ignored_properties: HashSet<&'static str>,
 }
 
 impl Exporter {
     /// Create a new exporter.
     pub fn new(instrumentation_key: String) -> Self {
         let common_tags = get_common_tags();
-        let request_ignored_properties: HashSet<&'static str> = [
-            "enduser.id",
-            "http.method",
-            "http.route",
-            "http.status_code",
-            "http.url",
-            "http.target",
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        let dependency_ignored_properties: HashSet<&'static str> = [
-            "enduser.id",
-            "http.status_code",
-            "http.url",
-            "db.statement",
-            "http.host",
-            "net.peer.name",
-            "db.name",
-            "db.system",
-            "messaging.system",
-        ]
-        .iter()
-        .cloned()
-        .collect();
         Self {
             instrumentation_key,
             common_tags,
             sample_rate: 100.0,
-            request_ignored_properties,
-            dependency_ignored_properties,
         }
     }
 
@@ -139,7 +128,7 @@ impl Exporter {
     ///     .with_application_version(std::env!("CARGO_PKG_VERSION").into());
     /// ```
     pub fn with_application_version(mut self, ver: String) -> Self {
-        self.common_tags.insert("ai.application.ver".into(), ver);
+        self.common_tags.insert(APPLICATION_VERSION, ver);
         self
     }
 
@@ -169,150 +158,60 @@ impl Exporter {
 
     fn create_envelopes(&self, span: Arc<trace::SpanData>) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.message_events.len());
-        result.push(match span.span_kind {
+
+        let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let mut data = RequestData {
-                    ver: 2,
-                    id: span_id_to_string(span.span_context.span_id()),
-                    name: Some(span.name.clone()).filter(|x| !x.is_empty()),
-                    duration: duration_to_string(
-                        span.end_time
-                            .duration_since(span.start_time)
-                            .unwrap_or(Duration::from_secs(0)),
-                    ),
-                    response_code: (span.status_code.clone() as i32).to_string(),
-                    success: span.status_code == StatusCode::OK,
-                    source: None,
-                    url: None,
-                    properties: None,
-                };
-                let mut attrs = evictedhashmap_to_hashmap(&span.attributes);
-                for (k, v) in span.resource.iter() {
-                    attrs.insert(k.as_str(), v);
-                }
-                let tags = merge_tags(self.common_tags.clone(), get_tags_for_span(&span, &attrs));
-                if let Some(method) = attrs.get("http.method") {
-                    if let Some(route) = attrs.get("http.route") {
-                        data.name = Some(format!(
-                            "{} {}",
-                            String::from(*method),
-                            String::from(*route)
-                        ));
-                    } else {
-                        data.name = Some(String::from(*method));
-                    }
-                }
-                if let Some(status_code) = attrs.get("http.status_code") {
-                    data.response_code = String::from(*status_code);
-                }
-                if let Some(url) = attrs.get("http.url") {
-                    data.url = Some(String::from(*url));
-                } else if let Some(target) = attrs.get("http.target") {
-                    data.url = Some(String::from(*target));
-                }
-                data.properties = attrs_to_properties(attrs, &self.request_ignored_properties);
-                Envelope {
-                    name: "Microsoft.ApplicationInsights.Request".into(),
-                    time: time_to_string(span.start_time),
-                    sample_rate: Some(self.sample_rate),
-                    i_key: Some(self.instrumentation_key.clone()),
-                    tags: Some(tags),
-                    data: Some(Data::Request(data)),
-                }
+                let mut data: RequestData = span.as_ref().into();
+                let tags = get_tags_for_span(&span, &data.properties);
+                data.sanitize();
+                (
+                    Data::Request(data),
+                    tags,
+                    "Microsoft.ApplicationInsights.Request",
+                )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let mut data = RemoteDependencyData {
-                    ver: 2,
-                    id: Some(span_id_to_string(span.span_context.span_id())),
-                    name: span.name.clone(),
-                    duration: duration_to_string(
-                        span.end_time
-                            .duration_since(span.start_time)
-                            .unwrap_or(Duration::from_secs(0)),
-                    ),
-                    result_code: Some((span.status_code.clone() as i32).to_string()),
-                    success: Some(span.status_code == StatusCode::OK),
-                    data: None,
-                    target: None,
-                    type_: None,
-                    properties: None,
-                };
-                let mut attrs = evictedhashmap_to_hashmap(&span.attributes);
-                for (k, v) in span.resource.iter() {
-                    attrs.insert(k.as_str(), v);
-                }
-                let tags = merge_tags(self.common_tags.clone(), get_tags_for_span(&span, &attrs));
-                if let Some(status_code) = attrs.get("http.status_code") {
-                    data.result_code = Some(String::from(*status_code));
-                }
-                if let Some(url) = attrs.get("http.url") {
-                    data.data = Some(String::from(*url));
-                } else if let Some(statement) = attrs.get("db.statement") {
-                    data.data = Some(String::from(*statement));
-                }
-                if let Some(host) = attrs.get("http.host") {
-                    data.target = Some(String::from(*host));
-                } else if let Some(peer_name) = attrs.get("net.peer.name") {
-                    data.target = Some(String::from(*peer_name));
-                } else if let Some(db_name) = attrs.get("db.name") {
-                    data.target = Some(String::from(*db_name));
-                }
-                if span.span_kind == SpanKind::Internal {
-                    data.type_ = Some("InProc".into());
-                    data.success = Some(true);
-                } else if let Some(db_system) = attrs.get("db.system") {
-                    data.type_ = Some(String::from(*db_system));
-                } else if let Some(messaging_system) = attrs.get("messaging.system") {
-                    data.type_ = Some(String::from(*messaging_system));
-                } else if attrs.keys().any(|x| x.starts_with("http.")) {
-                    data.type_ = Some("HTTP".into());
-                } else if attrs.keys().any(|x| x.starts_with("db.")) {
-                    data.type_ = Some("DB".into());
-                }
-                data.properties = attrs_to_properties(attrs, &self.dependency_ignored_properties);
-                Envelope {
-                    name: "Microsoft.ApplicationInsights.RemoteDependency".into(),
-                    time: time_to_string(span.start_time),
-                    sample_rate: Some(self.sample_rate),
-                    i_key: Some(self.instrumentation_key.clone()),
-                    tags: Some(tags),
-                    data: Some(Data::RemoteDependency(data)),
-                }
+                let mut data: RemoteDependencyData = span.as_ref().into();
+                let tags = get_tags_for_span(&span, &data.properties);
+                data.sanitize();
+                (
+                    Data::RemoteDependency(data),
+                    tags,
+                    "Microsoft.ApplicationInsights.RemoteDependency",
+                )
             }
+        };
+        result.push({
+            let tags = merge_tags(self.common_tags.clone(), tags);
+            let mut envelope = Envelope {
+                name: name.into(),
+                time: time_to_string(span.start_time),
+                sample_rate: Some(self.sample_rate),
+                i_key: Some(self.instrumentation_key.clone()),
+                tags: Some(tags),
+                data: Some(data),
+            };
+            envelope.sanitize();
+            envelope
         });
 
         for event in span.message_events.iter() {
-            let data = MessageData {
-                ver: 2,
-                message: if event.name.is_empty() {
-                    "<no message>".into()
-                } else {
-                    event.name.clone()
-                },
-                properties: Some(
-                    event
-                        .attributes
-                        .iter()
-                        .map(|kv| (kv.key.as_str().to_string(), String::from(&kv.value)))
-                        .chain(
-                            span.resource
-                                .iter()
-                                .map(|(k, v)| (k.as_str().to_string(), v.into())),
-                        )
-                        .collect(),
-                )
-                .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
-            };
-            result.push(Envelope {
-                name: "Microsoft.ApplicationInsights.Message".into(),
-                time: time_to_string(event.timestamp),
-                sample_rate: Some(self.sample_rate),
-                i_key: Some(self.instrumentation_key.clone()),
-                tags: Some(merge_tags(
-                    self.common_tags.clone(),
-                    get_tags_for_event(&span),
-                )),
-                data: Some(Data::Message(data)),
+            result.push({
+                let mut data: MessageData = event.into();
+                data.sanitize();
+                let mut envelope = Envelope {
+                    name: "Microsoft.ApplicationInsights.Message".into(),
+                    time: time_to_string(event.timestamp),
+                    sample_rate: Some(self.sample_rate),
+                    i_key: Some(self.instrumentation_key.clone()),
+                    tags: Some(merge_tags(
+                        self.common_tags.clone(),
+                        get_tags_for_event(&span),
+                    )),
+                    data: Some(Data::Message(data)),
+                };
+                envelope.sanitize();
+                envelope
             });
         }
 
@@ -340,5 +239,174 @@ impl From<uploader::Response> for trace::ExportResult {
             uploader::Response::Retry => Self::FailedRetryable,
             uploader::Response::NoRetry => Self::FailedNotRetryable,
         }
+    }
+}
+
+impl From<&trace::SpanData> for RequestData {
+    fn from(span: &trace::SpanData) -> RequestData {
+        let mut data = RequestData {
+            ver: 2,
+            id: span_id_to_string(span.span_context.span_id()),
+            name: Some(span.name.clone()).filter(|x| !x.is_empty()),
+            duration: duration_to_string(
+                span.end_time
+                    .duration_since(span.start_time)
+                    .unwrap_or(Duration::from_secs(0)),
+            ),
+            response_code: (span.status_code.clone() as i32).to_string(),
+            success: span.status_code == StatusCode::OK,
+            source: None,
+            url: None,
+            properties: None,
+        };
+
+        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
+
+        if let Some(method) = attrs.get("http.method") {
+            data.name = Some(if let Some(route) = attrs.get("http.route") {
+                format!("{} {}", String::from(*method), String::from(*route))
+            } else {
+                String::from(*method)
+            });
+        }
+
+        if let Some(status_code) = attrs.get("http.status_code") {
+            data.response_code = String::from(*status_code);
+        }
+
+        if let Some(url) = attrs.get("http.url") {
+            data.url = Some(String::from(*url));
+        } else if let Some(target) = attrs.get("http.target") {
+            let mut target = String::from(*target);
+            if !target.starts_with('/') {
+                target.insert(0, '/');
+            }
+
+            if let Some((scheme, host)) = opt_zip(attrs.get("http.scheme"), attrs.get("http.host"))
+            {
+                data.url = Some(format!(
+                    "{}://{}{}",
+                    String::from(*scheme),
+                    String::from(*host),
+                    target
+                ));
+            } else {
+                data.url = Some(target);
+            }
+        }
+
+        if let Some(client_ip) = attrs.get("http.client_ip") {
+            data.source = Some(String::from(*client_ip));
+        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
+            data.source = Some(String::from(*peer_ip));
+        }
+
+        data.properties = attrs_to_properties(attrs);
+        data
+    }
+}
+
+impl From<&trace::SpanData> for RemoteDependencyData {
+    fn from(span: &trace::SpanData) -> RemoteDependencyData {
+        let mut data = RemoteDependencyData {
+            ver: 2,
+            id: Some(span_id_to_string(span.span_context.span_id())),
+            name: span.name.clone(),
+            duration: duration_to_string(
+                span.end_time
+                    .duration_since(span.start_time)
+                    .unwrap_or(Duration::from_secs(0)),
+            ),
+            result_code: Some((span.status_code.clone() as i32).to_string()),
+            success: Some(span.status_code == StatusCode::OK),
+            data: None,
+            target: None,
+            type_: None,
+            properties: None,
+        };
+
+        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
+
+        if let Some(status_code) = attrs.get("http.status_code") {
+            data.result_code = Some(String::from(*status_code));
+        }
+
+        if let Some(url) = attrs.get("http.url") {
+            data.data = Some(String::from(*url));
+        } else if let Some(statement) = attrs.get("db.statement") {
+            data.data = Some(String::from(*statement));
+        }
+
+        if let Some(host) = attrs.get("http.host") {
+            data.target = Some(String::from(*host));
+        } else if let Some(peer_name) = attrs.get("net.peer.name") {
+            if let Some(peer_port) = attrs.get("net.peer.port") {
+                data.target = Some(format!(
+                    "{}:{}",
+                    String::from(*peer_name),
+                    String::from(*peer_port)
+                ));
+            } else {
+                data.target = Some(String::from(*peer_name));
+            }
+        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
+            if let Some(peer_port) = attrs.get("net.peer.port") {
+                data.target = Some(format!(
+                    "{}:{}",
+                    String::from(*peer_ip),
+                    String::from(*peer_port)
+                ));
+            } else {
+                data.target = Some(String::from(*peer_ip));
+            }
+        } else if let Some(db_name) = attrs.get("db.name") {
+            data.target = Some(String::from(*db_name));
+        }
+
+        if span.span_kind == SpanKind::Internal {
+            data.type_ = Some("InProc".into());
+            data.success = Some(true);
+        } else if let Some(db_system) = attrs.get("db.system") {
+            data.type_ = Some(String::from(*db_system));
+        } else if let Some(messaging_system) = attrs.get("messaging.system") {
+            data.type_ = Some(String::from(*messaging_system));
+        } else if let Some(rpc_system) = attrs.get("rpc.system") {
+            data.type_ = Some(String::from(*rpc_system));
+        } else if attrs.keys().any(|x| x.starts_with("http.")) {
+            data.type_ = Some("HTTP".into());
+        } else if attrs.keys().any(|x| x.starts_with("db.")) {
+            data.type_ = Some("DB".into());
+        }
+
+        data.properties = attrs_to_properties(attrs);
+        data
+    }
+}
+
+impl From<&Event> for MessageData {
+    fn from(event: &Event) -> MessageData {
+        MessageData {
+            ver: 2,
+            message: if event.name.is_empty() {
+                "<no message>".into()
+            } else {
+                event.name.clone()
+            },
+            properties: Some(
+                event
+                    .attributes
+                    .iter()
+                    .map(|kv| (kv.key.as_str().to_string(), String::from(&kv.value)))
+                    .collect(),
+            )
+            .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
+        }
+    }
+}
+
+fn opt_zip<T1, T2>(o1: Option<T1>, o2: Option<T2>) -> Option<(T1, T2)> {
+    match (o1, o2) {
+        (Some(v1), Some(v2)) => Some((v1, v2)),
+        _ => None,
     }
 }
