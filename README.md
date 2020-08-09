@@ -55,9 +55,10 @@ the status is `OK`; otherwise `false`.
 For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
 
 The following of the Span's attributes map to special fields in Application Insights (the
-mapping tries to follow [OpenTelemetry semantic conventions]).
+mapping tries to follow the OpenTelemetry semantic conventions for [trace] and [resource]).
 
-[OpenTelemetry semantic conventions]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
+[trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
+[resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
 
 | OpenTelemetry attribute key                 | Application Insights field     |
 | ------------------------------------------- | ------------------------------ |
