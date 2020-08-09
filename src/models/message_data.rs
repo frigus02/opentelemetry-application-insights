@@ -1,4 +1,4 @@
-use crate::models::{sanitize_properties, Sanitize};
+use crate::models::Sanitize;
 use serde::Serialize;
 
 /// Instances of Message represent printf-like trace statements that are text-searched. Log4Net,
@@ -21,6 +21,8 @@ pub(crate) struct MessageData {
 impl Sanitize for MessageData {
     fn sanitize(&mut self) {
         self.message.truncate(32768);
-        sanitize_properties(&mut self.properties);
+        if let Some(properties) = self.properties.as_mut() {
+            properties.sanitize();
+        }
     }
 }

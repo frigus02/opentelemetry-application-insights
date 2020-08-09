@@ -1,4 +1,4 @@
-use crate::models::{sanitize_properties, Sanitize};
+use crate::models::Sanitize;
 use serde::Serialize;
 
 /// An instance of Request represents completion of an external request to the application to do
@@ -55,6 +55,8 @@ impl Sanitize for RequestData {
         if let Some(url) = self.url.as_mut() {
             url.truncate(2048);
         }
-        sanitize_properties(&mut self.properties);
+        if let Some(properties) = self.properties.as_mut() {
+            properties.sanitize();
+        }
     }
 }

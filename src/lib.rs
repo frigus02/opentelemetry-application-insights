@@ -161,9 +161,8 @@ impl Exporter {
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let mut data: RequestData = span.as_ref().into();
+                let data: RequestData = span.as_ref().into();
                 let tags = get_tags_for_span(&span, &data.properties);
-                data.sanitize();
                 (
                     Data::Request(data),
                     tags,
@@ -171,9 +170,8 @@ impl Exporter {
                 )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let mut data: RemoteDependencyData = span.as_ref().into();
+                let data: RemoteDependencyData = span.as_ref().into();
                 let tags = get_tags_for_span(&span, &data.properties);
-                data.sanitize();
                 (
                     Data::RemoteDependency(data),
                     tags,
@@ -183,35 +181,27 @@ impl Exporter {
         };
         result.push({
             let tags = merge_tags(self.common_tags.clone(), tags);
-            let mut envelope = Envelope {
+            Envelope {
                 name: name.into(),
                 time: time_to_string(span.start_time),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone()),
                 tags: Some(tags),
                 data: Some(data),
-            };
-            envelope.sanitize();
-            envelope
+            }
         });
 
         for event in span.message_events.iter() {
-            result.push({
-                let mut data: MessageData = event.into();
-                data.sanitize();
-                let mut envelope = Envelope {
-                    name: "Microsoft.ApplicationInsights.Message".into(),
-                    time: time_to_string(event.timestamp),
-                    sample_rate: Some(self.sample_rate),
-                    i_key: Some(self.instrumentation_key.clone()),
-                    tags: Some(merge_tags(
-                        self.common_tags.clone(),
-                        get_tags_for_event(&span),
-                    )),
-                    data: Some(Data::Message(data)),
-                };
-                envelope.sanitize();
-                envelope
+            result.push(Envelope {
+                name: "Microsoft.ApplicationInsights.Message".into(),
+                time: time_to_string(event.timestamp),
+                sample_rate: Some(self.sample_rate),
+                i_key: Some(self.instrumentation_key.clone()),
+                tags: Some(merge_tags(
+                    self.common_tags.clone(),
+                    get_tags_for_event(&span),
+                )),
+                data: Some(Data::Message(event.into())),
             });
         }
 
@@ -222,10 +212,13 @@ impl Exporter {
 impl trace::SpanExporter for Exporter {
     /// Export spans to Application Insights
     fn export(&self, batch: Vec<Arc<trace::SpanData>>) -> trace::ExportResult {
-        let envelopes = batch
+        let mut envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes(span))
             .collect();
+        for envelope in envelopes.iter_mut() {
+            envelope.sanitize();
+        }
         uploader::send(envelopes).into()
     }
 

@@ -1,4 +1,6 @@
+use crate::models::Sanitize;
 use serde::ser::{Serialize, Serializer};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ContextTagKey(&'static str);
@@ -136,9 +138,9 @@ pub(crate) const INTERNAL_AGENT_VERSION: ContextTagKey =
 /// nodes.
 pub(crate) const INTERNAL_NODE_NAME: ContextTagKey = ContextTagKey::new("ai.internal.nodeName");
 
-pub(crate) fn sanitize_tags(tags: &mut Option<std::collections::BTreeMap<ContextTagKey, String>>) {
-    if let Some(tags) = tags.as_mut() {
-        for (key, value) in tags.iter_mut() {
+impl Sanitize for BTreeMap<ContextTagKey, String> {
+    fn sanitize(&mut self) {
+        for (key, value) in self.iter_mut() {
             value.truncate(match *key {
                 APPLICATION_VERSION => 1024,
                 DEVICE_ID => 1024,

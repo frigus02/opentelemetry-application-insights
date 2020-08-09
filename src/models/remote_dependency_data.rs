@@ -1,4 +1,4 @@
-use crate::models::{sanitize_properties, Sanitize};
+use crate::models::Sanitize;
 use serde::Serialize;
 
 /// An instance of Remote Dependency represents an interaction of the monitored component with a
@@ -67,6 +67,8 @@ impl Sanitize for RemoteDependencyData {
         if let Some(target) = self.target.as_mut() {
             target.truncate(1024);
         }
-        sanitize_properties(&mut self.properties);
+        if let Some(properties) = self.properties.as_mut() {
+            properties.sanitize();
+        }
     }
 }
