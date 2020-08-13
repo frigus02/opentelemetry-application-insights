@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Removed `.with_application_version` function on exporter. Please use the `service.version` resource attribute instead. See [semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions#service) for about the attribute.
+
+  ```rust
+  sdk::Provider::builder()
+      .with_config(sdk::Config {
+          resource: Arc::new(sdk::Resource::new(vec![
+              KeyValue::new("service.version", concat!("semver:", env!("CARGO_PKG_VERSION"))),
+          ])),
+          ..sdk::Config::default()
+      })
+      .build();
+  ```
+
 ## [0.3.0] - 2020-08-09
 
 ### Added

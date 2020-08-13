@@ -59,6 +59,10 @@ pub(crate) fn get_tags_for_span(
         if let Some(service_instance) = properties.get("service.instance.id") {
             map.insert(tags::CLOUD_ROLE_INSTANCE, service_instance.to_owned());
         }
+
+        if let Some(service_version) = properties.get("service.version") {
+            map.insert(tags::APPLICATION_VERSION, service_version.to_owned());
+        }
     }
 
     map

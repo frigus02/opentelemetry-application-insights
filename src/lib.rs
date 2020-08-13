@@ -93,8 +93,8 @@ use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
 use models::{
-    context_tag_keys::ContextTagKey, context_tag_keys::APPLICATION_VERSION, Data, Envelope,
-    MessageData, RemoteDependencyData, RequestData, Sanitize,
+    context_tag_keys::ContextTagKey, Data, Envelope, MessageData, RemoteDependencyData,
+    RequestData, Sanitize,
 };
 use opentelemetry::api::{Event, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
@@ -120,17 +120,6 @@ impl Exporter {
             common_tags,
             sample_rate: 100.0,
         }
-    }
-
-    /// Add an application version to all telemetry items.
-    ///
-    /// ```
-    /// let exporter = opentelemetry_application_insights::Exporter::new("...".into())
-    ///     .with_application_version(std::env!("CARGO_PKG_VERSION").into());
-    /// ```
-    pub fn with_application_version(mut self, ver: String) -> Self {
-        self.common_tags.insert(APPLICATION_VERSION, ver);
-        self
     }
 
     /// Set sample rate, which is passed through to Application Insights. It should be a value
