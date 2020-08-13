@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
       .build();
   ```
 
+- Internal SDK Version is now filled from the resource attributes `telemetry.sdk.name` and `telemetry.sdk.version`.
+
 ## [0.3.0] - 2020-08-09
 
 ### Added

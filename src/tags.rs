@@ -1,18 +1,9 @@
-use crate::convert::{span_id_to_string, trace_id_to_string};
+use crate::convert::{otel_to_semantic_version, span_id_to_string, trace_id_to_string};
 use crate::models::context_tag_keys::{self as tags, ContextTagKey};
 use opentelemetry::api::{SpanId, SpanKind};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-
-pub(crate) fn get_common_tags() -> BTreeMap<ContextTagKey, String> {
-    let mut tags = BTreeMap::new();
-    tags.insert(
-        tags::INTERNAL_SDK_VERSION,
-        format!("rust:ot:ext{}", std::env!("CARGO_PKG_VERSION")),
-    );
-    tags
-}
 
 pub(crate) fn get_tags_for_span(
     span: &trace::SpanData,
@@ -63,6 +54,17 @@ pub(crate) fn get_tags_for_span(
         if let Some(service_version) = properties.get("service.version") {
             map.insert(tags::APPLICATION_VERSION, service_version.to_owned());
         }
+
+        if let Some(sdk_name) = properties.get("telemetry.sdk.name") {
+            let sdk_version = properties
+                .get("telemetry.sdk.version")
+                .map(|v| v.as_str())
+                .unwrap_or("");
+            map.insert(
+                tags::INTERNAL_SDK_VERSION,
+                format!("{}:{}", sdk_name, otel_to_semantic_version(sdk_version)),
+            );
+        }
     }
 
     map
@@ -79,11 +81,4 @@ pub(crate) fn get_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<Contex
         span_id_to_string(span.span_context.span_id()),
     );
     map
-}
-
-pub(crate) fn merge_tags(
-    common_tags: BTreeMap<ContextTagKey, String>,
-    span_tags: BTreeMap<ContextTagKey, String>,
-) -> BTreeMap<ContextTagKey, String> {
-    common_tags.into_iter().chain(span_tags).collect()
 }

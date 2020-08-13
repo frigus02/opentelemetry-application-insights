@@ -92,32 +92,26 @@ mod uploader;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{
-    context_tag_keys::ContextTagKey, Data, Envelope, MessageData, RemoteDependencyData,
-    RequestData, Sanitize,
-};
+use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
 use opentelemetry::api::{Event, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tags::{get_common_tags, get_tags_for_event, get_tags_for_span, merge_tags};
+use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Application Insights span exporter
 #[derive(Debug)]
 pub struct Exporter {
     instrumentation_key: String,
-    common_tags: BTreeMap<ContextTagKey, String>,
     sample_rate: f64,
 }
 
 impl Exporter {
     /// Create a new exporter.
     pub fn new(instrumentation_key: String) -> Self {
-        let common_tags = get_common_tags();
         Self {
             instrumentation_key,
-            common_tags,
             sample_rate: 100.0,
         }
     }
@@ -169,16 +163,13 @@ impl Exporter {
                 )
             }
         };
-        result.push({
-            let tags = merge_tags(self.common_tags.clone(), tags);
-            Envelope {
-                name: name.into(),
-                time: time_to_string(span.start_time),
-                sample_rate: Some(self.sample_rate),
-                i_key: Some(self.instrumentation_key.clone()),
-                tags: Some(tags),
-                data: Some(data),
-            }
+        result.push(Envelope {
+            name: name.into(),
+            time: time_to_string(span.start_time),
+            sample_rate: Some(self.sample_rate),
+            i_key: Some(self.instrumentation_key.clone()),
+            tags: Some(tags),
+            data: Some(data),
         });
 
         for event in span.message_events.iter() {
@@ -187,10 +178,7 @@ impl Exporter {
                 time: time_to_string(event.timestamp),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone()),
-                tags: Some(merge_tags(
-                    self.common_tags.clone(),
-                    get_tags_for_event(&span),
-                )),
+                tags: Some(get_tags_for_event(&span)),
                 data: Some(Data::Message(event.into())),
             });
         }

@@ -52,6 +52,23 @@ pub(crate) fn attrs_to_properties(
     .filter(|x: &BTreeMap<String, String>| !x.is_empty())
 }
 
+pub(crate) fn otel_to_semantic_version(otel: &str) -> String {
+    if otel.is_empty() {
+        "0.0.0".into()
+    } else if otel.starts_with("semver:") {
+        otel["semver:".len()..].into()
+    } else {
+        format!(
+            "0.0.0-{}",
+            if let Some(i) = otel.find(':') {
+                &otel[i + 1..]
+            } else {
+                otel
+            }
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +91,13 @@ mod tests {
     #[test_case(Duration::from_micros(123456789123), "1.10:17:36.0789123" ; "all")]
     fn duration(duration: Duration, expected: &'static str) {
         assert_eq!(expected.to_string(), duration_to_string(duration));
+    }
+
+    #[test_case("semver:1.2.3",     "1.2.3"                  ; "semver")]
+    #[test_case("git:8ae73a",       "0.0.0-8ae73a"           ; "git sha")]
+    #[test_case("0.0.4.2.20190921", "0.0.0-0.0.4.2.20190921" ; "untyped")]
+    #[test_case("",                 "0.0.0"                  ; "empty")]
+    fn semantic_version(otel_version: &'static str, expected: &'static str) {
+        assert_eq!(expected.to_string(), otel_to_semantic_version(otel_version));
     }
 }
