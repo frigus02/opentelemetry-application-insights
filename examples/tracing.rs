@@ -21,7 +21,7 @@ async fn spawn_children(n: u32, process_name: String) {
     }
 }
 
-#[instrument]
+#[instrument(fields(otel.kind = "client"))]
 async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             extractor.insert("traceparent".to_string(), traceparent);
             let propagator = TraceContextPropagator::new();
             let cx = propagator.extract(&extractor);
-            let span = tracing::info_span!("child");
+            let span = tracing::info_span!("child", otel.kind = "server");
             span.set_parent(&cx);
             let _guard = span.enter();
             run_in_child_process().await;
