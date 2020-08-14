@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- Upgrade to `v0.8.0` of `opentelemetry`.
+
 - Removed `.with_application_version` function on exporter. Please use the `service.version` resource attribute instead. See [semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions#service) for about the attribute.
 
   ```rust

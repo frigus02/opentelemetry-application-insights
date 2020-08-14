@@ -34,12 +34,12 @@ async fn spawn_child_process(process_name: &str) {
     span.set_attribute(Key::new("process_name").string(process_name.to_string()));
     let cx = Context::current_with_span(span);
 
-    let mut carrier = HashMap::new();
+    let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
-    propagator.inject_context(&cx, &mut carrier);
+    propagator.inject_context(&cx, &mut injector);
     let child = Command::new(process_name)
         .arg(
-            carrier
+            injector
                 .remove("traceparent")
                 .expect("propagator should inject traceparent"),
         )
@@ -76,10 +76,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match traceparent {
         Some(traceparent) => {
-            let mut carrier = HashMap::new();
-            carrier.insert("traceparent".to_string(), traceparent);
+            let mut extractor = HashMap::new();
+            extractor.insert("traceparent".to_string(), traceparent);
             let propagator = TraceContextPropagator::new();
-            let _guard = propagator.extract(&carrier).attach();
+            let _guard = propagator.extract(&extractor).attach();
             let tracer = global::tracer("example-opentelemetry");
             let span = tracer
                 .span_builder("child")
