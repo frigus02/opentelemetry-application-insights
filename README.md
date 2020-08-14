@@ -60,28 +60,30 @@ mapping tries to follow the OpenTelemetry semantic conventions for [trace] and [
 [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
 
-| OpenTelemetry attribute key                 | Application Insights field     |
-| ------------------------------------------- | ------------------------------ |
-| `enduser.id`                                | Context: Authenticated user id |
-| `service.namespace` + `service.name`        | Context: Cloud role            |
-| `service.instance.id`                       | Context: Cloud role instance   |
-| `http.url`                                  | Dependency Data                |
-| `db.statement`                              | Dependency Data                |
-| `http.host`                                 | Dependency Target              |
-| `net.peer.name` + `net.peer.port`           | Dependency Target              |
-| `net.peer.ip` + `net.peer.port`             | Dependency Target              |
-| `db.name`                                   | Dependency Target              |
-| `http.status_code`                          | Dependency Result code         |
-| `db.system`                                 | Dependency Type                |
-| `messaging.system`                          | Dependency Type                |
-| `rpc.system`                                | Dependency Type                |
-| `"HTTP"` if any `http.` attribute exists    | Dependency Type                |
-| `"DB"` if any `db.` attribute exists        | Dependency Type                |
-| `http.url`                                  | Request Url                    |
-| `http.scheme` + `http.host` + `http.target` | Request Url                    |
-| `http.client_ip`                            | Request Source                 |
-| `net.peer.ip`                               | Request Source                 |
-| `http.status_code`                          | Request Response code          |
+| OpenTelemetry attribute key                    | Application Insights field     |
+| ---------------------------------------------- | ------------------------------ |
+| `service.version`                              | Context: Application version   |
+| `enduser.id`                                   | Context: Authenticated user id |
+| `service.namespace` + `service.name`           | Context: Cloud role            |
+| `service.instance.id`                          | Context: Cloud role instance   |
+| `telemetry.sdk.name` + `telemetry.sdk.version` | Context: Internal SDK version  |
+| `http.url`                                     | Dependency Data                |
+| `db.statement`                                 | Dependency Data                |
+| `http.host`                                    | Dependency Target              |
+| `net.peer.name` + `net.peer.port`              | Dependency Target              |
+| `net.peer.ip` + `net.peer.port`                | Dependency Target              |
+| `db.name`                                      | Dependency Target              |
+| `http.status_code`                             | Dependency Result code         |
+| `db.system`                                    | Dependency Type                |
+| `messaging.system`                             | Dependency Type                |
+| `rpc.system`                                   | Dependency Type                |
+| `"HTTP"` if any `http.` attribute exists       | Dependency Type                |
+| `"DB"` if any `db.` attribute exists           | Dependency Type                |
+| `http.url`                                     | Request Url                    |
+| `http.scheme` + `http.host` + `http.target`    | Request Url                    |
+| `http.client_ip`                               | Request Source                 |
+| `net.peer.ip`                                  | Request Source                 |
+| `http.status_code`                             | Request Response code          |
 
 All other attributes are be directly converted to custom properties.
 
