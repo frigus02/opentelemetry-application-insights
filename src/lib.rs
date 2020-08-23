@@ -7,21 +7,27 @@
 //!
 //! # Usage
 //!
-//! Configure the exporter:
+//! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
+//! spans:
 //!
-//! ```rust,no_run
-//! use opentelemetry::sdk;
+//! ```no_run
+//! use opentelemetry::{api::Tracer, sdk};
 //!
 //! fn init_tracer() -> sdk::Tracer {
 //!     let instrumentation_key = "...".to_string();
 //!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
 //!         .install()
 //! }
+//!
+//! fn main() {
+//!     let tracer = init_tracer();
+//!     tracer.in_span("main", |_cx| {});
+//! }
 //! ```
 //!
-//! Then follow the documentation of [opentelemetry] to create spans and events.
-//!
-//! [opentelemetry]: https://github.com/open-telemetry/opentelemetry-rust
+//! The functions `build` and `install` automatically configure an asynchronous batch exporter if
+//! you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
+//! exported synchronously.
 //!
 //! # Attribute mapping
 //!
@@ -110,7 +116,7 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder {
     }
 }
 
-/// Application Insights exporter builder
+/// Application Insights exporter pipeline builder
 #[derive(Debug)]
 pub struct PipelineBuilder {
     instrumentation_key: String,
@@ -157,7 +163,10 @@ impl PipelineBuilder {
         }
     }
 
-    /// Install a Application Insights pipeline with the recommended defaults.
+    /// Install an Application Insights pipeline with the recommended defaults.
+    ///
+    /// This registers a global `sdk::Provider`. See the `build` function for details about how
+    /// this provider is configured.
     pub fn install(self) -> sdk::Tracer {
         let trace_provider = self.build();
         let tracer = trace_provider.get_tracer("opentelemetry-application-insights");
@@ -168,6 +177,9 @@ impl PipelineBuilder {
     }
 
     /// Build a configured `sdk::Provider` with the recommended defaults.
+    ///
+    /// This will automatically configure an asynchronous batch exporter if you use this crate with
+    /// either the `async-std` or `tokio` feature. Otherwise spans will be exported synchronously.
     pub fn build(mut self) -> sdk::Provider {
         let config = self.config.take();
         let exporter = self.init_exporter();
