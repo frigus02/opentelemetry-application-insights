@@ -16,15 +16,12 @@ An [Azure Application Insights] exporter implementation for [OpenTelemetry Rust]
 Configure the exporter:
 
 ```rust
-use opentelemetry::{global, sdk};
+use opentelemetry::sdk;
 
-fn init_tracer() {
+fn init_tracer() -> sdk::Tracer {
     let instrumentation_key = "...".to_string();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
-        .build();
-    global::set_provider(provider);
+    opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .install()
 }
 ```
 
