@@ -37,14 +37,14 @@
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
 //! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
 //!
+//! ## Spans
+//!
 //! The OpenTelemetry SpanKind determines the Application Insights telemetry type:
 //!
 //! | OpenTelemetry SpanKind           | Application Insights telemetry type |
 //! | -------------------------------- | ----------------------------------- |
 //! | `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
 //! | `SERVER`, `CONSUMER`             | Request                             |
-//!
-//! The Span's list of Events are converted to Trace telemetry.
 //!
 //! The Span's status determines the Success field of a Dependency or Request. Success is `true` if
 //! the status is `OK`; otherwise `false`.
@@ -82,9 +82,26 @@
 //! | `net.peer.ip`                                  | Request Source                 |
 //! | `http.status_code`                             | Request Response code          |
 //!
-//! All other attributes are be directly converted to custom properties.
+//! All other attributes are directly converted to custom properties.
 //!
 //! For Requests the attributes `http.method` and `http.route` override the Name.
+//!
+//! ## Events
+//!
+//! Events are converted into Exception telemetry if the event name equals `"exception"` (see
+//! OpenTelemetry semantic conventions for [exceptions]) with the following mapping:
+//!
+//! | OpenTelemetry attribute key | Application Insights field |
+//! | --------------------------- | -------------------------- |
+//! | `exception.type`            | Exception type             |
+//! | `exception.message`         | Exception message          |
+//! | `exception.stacktrace`      | Exception call stack       |
+//!
+//! All other events are converted into Trace telemetry.
+//!
+//! All other attributes are directly converted to custom properties.
+//!
+//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
 #![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.4.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
@@ -97,12 +114,15 @@ mod uploader;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
-use opentelemetry::api::{Event, Provider, SpanKind, StatusCode};
+use models::{
+    Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
+    RequestData, Sanitize,
+};
+use opentelemetry::api::{Event, Provider, SpanKind, StatusCode, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::global;
 use opentelemetry::sdk;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tags::{get_tags_for_event, get_tags_for_span};
 
@@ -286,13 +306,23 @@ impl Exporter {
         });
 
         for event in span.message_events.iter() {
+            let (data, name) = match event.name.as_ref() {
+                "exception" => (
+                    Data::Exception(event.into()),
+                    "Microsoft.ApplicationInsights.Exception",
+                ),
+                _ => (
+                    Data::Message(event.into()),
+                    "Microsoft.ApplicationInsights.Message",
+                ),
+            };
             result.push(Envelope {
-                name: "Microsoft.ApplicationInsights.Message".into(),
+                name: name.into(),
                 time: time_to_string(event.timestamp),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone()),
                 tags: Some(get_tags_for_event(&span)),
-                data: Some(Data::Message(event.into())),
+                data: Some(data),
             });
         }
 
@@ -464,6 +494,32 @@ impl From<&trace::SpanData> for RemoteDependencyData {
 
         data.properties = attrs_to_properties(attrs);
         data
+    }
+}
+
+impl From<&Event> for ExceptionData {
+    fn from(event: &Event) -> ExceptionData {
+        let mut attrs: HashMap<&str, &Value> = event
+            .attributes
+            .iter()
+            .map(|kv| (kv.key.as_str(), &kv.value))
+            .collect();
+        let exception = ExceptionDetails {
+            type_name: attrs
+                .remove("exception.type")
+                .map(String::from)
+                .unwrap_or_else(|| "<no type>".into()),
+            message: attrs
+                .remove("exception.message")
+                .map(String::from)
+                .unwrap_or_else(|| "<no message>".into()),
+            stack: attrs.remove("exception.stacktrace").map(String::from),
+        };
+        ExceptionData {
+            ver: 2,
+            exceptions: vec![exception],
+            properties: attrs_to_properties(attrs),
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+use backtrace::Backtrace;
 use opentelemetry::{
     api::{KeyValue, Provider, SpanKind, Tracer},
     global, sdk,
@@ -11,6 +12,13 @@ fn log() {
             "An event!".to_string(),
             vec![KeyValue::new("happened", true)],
         );
+    })
+}
+
+fn exception() {
+    global::tracer("log").get_active_span(|span| {
+        let error: Box<dyn std::error::Error> = "An error".into();
+        span.record_exception_with_stacktrace(error.as_ref(), format!("{:?}", Backtrace::new()));
     })
 }
 
@@ -70,6 +78,7 @@ fn main() {
         let span = server_tracer.build_with_context(builder, &cx);
         server_tracer.with_span(span, |_cx| {
             log();
+            exception();
         });
     });
 }
