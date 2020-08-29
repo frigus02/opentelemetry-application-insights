@@ -37,14 +37,14 @@
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
 //! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
 //!
+//! ## Spans
+//!
 //! The OpenTelemetry SpanKind determines the Application Insights telemetry type:
 //!
 //! | OpenTelemetry SpanKind           | Application Insights telemetry type |
 //! | -------------------------------- | ----------------------------------- |
 //! | `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
 //! | `SERVER`, `CONSUMER`             | Request                             |
-//!
-//! The Span's list of Events are converted to Trace telemetry.
 //!
 //! The Span's status determines the Success field of a Dependency or Request. Success is `true` if
 //! the status is `OK`; otherwise `false`.
@@ -82,9 +82,26 @@
 //! | `net.peer.ip`                                  | Request Source                 |
 //! | `http.status_code`                             | Request Response code          |
 //!
-//! All other attributes are be directly converted to custom properties.
+//! All other attributes are directly converted to custom properties.
 //!
 //! For Requests the attributes `http.method` and `http.route` override the Name.
+//!
+//! ## Events
+//!
+//! Events are converted into Exception telemetry if the event name equals `"exception"` (see
+//! OpenTelemetry semantic conventions for [exceptions]) with the following mapping:
+//!
+//! | OpenTelemetry attribute key | Application Insights field |
+//! | --------------------------- | -------------------------- |
+//! | `exception.type`            | Exception type             |
+//! | `exception.message`         | Exception message          |
+//! | `exception.stacktrace`      | Exception call stack       |
+//!
+//! All other events are converted into Trace telemetry.
+//!
+//! All other attributes are directly converted to custom properties.
+//!
+//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
 #![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.4.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
