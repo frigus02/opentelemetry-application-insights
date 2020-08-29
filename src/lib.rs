@@ -97,12 +97,15 @@ mod uploader;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
-use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
-use opentelemetry::api::{Event, Provider, SpanKind, StatusCode};
+use models::{
+    Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
+    RequestData, Sanitize,
+};
+use opentelemetry::api::{Event, Provider, SpanKind, StatusCode, Value};
 use opentelemetry::exporter::trace;
 use opentelemetry::global;
 use opentelemetry::sdk;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tags::{get_tags_for_event, get_tags_for_span};
 
@@ -286,13 +289,23 @@ impl Exporter {
         });
 
         for event in span.message_events.iter() {
+            let (data, name) = match event.name.as_ref() {
+                "exception" => (
+                    Data::Exception(event.into()),
+                    "Microsoft.ApplicationInsights.Exception",
+                ),
+                _ => (
+                    Data::Message(event.into()),
+                    "Microsoft.ApplicationInsights.Message",
+                ),
+            };
             result.push(Envelope {
-                name: "Microsoft.ApplicationInsights.Message".into(),
+                name: name.into(),
                 time: time_to_string(event.timestamp),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone()),
                 tags: Some(get_tags_for_event(&span)),
-                data: Some(Data::Message(event.into())),
+                data: Some(data),
             });
         }
 
@@ -464,6 +477,32 @@ impl From<&trace::SpanData> for RemoteDependencyData {
 
         data.properties = attrs_to_properties(attrs);
         data
+    }
+}
+
+impl From<&Event> for ExceptionData {
+    fn from(event: &Event) -> ExceptionData {
+        let mut attrs: HashMap<&str, &Value> = event
+            .attributes
+            .iter()
+            .map(|kv| (kv.key.as_str(), &kv.value))
+            .collect();
+        let exception = ExceptionDetails {
+            type_name: attrs
+                .remove("exception.type")
+                .map(String::from)
+                .unwrap_or_else(|| "<no type>".into()),
+            message: attrs
+                .remove("exception.message")
+                .map(String::from)
+                .unwrap_or_else(|| "<no message>".into()),
+            stack: attrs.remove("exception.stacktrace").map(String::from),
+        };
+        ExceptionData {
+            ver: 2,
+            exceptions: vec![exception],
+            properties: attrs_to_properties(attrs),
+        }
     }
 }
 
