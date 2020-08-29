@@ -104,7 +104,6 @@ use opentelemetry::global;
 use opentelemetry::sdk;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -234,6 +233,26 @@ pub struct Exporter {
 }
 
 impl Exporter {
+    /// Create a new exporter.
+    #[deprecated(note = "Use PipelineBuilder instead")]
+    pub fn new(instrumentation_key: String) -> Self {
+        Self {
+            instrumentation_key,
+            sample_rate: 100.0,
+        }
+    }
+
+    /// Set sample rate, which is passed through to Application Insights. It should be a value
+    /// between 0 and 1 and match the rate given to the sampler.
+    ///
+    /// Default: 1.0
+    #[deprecated(note = "Use PipelineBuilder instead")]
+    pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
+        // Application Insights expects the sample rate as a percentage.
+        self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
     fn create_envelopes(&self, span: Arc<trace::SpanData>) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.message_events.len());
 
@@ -316,7 +335,7 @@ impl From<&trace::SpanData> for RequestData {
             duration: duration_to_string(
                 span.end_time
                     .duration_since(span.start_time)
-                    .unwrap_or(Duration::from_secs(0)),
+                    .unwrap_or_default(),
             ),
             response_code: (span.status_code.clone() as i32).to_string(),
             success: span.status_code == StatusCode::OK,
@@ -380,7 +399,7 @@ impl From<&trace::SpanData> for RemoteDependencyData {
             duration: duration_to_string(
                 span.end_time
                     .duration_since(span.start_time)
-                    .unwrap_or(Duration::from_secs(0)),
+                    .unwrap_or_default(),
             ),
             result_code: Some((span.status_code.clone() as i32).to_string()),
             success: Some(span.status_code == StatusCode::OK),
