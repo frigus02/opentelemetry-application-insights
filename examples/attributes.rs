@@ -20,24 +20,20 @@ fn main() {
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
 
-    let client_exporter =
-        opentelemetry_application_insights::Exporter::new(instrumentation_key.clone());
-    let client_provider = sdk::Provider::builder()
-        .with_simple_exporter(client_exporter)
-        .with_config(sdk::Config {
-            resource: Arc::new(sdk::Resource::new(vec![
-                KeyValue::new("service.namespace", "example-attributes"),
-                KeyValue::new("service.name", "client"),
-            ])),
-            ..sdk::Config::default()
-        })
-        .build();
+    let client_provider =
+        opentelemetry_application_insights::new_pipeline(instrumentation_key.clone())
+            .with_sdk_config(sdk::Config {
+                resource: Arc::new(sdk::Resource::new(vec![
+                    KeyValue::new("service.namespace", "example-attributes"),
+                    KeyValue::new("service.name", "client"),
+                ])),
+                ..sdk::Config::default()
+            })
+            .build();
     let client_tracer = client_provider.get_tracer("example-attributes");
 
-    let server_exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let server_provider = sdk::Provider::builder()
-        .with_simple_exporter(server_exporter)
-        .with_config(sdk::Config {
+    let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_sdk_config(sdk::Config {
             resource: Arc::new(sdk::Resource::new(vec![
                 KeyValue::new("service.namespace", "example-attributes"),
                 KeyValue::new("service.name", "server"),

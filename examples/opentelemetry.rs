@@ -3,7 +3,7 @@ use opentelemetry::{
         trace::futures::FutureExt, Context, HttpTextFormat, Key, Span, SpanKind, TraceContextExt,
         TraceContextPropagator, Tracer,
     },
-    global, sdk,
+    global,
 };
 use std::collections::HashMap;
 use std::env;
@@ -68,11 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
-        .build();
-    global::set_provider(provider);
+    opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
 
     match traceparent {
         Some(traceparent) => {

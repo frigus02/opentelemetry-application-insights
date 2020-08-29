@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Added `PipelineBuilder`, a more ergonomic way to configure OpenTelemetry with the Application Insights span exporter.
+
 ## [0.4.0] - 2020-08-14
 
 ### Changed

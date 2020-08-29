@@ -1,7 +1,4 @@
-use opentelemetry::{
-    api::{HttpTextFormat, Provider, TraceContextPropagator},
-    sdk,
-};
+use opentelemetry::api::{HttpTextFormat, TraceContextPropagator};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -53,12 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
-        .build();
-
-    let tracer = provider.get_tracer("example-tracing");
+    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");

@@ -7,24 +7,27 @@
 //!
 //! # Usage
 //!
-//! Configure the exporter:
+//! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
+//! spans:
 //!
-//! ```rust,no_run
-//! use opentelemetry::{global, sdk};
+//! ```no_run
+//! use opentelemetry::{api::Tracer, sdk};
 //!
-//! fn init_tracer() {
+//! fn init_tracer() -> sdk::Tracer {
 //!     let instrumentation_key = "...".to_string();
-//!     let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-//!     let provider = sdk::Provider::builder()
-//!         .with_simple_exporter(exporter)
-//!         .build();
-//!     global::set_provider(provider);
+//!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!         .install()
+//! }
+//!
+//! fn main() {
+//!     let tracer = init_tracer();
+//!     tracer.in_span("main", |_cx| {});
 //! }
 //! ```
 //!
-//! Then follow the documentation of [opentelemetry] to create spans and events.
-//!
-//! [opentelemetry]: https://github.com/open-telemetry/opentelemetry-rust
+//! The functions `build` and `install` automatically configure an asynchronous batch exporter if
+//! you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
+//! exported synchronously.
 //!
 //! # Attribute mapping
 //!
@@ -95,12 +98,132 @@ use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
 use models::{Data, Envelope, MessageData, RemoteDependencyData, RequestData, Sanitize};
-use opentelemetry::api::{Event, SpanKind, StatusCode};
+use opentelemetry::api::{Event, Provider, SpanKind, StatusCode};
 use opentelemetry::exporter::trace;
+use opentelemetry::global;
+use opentelemetry::sdk;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tags::{get_tags_for_event, get_tags_for_span};
+
+/// Create a new Application Insights exporter pipeline builder
+pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder {
+    PipelineBuilder {
+        instrumentation_key,
+        sample_rate: 100.0,
+        config: None,
+    }
+}
+
+/// Application Insights exporter pipeline builder
+#[derive(Debug)]
+pub struct PipelineBuilder {
+    instrumentation_key: String,
+    sample_rate: f64,
+    config: Option<sdk::Config>,
+}
+
+impl PipelineBuilder {
+    /// Set sample rate, which is passed through to Application Insights. It should be a value
+    /// between 0 and 1 and match the rate given to the sampler.
+    ///
+    /// Default: 1.0
+    ///
+    /// ```
+    /// let sample_rate = 0.3;
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_sample_rate(sample_rate)
+    ///     .install();
+    /// ```
+    pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
+        // Application Insights expects the sample rate as a percentage.
+        self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
+    /// Assign the SDK config for the exporter pipeline.
+    ///
+    /// ```
+    /// # use opentelemetry::{api::KeyValue, sdk};
+    /// # use std::sync::Arc;
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_sdk_config(sdk::Config {
+    ///         resource: Arc::new(sdk::Resource::new(vec![
+    ///             KeyValue::new("service.name", "my-application"),
+    ///         ])),
+    ///         ..sdk::Config::default()
+    ///     })
+    ///     .install();
+    /// ```
+    pub fn with_sdk_config(self, config: sdk::Config) -> Self {
+        PipelineBuilder {
+            config: Some(config),
+            ..self
+        }
+    }
+
+    /// Install an Application Insights pipeline with the recommended defaults.
+    ///
+    /// This registers a global `sdk::Provider`. See the `build` function for details about how
+    /// this provider is configured.
+    pub fn install(self) -> sdk::Tracer {
+        let trace_provider = self.build();
+        let tracer = trace_provider.get_tracer("opentelemetry-application-insights");
+
+        global::set_provider(trace_provider);
+
+        tracer
+    }
+
+    /// Build a configured `sdk::Provider` with the recommended defaults.
+    ///
+    /// This will automatically configure an asynchronous batch exporter if you use this crate with
+    /// either the `async-std` or `tokio` feature. Otherwise spans will be exported synchronously.
+    pub fn build(mut self) -> sdk::Provider {
+        let config = self.config.take();
+        let exporter = self.init_exporter();
+
+        let mut builder = sdk::Provider::builder();
+
+        #[cfg(feature = "tokio")]
+        {
+            let batch =
+                sdk::BatchSpanProcessor::builder(exporter, tokio::spawn, tokio::time::interval)
+                    .build();
+            builder = builder.with_batch_exporter(batch);
+        }
+        #[cfg(all(feature = "async-std", not(feature = "tokio")))]
+        {
+            let batch = sdk::BatchSpanProcessor::builder(
+                exporter,
+                async_std::task::spawn,
+                async_std::stream::interval,
+            )
+            .build();
+            builder = builder.with_batch_exporter(batch);
+        }
+        #[cfg(all(not(feature = "async-std"), not(feature = "tokio")))]
+        {
+            builder = builder.with_simple_exporter(exporter);
+        }
+
+        if let Some(config) = config {
+            builder = builder.with_config(config);
+        }
+
+        builder.build()
+    }
+
+    /// Initialize a new exporter.
+    ///
+    /// This is useful if you are manually constructing a pipeline.
+    pub fn init_exporter(self) -> Exporter {
+        Exporter {
+            instrumentation_key: self.instrumentation_key,
+            sample_rate: self.sample_rate,
+        }
+    }
+}
 
 /// Application Insights span exporter
 #[derive(Debug)]
@@ -111,6 +234,7 @@ pub struct Exporter {
 
 impl Exporter {
     /// Create a new exporter.
+    #[deprecated(note = "Use PipelineBuilder instead")]
     pub fn new(instrumentation_key: String) -> Self {
         Self {
             instrumentation_key,
@@ -122,20 +246,7 @@ impl Exporter {
     /// between 0 and 1 and match the rate given to the sampler.
     ///
     /// Default: 1.0
-    ///
-    /// ```
-    /// # use opentelemetry::{global, sdk};
-    /// let sample_rate = 0.3;
-    /// let exporter = opentelemetry_application_insights::Exporter::new("...".into())
-    ///     .with_sample_rate(sample_rate);
-    /// let provider = sdk::Provider::builder()
-    ///     .with_simple_exporter(exporter)
-    ///     .with_config(sdk::Config {
-    ///         default_sampler: Box::new(sdk::Sampler::Probability(sample_rate)),
-    ///         ..Default::default()
-    ///     })
-    ///     .build();
-    /// ```
+    #[deprecated(note = "Use PipelineBuilder instead")]
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
@@ -224,7 +335,7 @@ impl From<&trace::SpanData> for RequestData {
             duration: duration_to_string(
                 span.end_time
                     .duration_since(span.start_time)
-                    .unwrap_or(Duration::from_secs(0)),
+                    .unwrap_or_default(),
             ),
             response_code: (span.status_code.clone() as i32).to_string(),
             success: span.status_code == StatusCode::OK,
@@ -288,7 +399,7 @@ impl From<&trace::SpanData> for RemoteDependencyData {
             duration: duration_to_string(
                 span.end_time
                     .duration_since(span.start_time)
-                    .unwrap_or(Duration::from_secs(0)),
+                    .unwrap_or_default(),
             ),
             result_code: Some((span.status_code.clone() as i32).to_string()),
             success: Some(span.status_code == StatusCode::OK),

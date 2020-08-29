@@ -13,24 +13,27 @@ An [Azure Application Insights] exporter implementation for [OpenTelemetry Rust]
 
 ## Usage
 
-Configure the exporter:
+Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
+spans:
 
 ```rust
-use opentelemetry::{global, sdk};
+use opentelemetry::{api::Tracer, sdk};
 
-fn init_tracer() {
+fn init_tracer() -> sdk::Tracer {
     let instrumentation_key = "...".to_string();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
-        .build();
-    global::set_provider(provider);
+    opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .install()
+}
+
+fn main() {
+    let tracer = init_tracer();
+    tracer.in_span("main", |_cx| {});
 }
 ```
 
-Then follow the documentation of [opentelemetry] to create spans and events.
-
-[opentelemetry]: https://github.com/open-telemetry/opentelemetry-rust
+The functions `build` and `install` automatically configure an asynchronous batch exporter if
+you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
+exported synchronously.
 
 ## Attribute mapping
 
