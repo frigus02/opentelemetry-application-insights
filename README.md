@@ -17,23 +17,24 @@ Configure a OpenTelemetry pipeline using the Application Insights exporter and s
 spans:
 
 ```rust
-use opentelemetry::{api::Tracer, sdk};
+use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
+use opentelemetry_application_insights::Uninstall;
 
-fn init_tracer() -> sdk::Tracer {
+fn init_tracer() -> (Tracer, Uninstall)  {
     let instrumentation_key = "...".to_string();
     opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .install()
 }
 
 fn main() {
-    let tracer = init_tracer();
+    let (tracer, _uninstall) = init_tracer();
     tracer.in_span("main", |_cx| {});
 }
 ```
 
 The functions `build` and `install` automatically configure an asynchronous batch exporter if
-you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
-exported synchronously.
+you enable either the `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise
+spans will be exported synchronously.
 
 ## Attribute mapping
 

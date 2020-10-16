@@ -27,8 +27,8 @@
 //! ```
 //!
 //! The functions `build` and `install` automatically configure an asynchronous batch exporter if
-//! you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
-//! exported synchronously.
+//! you enable either the `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise
+//! spans will be exported synchronously.
 //!
 //! # Attribute mapping
 //!
@@ -204,8 +204,9 @@ impl PipelineBuilder {
 
     /// Build a configured `sdk::Provider` with the recommended defaults.
     ///
-    /// This will automatically configure an asynchronous batch exporter if you use this crate with
-    /// either the `async-std` or `tokio` feature. Otherwise spans will be exported synchronously.
+    /// This will automatically configure an asynchronous batch exporter if you enable either the
+    /// `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise spans will be
+    /// exported synchronously.
     pub fn build(mut self) -> sdk::trace::TracerProvider {
         let config = self.config.take();
         let exporter = Exporter::new(self.instrumentation_key).with_sample_rate(self.sample_rate);
