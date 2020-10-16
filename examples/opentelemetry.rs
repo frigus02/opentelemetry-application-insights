@@ -71,7 +71,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
+    let (tracer, _uninstall) =
+        opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
 
     match traceparent {
         Some(traceparent) => {
@@ -79,7 +80,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             extractor.insert("traceparent".to_string(), traceparent);
             let propagator = TraceContextPropagator::new();
             let _guard = propagator.extract(&extractor).attach();
-            let tracer = global::tracer("example-opentelemetry");
             let span = tracer
                 .span_builder("child")
                 .with_kind(SpanKind::Server)
@@ -88,7 +88,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             run_in_child_process().with_context(cx).await;
         }
         _ => {
-            let tracer = global::tracer("example-opentelemetry");
             let span = tracer.start("root");
             let cx = Context::current_with_span(span);
             spawn_children(5, process_name).with_context(cx).await;
