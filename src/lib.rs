@@ -11,16 +11,17 @@
 //! spans:
 //!
 //! ```no_run
-//! use opentelemetry::{api::Tracer, sdk};
+//! use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
+//! use opentelemetry_application_insights::Uninstall;
 //!
-//! fn init_tracer() -> sdk::Tracer {
+//! fn init_tracer() -> (Tracer, Uninstall)  {
 //!     let instrumentation_key = "...".to_string();
 //!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
 //!         .install()
 //! }
 //!
 //! fn main() {
-//!     let tracer = init_tracer();
+//!     let (tracer, _uninstall) = init_tracer();
 //!     tracer.in_span("main", |_cx| {});
 //! }
 //! ```
@@ -111,6 +112,7 @@ mod models;
 mod tags;
 mod uploader;
 
+use async_trait::async_trait;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
@@ -118,12 +120,14 @@ use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
     RequestData, Sanitize,
 };
-use opentelemetry::api::{Event, Provider, SpanKind, StatusCode, Value};
-use opentelemetry::exporter::trace;
+use opentelemetry::api::{
+    trace::{Event, SpanKind, StatusCode, TracerProvider},
+    Value,
+};
+use opentelemetry::exporter::trace::{ExportResult, SpanData, SpanExporter};
 use opentelemetry::global;
 use opentelemetry::sdk;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -140,7 +144,7 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder {
 pub struct PipelineBuilder {
     instrumentation_key: String,
     sample_rate: f64,
-    config: Option<sdk::Config>,
+    config: Option<sdk::trace::Config>,
 }
 
 impl PipelineBuilder {
@@ -151,7 +155,7 @@ impl PipelineBuilder {
     ///
     /// ```
     /// let sample_rate = 0.3;
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
+    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_sample_rate(sample_rate)
     ///     .install();
     /// ```
@@ -166,16 +170,16 @@ impl PipelineBuilder {
     /// ```
     /// # use opentelemetry::{api::KeyValue, sdk};
     /// # use std::sync::Arc;
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_sdk_config(sdk::Config {
+    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_trace_config(sdk::trace::Config {
     ///         resource: Arc::new(sdk::Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),
     ///         ])),
-    ///         ..sdk::Config::default()
+    ///         ..Default::default()
     ///     })
     ///     .install();
     /// ```
-    pub fn with_sdk_config(self, config: sdk::Config) -> Self {
+    pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
         PipelineBuilder {
             config: Some(config),
             ..self
@@ -186,64 +190,38 @@ impl PipelineBuilder {
     ///
     /// This registers a global `sdk::Provider`. See the `build` function for details about how
     /// this provider is configured.
-    pub fn install(self) -> sdk::Tracer {
+    pub fn install(self) -> (sdk::trace::Tracer, Uninstall) {
         let trace_provider = self.build();
-        let tracer = trace_provider.get_tracer("opentelemetry-application-insights");
+        let tracer = trace_provider.get_tracer(
+            "opentelemetry-application-insights",
+            Some(env!("CARGO_PKG_VERSION")),
+        );
 
-        global::set_provider(trace_provider);
+        let provider_guard = global::set_tracer_provider(trace_provider);
 
-        tracer
+        (tracer, Uninstall(provider_guard))
     }
 
     /// Build a configured `sdk::Provider` with the recommended defaults.
     ///
     /// This will automatically configure an asynchronous batch exporter if you use this crate with
     /// either the `async-std` or `tokio` feature. Otherwise spans will be exported synchronously.
-    pub fn build(mut self) -> sdk::Provider {
+    pub fn build(mut self) -> sdk::trace::TracerProvider {
         let config = self.config.take();
-        let exporter = self.init_exporter();
+        let exporter = Exporter::new(self.instrumentation_key).with_sample_rate(self.sample_rate);
 
-        let mut builder = sdk::Provider::builder();
-
-        #[cfg(feature = "tokio")]
-        {
-            let batch =
-                sdk::BatchSpanProcessor::builder(exporter, tokio::spawn, tokio::time::interval)
-                    .build();
-            builder = builder.with_batch_exporter(batch);
-        }
-        #[cfg(all(feature = "async-std", not(feature = "tokio")))]
-        {
-            let batch = sdk::BatchSpanProcessor::builder(
-                exporter,
-                async_std::task::spawn,
-                async_std::stream::interval,
-            )
-            .build();
-            builder = builder.with_batch_exporter(batch);
-        }
-        #[cfg(all(not(feature = "async-std"), not(feature = "tokio")))]
-        {
-            builder = builder.with_simple_exporter(exporter);
-        }
-
+        let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
 
         builder.build()
     }
-
-    /// Initialize a new exporter.
-    ///
-    /// This is useful if you are manually constructing a pipeline.
-    pub fn init_exporter(self) -> Exporter {
-        Exporter {
-            instrumentation_key: self.instrumentation_key,
-            sample_rate: self.sample_rate,
-        }
-    }
 }
+
+/// Guard that uninstalls the Application Insights trace pipeline when dropped.
+#[derive(Debug)]
+pub struct Uninstall(global::TracerProviderGuard);
 
 /// Application Insights span exporter
 #[derive(Debug)]
@@ -254,7 +232,6 @@ pub struct Exporter {
 
 impl Exporter {
     /// Create a new exporter.
-    #[deprecated(note = "Use PipelineBuilder instead")]
     pub fn new(instrumentation_key: String) -> Self {
         Self {
             instrumentation_key,
@@ -266,19 +243,18 @@ impl Exporter {
     /// between 0 and 1 and match the rate given to the sampler.
     ///
     /// Default: 1.0
-    #[deprecated(note = "Use PipelineBuilder instead")]
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
         self
     }
 
-    fn create_envelopes(&self, span: Arc<trace::SpanData>) -> Vec<Envelope> {
+    fn create_envelopes(&self, span: SpanData) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.message_events.len());
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let data: RequestData = span.as_ref().into();
+                let data: RequestData = (&span).into();
                 let tags = get_tags_for_span(&span, &data.properties);
                 (
                     Data::Request(data),
@@ -287,7 +263,7 @@ impl Exporter {
                 )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let data: RemoteDependencyData = span.as_ref().into();
+                let data: RemoteDependencyData = (&span).into();
                 let tags = get_tags_for_span(&span, &data.properties);
                 (
                     Data::RemoteDependency(data),
@@ -330,9 +306,10 @@ impl Exporter {
     }
 }
 
-impl trace::SpanExporter for Exporter {
+#[async_trait]
+impl SpanExporter for Exporter {
     /// Export spans to Application Insights
-    fn export(&self, batch: Vec<Arc<trace::SpanData>>) -> trace::ExportResult {
+    async fn export(&self, batch: Vec<SpanData>) -> ExportResult {
         let mut envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes(span))
@@ -342,12 +319,10 @@ impl trace::SpanExporter for Exporter {
         }
         uploader::send(envelopes).into()
     }
-
-    fn shutdown(&self) {}
 }
 
-impl From<uploader::Response> for trace::ExportResult {
-    fn from(response: uploader::Response) -> trace::ExportResult {
+impl From<uploader::Response> for ExportResult {
+    fn from(response: uploader::Response) -> ExportResult {
         match response {
             uploader::Response::Success => Self::Success,
             uploader::Response::Retry => Self::FailedRetryable,
@@ -356,11 +331,11 @@ impl From<uploader::Response> for trace::ExportResult {
     }
 }
 
-impl From<&trace::SpanData> for RequestData {
-    fn from(span: &trace::SpanData) -> RequestData {
+impl From<&SpanData> for RequestData {
+    fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
             ver: 2,
-            id: span_id_to_string(span.span_context.span_id()),
+            id: span_id_to_string(span.span_reference.span_id()),
             name: Some(span.name.clone()).filter(|x| !x.is_empty()),
             duration: duration_to_string(
                 span.end_time
@@ -420,11 +395,11 @@ impl From<&trace::SpanData> for RequestData {
     }
 }
 
-impl From<&trace::SpanData> for RemoteDependencyData {
-    fn from(span: &trace::SpanData) -> RemoteDependencyData {
+impl From<&SpanData> for RemoteDependencyData {
+    fn from(span: &SpanData) -> RemoteDependencyData {
         let mut data = RemoteDependencyData {
             ver: 2,
-            id: Some(span_id_to_string(span.span_context.span_id())),
+            id: Some(span_id_to_string(span.span_reference.span_id())),
             name: span.name.clone(),
             duration: duration_to_string(
                 span.end_time

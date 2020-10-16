@@ -1,6 +1,9 @@
 use chrono::{DateTime, SecondsFormat, Utc};
-use opentelemetry::api::{SpanId, TraceId, Value};
-use opentelemetry::sdk::{EvictedHashMap, Resource};
+use opentelemetry::api::{
+    trace::{SpanId, TraceId},
+    Value,
+};
+use opentelemetry::sdk::{trace::EvictedHashMap, Resource};
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, SystemTime};
 

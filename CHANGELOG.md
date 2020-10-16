@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 
 - Added `PipelineBuilder`, a more ergonomic way to configure OpenTelemetry with the Application Insights span exporter.
-- Added support semantic conventions for exceptions. Events with the name "exception" are now converted into Exception telemetry.
+- Added support for semantic conventions for exceptions. Events with the name "exception" are now converted into Exception telemetry.
+
+### Changed
+
+- Upgrade to `v0.9.0` of `opentelemetry`.
 
 ## [0.4.0] - 2020-08-14
 

@@ -1,9 +1,8 @@
 use crate::convert::{otel_to_semantic_version, span_id_to_string, trace_id_to_string};
 use crate::models::context_tag_keys::{self as tags, ContextTagKey};
-use opentelemetry::api::{SpanId, SpanKind};
+use opentelemetry::api::trace::{SpanId, SpanKind};
 use opentelemetry::exporter::trace;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 pub(crate) fn get_tags_for_span(
     span: &trace::SpanData,
@@ -13,7 +12,7 @@ pub(crate) fn get_tags_for_span(
 
     map.insert(
         tags::OPERATION_ID,
-        trace_id_to_string(span.span_context.trace_id()),
+        trace_id_to_string(span.span_reference.trace_id()),
     );
     if span.parent_span_id != SpanId::invalid() {
         map.insert(
@@ -70,15 +69,15 @@ pub(crate) fn get_tags_for_span(
     map
 }
 
-pub(crate) fn get_tags_for_event(span: &Arc<trace::SpanData>) -> BTreeMap<ContextTagKey, String> {
+pub(crate) fn get_tags_for_event(span: &trace::SpanData) -> BTreeMap<ContextTagKey, String> {
     let mut map = BTreeMap::new();
     map.insert(
         tags::OPERATION_ID,
-        trace_id_to_string(span.span_context.trace_id()),
+        trace_id_to_string(span.span_reference.trace_id()),
     );
     map.insert(
         tags::OPERATION_PARENT_ID,
-        span_id_to_string(span.span_context.span_id()),
+        span_id_to_string(span.span_reference.span_id()),
     );
     map
 }

@@ -1,6 +1,9 @@
 use backtrace::Backtrace;
 use opentelemetry::{
-    api::{KeyValue, Provider, SpanKind, Tracer},
+    api::{
+        trace::{SpanKind, Tracer, TracerProvider},
+        KeyValue,
+    },
     global, sdk,
 };
 use std::env;
@@ -30,26 +33,26 @@ fn main() {
 
     let client_provider =
         opentelemetry_application_insights::new_pipeline(instrumentation_key.clone())
-            .with_sdk_config(sdk::Config {
+            .with_trace_config(sdk::trace::Config {
                 resource: Arc::new(sdk::Resource::new(vec![
                     KeyValue::new("service.namespace", "example-attributes"),
                     KeyValue::new("service.name", "client"),
                 ])),
-                ..sdk::Config::default()
+                ..Default::default()
             })
             .build();
-    let client_tracer = client_provider.get_tracer("example-attributes");
+    let client_tracer = client_provider.get_tracer("example-attributes", None);
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
-        .with_sdk_config(sdk::Config {
+        .with_trace_config(sdk::trace::Config {
             resource: Arc::new(sdk::Resource::new(vec![
                 KeyValue::new("service.namespace", "example-attributes"),
                 KeyValue::new("service.name", "server"),
             ])),
-            ..sdk::Config::default()
+            ..Default::default()
         })
         .build();
-    let server_tracer = server_provider.get_tracer("example-attributes");
+    let server_tracer = server_provider.get_tracer("example-attributes", None);
 
     // An HTTP client make a request
     let span = client_tracer

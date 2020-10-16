@@ -1,15 +1,16 @@
-use opentelemetry::api::{HttpTextFormat, TraceContextPropagator};
+use opentelemetry::{
+    api::propagation::TextMapPropagator, sdk::propagation::TraceContextPropagator,
+};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing::Span;
 use tracing_attributes::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::Registry;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 #[instrument]
 async fn spawn_children(n: u32, process_name: String) {
@@ -23,21 +24,21 @@ async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&Span::current().context(), &mut injector);
-    let child = Command::new(process_name)
+    let mut child = Command::new(process_name)
         .arg(
             injector
                 .remove("traceparent")
                 .expect("propagator should inject traceparent"),
         )
-        .spawn();
-    let future = child.expect("failed to spawn");
-    future.await.expect("awaiting process failed");
+        .spawn()
+        .expect("failed to spawn");
+    child.wait().await.expect("awaiting process failed");
 }
 
 #[instrument]
 async fn run_in_child_process() {
     tracing::info!("leaf fn");
-    delay_for(Duration::from_millis(50)).await
+    sleep(Duration::from_millis(50)).await
 }
 
 #[tokio::main]
@@ -50,7 +51,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
+    let (tracer, _uninstall) =
+        opentelemetry_application_insights::new_pipeline(instrumentation_key).install();
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");

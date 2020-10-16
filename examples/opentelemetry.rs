@@ -1,16 +1,18 @@
 use opentelemetry::{
     api::{
-        trace::futures::FutureExt, Context, HttpTextFormat, Key, Span, SpanKind, TraceContextExt,
-        TraceContextPropagator, Tracer,
+        propagation::TextMapPropagator,
+        trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
+        Context, Key,
     },
     global,
+    sdk::propagation::TraceContextPropagator,
 };
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
@@ -37,15 +39,16 @@ async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&cx, &mut injector);
-    let child = Command::new(process_name)
+    let mut child = Command::new(process_name)
         .arg(
             injector
                 .remove("traceparent")
                 .expect("propagator should inject traceparent"),
         )
-        .spawn();
-    let future = child.expect("failed to spawn");
-    future
+        .spawn()
+        .expect("failed to spawn");
+    child
+        .wait()
         .with_context(cx)
         .await
         .expect("awaiting process failed");
@@ -55,7 +58,7 @@ async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
     let span = tracer.start("run_in_child_process");
     span.add_event("leaf fn".into(), vec![]);
-    delay_for(Duration::from_millis(50)).await
+    sleep(Duration::from_millis(50)).await
 }
 
 #[tokio::main]
