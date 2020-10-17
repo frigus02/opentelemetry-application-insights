@@ -108,6 +108,7 @@
 #![cfg_attr(test, deny(warnings))]
 
 mod convert;
+mod http_client;
 mod models;
 mod tags;
 mod uploader;
@@ -116,6 +117,7 @@ use async_trait::async_trait;
 use convert::{
     attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
 };
+pub use http_client::HttpClient;
 use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
     RequestData, Sanitize,
@@ -131,23 +133,37 @@ use std::collections::{BTreeMap, HashMap};
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
-pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder {
+pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
+        client: (),
+        config: None,
         instrumentation_key,
         sample_rate: 100.0,
-        config: None,
     }
 }
 
 /// Application Insights exporter pipeline builder
 #[derive(Debug)]
-pub struct PipelineBuilder {
+pub struct PipelineBuilder<C> {
+    client: C,
+    config: Option<sdk::trace::Config>,
     instrumentation_key: String,
     sample_rate: f64,
-    config: Option<sdk::trace::Config>,
 }
 
-impl PipelineBuilder {
+impl<C> PipelineBuilder<C> {
+    /// Set HTTP client, which the exporter will use to send telemetry to Application Insights.
+    ///
+    /// Use this to set an HTTP client which fits your async runtime.
+    pub fn with_client<NC>(self, client: NC) -> PipelineBuilder<NC> {
+        PipelineBuilder {
+            client,
+            config: self.config,
+            instrumentation_key: self.instrumentation_key,
+            sample_rate: self.sample_rate,
+        }
+    }
+
     /// Set sample rate, which is passed through to Application Insights. It should be a value
     /// between 0 and 1 and match the rate given to the sampler.
     ///
@@ -185,6 +201,29 @@ impl PipelineBuilder {
             ..self
         }
     }
+}
+
+impl<C> PipelineBuilder<C>
+where
+    C: HttpClient + 'static,
+{
+    /// Build a configured `sdk::Provider` with the recommended defaults.
+    ///
+    /// This will automatically configure an asynchronous batch exporter if you enable either the
+    /// `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise spans will be
+    /// exported synchronously.
+    pub fn build(mut self) -> sdk::trace::TracerProvider {
+        let config = self.config.take();
+        let exporter =
+            Exporter::new(self.instrumentation_key, self.client).with_sample_rate(self.sample_rate);
+
+        let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
+        if let Some(config) = config {
+            builder = builder.with_config(config);
+        }
+
+        builder.build()
+    }
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
@@ -201,23 +240,6 @@ impl PipelineBuilder {
 
         (tracer, Uninstall(provider_guard))
     }
-
-    /// Build a configured `sdk::Provider` with the recommended defaults.
-    ///
-    /// This will automatically configure an asynchronous batch exporter if you enable either the
-    /// `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise spans will be
-    /// exported synchronously.
-    pub fn build(mut self) -> sdk::trace::TracerProvider {
-        let config = self.config.take();
-        let exporter = Exporter::new(self.instrumentation_key).with_sample_rate(self.sample_rate);
-
-        let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
-        if let Some(config) = config {
-            builder = builder.with_config(config);
-        }
-
-        builder.build()
-    }
 }
 
 /// Guard that uninstalls the Application Insights trace pipeline when dropped.
@@ -226,15 +248,17 @@ pub struct Uninstall(global::TracerProviderGuard);
 
 /// Application Insights span exporter
 #[derive(Debug)]
-pub struct Exporter {
+pub struct Exporter<C> {
+    client: C,
     instrumentation_key: String,
     sample_rate: f64,
 }
 
-impl Exporter {
+impl<C> Exporter<C> {
     /// Create a new exporter.
-    pub fn new(instrumentation_key: String) -> Self {
+    pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
+            client,
             instrumentation_key,
             sample_rate: 100.0,
         }
@@ -308,7 +332,10 @@ impl Exporter {
 }
 
 #[async_trait]
-impl SpanExporter for Exporter {
+impl<C> SpanExporter for Exporter<C>
+where
+    C: HttpClient,
+{
     /// Export spans to Application Insights
     async fn export(&self, batch: Vec<SpanData>) -> ExportResult {
         let mut envelopes: Vec<_> = batch
@@ -318,17 +345,8 @@ impl SpanExporter for Exporter {
         for envelope in envelopes.iter_mut() {
             envelope.sanitize();
         }
-        uploader::send(envelopes).into()
-    }
-}
 
-impl From<uploader::Response> for ExportResult {
-    fn from(response: uploader::Response) -> ExportResult {
-        match response {
-            uploader::Response::Success => Self::Success,
-            uploader::Response::Retry => Self::FailedRetryable,
-            uploader::Response::NoRetry => Self::FailedNotRetryable,
-        }
+        uploader::send(&self.client, envelopes).await
     }
 }
 
