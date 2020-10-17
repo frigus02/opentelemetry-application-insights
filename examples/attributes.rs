@@ -33,7 +33,7 @@ fn main() {
 
     let client_provider =
         opentelemetry_application_insights::new_pipeline(instrumentation_key.clone())
-            .with_client(reqwest::Client::new())
+            .with_client(reqwest::blocking::Client::new())
             .with_trace_config(sdk::trace::Config {
                 resource: Arc::new(sdk::Resource::new(vec![
                     KeyValue::new("service.namespace", "example-attributes"),
@@ -45,7 +45,7 @@ fn main() {
     let client_tracer = client_provider.get_tracer("example-attributes", None);
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
-        .with_client(reqwest::Client::new())
+        .with_client(reqwest::blocking::Client::new())
         .with_trace_config(sdk::trace::Config {
             resource: Arc::new(sdk::Resource::new(vec![
                 KeyValue::new("service.namespace", "example-attributes"),

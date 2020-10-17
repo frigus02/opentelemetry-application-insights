@@ -12,7 +12,7 @@ use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::sleep;
+use tokio::time::delay_for;
 
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
@@ -39,7 +39,7 @@ async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&cx, &mut injector);
-    let mut child = Command::new(process_name)
+    let child = Command::new(process_name)
         .arg(
             injector
                 .remove("traceparent")
@@ -48,7 +48,6 @@ async fn spawn_child_process(process_name: &str) {
         .spawn()
         .expect("failed to spawn");
     child
-        .wait()
         .with_context(cx)
         .await
         .expect("awaiting process failed");
@@ -58,7 +57,7 @@ async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
     let span = tracer.start("run_in_child_process");
     span.add_event("leaf fn".into(), vec![]);
-    sleep(Duration::from_millis(50)).await
+    delay_for(Duration::from_millis(50)).await
 }
 
 #[tokio::main]
@@ -73,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
     let (tracer, _uninstall) =
         opentelemetry_application_insights::new_pipeline(instrumentation_key)
-            .with_client(reqwest::Client::new())
+            .with_client(reqwest::blocking::Client::new())
             .install();
 
     match traceparent {

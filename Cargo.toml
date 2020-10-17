@@ -20,7 +20,7 @@ exclude = [
 
 [features]
 reqwest-blocking-client = ["reqwest", "reqwest/blocking"]
-reqwest-client = ["reqwest"]
+reqwest-client = ["reqwest", "opentelemetry/tokio"]
 surf-client = ["surf"]
 
 [dependencies]
@@ -37,11 +37,12 @@ serde_json = "1"
 surf = { version = "2.0", optional = true }
 
 [dev-dependencies]
+async-std = { version = "1.6.5", features = ["attributes"] }
 backtrace = "0.3.50"
 env_logger = "0.8.1"
-opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
+opentelemetry-application-insights = { path = ".", features = ["reqwest-blocking-client"] }
 test-case = "1.0.0"
-tokio = { version = "0.3.0", features = ["macros", "process", "rt-multi-thread", "time"] }
+tokio = { version = "0.2.22", features = ["macros", "process", "time"] }
 version-sync = "0.9.1"
 
 [package.metadata.docs.rs]
