@@ -8,7 +8,7 @@
 //! # Usage
 //!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans:
+//! spans (this example requires the **reqwest-client-blocking** feature):
 //!
 //! ```no_run
 //! use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
@@ -17,6 +17,7 @@
 //! fn init_tracer() -> (Tracer, Uninstall)  {
 //!     let instrumentation_key = "...".to_string();
 //!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!         .with_client(reqwest::blocking::Client::new())
 //!         .install()
 //! }
 //!
@@ -168,9 +169,12 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Default: 1.0
     ///
+    /// Note: This example requires the **reqwest-client-blocking** feature.
+    ///
     /// ```
     /// let sample_rate = 0.3;
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_sample_rate(sample_rate)
     ///     .install();
     /// ```
@@ -182,10 +186,13 @@ impl<C> PipelineBuilder<C> {
 
     /// Assign the SDK config for the exporter pipeline.
     ///
+    /// Note: This example requires the **reqwest-client-blocking** feature.
+    ///
     /// ```
     /// # use opentelemetry::{api::KeyValue, sdk};
     /// # use std::sync::Arc;
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_trace_config(sdk::trace::Config {
     ///         resource: Arc::new(sdk::Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),

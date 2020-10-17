@@ -16,6 +16,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --all-features
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:
@@ -25,3 +26,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
+          args: --all-features
+      - name: Build tracing example
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path examples/tracing/Cargo.toml

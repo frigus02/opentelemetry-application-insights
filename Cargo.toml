@@ -19,7 +19,6 @@ exclude = [
 ]
 
 [features]
-default = []
 reqwest-blocking-client = ["reqwest", "reqwest/blocking"]
 reqwest-client = ["reqwest"]
 surf-client = ["surf"]
@@ -39,16 +38,14 @@ surf = { version = "2.0", optional = true }
 
 [dev-dependencies]
 backtrace = "0.3.50"
-env_logger = "0.7.1"
-opentelemetry-application-insights = { path = ".", features = ["reqwest-client"] }
+env_logger = "0.8.1"
+opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
 test-case = "1.0.0"
 tokio = { version = "0.3.0", features = ["macros", "process", "rt-multi-thread", "time"] }
-tracing = "0.1.19"
-tracing-attributes = "0.1.10"
-tracing-futures = "0.2.4"
-tracing-opentelemetry = "0.8.0"
-tracing-subscriber = "0.2.11"
 version-sync = "0.9.1"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [badges]
 github = { repository = "frigus02/opentelemetry-application-insights", workflow = "CI" }

@@ -1,0 +1,15 @@
+[package]
+name = "tracing"
+version = "0.1.0"
+authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+opentelemetry = "0.8.0"
+opentelemetry-application-insights = "0.4.0"
+tokio = { version = "0.3.0", features = ["macros", "process", "rt-multi-thread", "time"] }
+tracing = "0.1.21"
+tracing-attributes = "0.1.11"
+tracing-futures = "0.2.4"
+tracing-opentelemetry = "0.8.0"
+tracing-subscriber = "0.2.13"

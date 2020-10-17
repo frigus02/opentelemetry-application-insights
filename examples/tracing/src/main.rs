@@ -1,5 +1,6 @@
 use opentelemetry::{
-    api::propagation::TextMapPropagator, sdk::propagation::TraceContextPropagator,
+    api::{HttpTextFormat, Provider, TraceContextPropagator},
+    sdk,
 };
 use std::collections::HashMap;
 use std::env;
@@ -43,18 +44,17 @@ async fn run_in_child_process() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
-
     let mut iter = env::args();
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let (tracer, _uninstall) =
-        opentelemetry_application_insights::new_pipeline(instrumentation_key)
-            .with_client(reqwest::Client::new())
-            .install();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
+    let provider = sdk::Provider::builder()
+        .with_simple_exporter(exporter)
+        .build();
+    let tracer = provider.get_tracer("example-tracing");
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
