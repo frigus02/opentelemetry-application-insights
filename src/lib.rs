@@ -114,9 +114,7 @@ mod tags;
 mod uploader;
 
 use async_trait::async_trait;
-use convert::{
-    attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
-};
+use convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string};
 pub use http_client::HttpClient;
 use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
@@ -124,11 +122,12 @@ use models::{
 };
 use opentelemetry::api::{
     trace::{Event, SpanKind, StatusCode, TracerProvider},
-    Value,
+    Key, Value,
 };
 use opentelemetry::exporter::trace::{ExportResult, SpanData, SpanExporter};
 use opentelemetry::global;
 use opentelemetry::sdk;
+use opentelemetry_semantic_conventions as semcov;
 use std::collections::{BTreeMap, HashMap};
 use tags::{get_tags_for_event, get_tags_for_span};
 
@@ -280,7 +279,7 @@ impl<C> Exporter<C> {
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
                 let data: RequestData = (&span).into();
-                let tags = get_tags_for_span(&span, &data.properties);
+                let tags = get_tags_for_span(&span);
                 (
                     Data::Request(data),
                     tags,
@@ -289,7 +288,7 @@ impl<C> Exporter<C> {
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
                 let data: RemoteDependencyData = (&span).into();
-                let tags = get_tags_for_span(&span, &data.properties);
+                let tags = get_tags_for_span(&span);
                 (
                     Data::RemoteDependency(data),
                     tags,
@@ -365,37 +364,39 @@ impl From<&SpanData> for RequestData {
             success: span.status_code == StatusCode::OK,
             source: None,
             url: None,
-            properties: None,
+            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
         };
 
-        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
-
-        if let Some(method) = attrs.get("http.method") {
-            data.name = Some(if let Some(route) = attrs.get("http.route") {
-                format!("{} {}", String::from(*method), String::from(*route))
-            } else {
-                String::from(*method)
-            });
+        if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
+            data.name = Some(
+                if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
+                    format!("{} {}", String::from(method), String::from(route))
+                } else {
+                    String::from(method)
+                },
+            );
         }
 
-        if let Some(status_code) = attrs.get("http.status_code") {
-            data.response_code = String::from(*status_code);
+        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+            data.response_code = String::from(status_code);
         }
 
-        if let Some(url) = attrs.get("http.url") {
-            data.url = Some(String::from(*url));
-        } else if let Some(target) = attrs.get("http.target") {
-            let mut target = String::from(*target);
+        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+            data.url = Some(String::from(url));
+        } else if let Some(target) = span.attributes.get(&semcov::trace::HTTP_TARGET) {
+            let mut target = String::from(target);
             if !target.starts_with('/') {
                 target.insert(0, '/');
             }
 
-            if let Some((scheme, host)) = opt_zip(attrs.get("http.scheme"), attrs.get("http.host"))
-            {
+            if let Some((scheme, host)) = opt_zip(
+                span.attributes.get(&semcov::trace::HTTP_SCHEME),
+                span.attributes.get(&semcov::trace::HTTP_HOST),
+            ) {
                 data.url = Some(format!(
                     "{}://{}{}",
-                    String::from(*scheme),
-                    String::from(*host),
+                    String::from(scheme),
+                    String::from(host),
                     target
                 ));
             } else {
@@ -403,13 +404,12 @@ impl From<&SpanData> for RequestData {
             }
         }
 
-        if let Some(client_ip) = attrs.get("http.client_ip") {
-            data.source = Some(String::from(*client_ip));
-        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
-            data.source = Some(String::from(*peer_ip));
+        if let Some(client_ip) = span.attributes.get(&semcov::trace::HTTP_CLIENT_IP) {
+            data.source = Some(String::from(client_ip));
+        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
+            data.source = Some(String::from(peer_ip));
         }
 
-        data.properties = attrs_to_properties(attrs);
         data
     }
 }
@@ -430,89 +430,97 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: None,
+            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
         };
 
-        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
-
-        if let Some(status_code) = attrs.get("http.status_code") {
-            data.result_code = Some(String::from(*status_code));
+        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+            data.result_code = Some(String::from(status_code));
         }
 
-        if let Some(url) = attrs.get("http.url") {
-            data.data = Some(String::from(*url));
-        } else if let Some(statement) = attrs.get("db.statement") {
-            data.data = Some(String::from(*statement));
+        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+            data.data = Some(String::from(url));
+        } else if let Some(statement) = span.attributes.get(&semcov::trace::DB_STATEMENT) {
+            data.data = Some(String::from(statement));
         }
 
-        if let Some(host) = attrs.get("http.host") {
-            data.target = Some(String::from(*host));
-        } else if let Some(peer_name) = attrs.get("net.peer.name") {
-            if let Some(peer_port) = attrs.get("net.peer.port") {
+        if let Some(host) = span.attributes.get(&semcov::trace::HTTP_HOST) {
+            data.target = Some(String::from(host));
+        } else if let Some(peer_name) = span.attributes.get(&semcov::trace::NET_PEER_NAME) {
+            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
                 data.target = Some(format!(
                     "{}:{}",
-                    String::from(*peer_name),
-                    String::from(*peer_port)
+                    String::from(peer_name),
+                    String::from(peer_port)
                 ));
             } else {
-                data.target = Some(String::from(*peer_name));
+                data.target = Some(String::from(peer_name));
             }
-        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
-            if let Some(peer_port) = attrs.get("net.peer.port") {
+        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
+            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
                 data.target = Some(format!(
                     "{}:{}",
-                    String::from(*peer_ip),
-                    String::from(*peer_port)
+                    String::from(peer_ip),
+                    String::from(peer_port)
                 ));
             } else {
-                data.target = Some(String::from(*peer_ip));
+                data.target = Some(String::from(peer_ip));
             }
-        } else if let Some(db_name) = attrs.get("db.name") {
-            data.target = Some(String::from(*db_name));
+        } else if let Some(db_name) = span.attributes.get(&semcov::trace::DB_NAME) {
+            data.target = Some(String::from(db_name));
         }
 
         if span.span_kind == SpanKind::Internal {
             data.type_ = Some("InProc".into());
             data.success = Some(true);
-        } else if let Some(db_system) = attrs.get("db.system") {
-            data.type_ = Some(String::from(*db_system));
-        } else if let Some(messaging_system) = attrs.get("messaging.system") {
-            data.type_ = Some(String::from(*messaging_system));
-        } else if let Some(rpc_system) = attrs.get("rpc.system") {
-            data.type_ = Some(String::from(*rpc_system));
-        } else if attrs.keys().any(|x| x.starts_with("http.")) {
-            data.type_ = Some("HTTP".into());
-        } else if attrs.keys().any(|x| x.starts_with("db.")) {
-            data.type_ = Some("DB".into());
+        } else if let Some(db_system) = span.attributes.get(&semcov::trace::DB_SYSTEM) {
+            data.type_ = Some(String::from(db_system));
+        } else if let Some(messaging_system) = span.attributes.get(&semcov::trace::MESSAGING_SYSTEM)
+        {
+            data.type_ = Some(String::from(messaging_system));
+        } else if let Some(rpc_system) = span.attributes.get(&semcov::trace::RPC_SYSTEM) {
+            data.type_ = Some(String::from(rpc_system));
+        } else if let Some(ref properties) = data.properties {
+            if properties.keys().any(|x| x.starts_with("http.")) {
+                data.type_ = Some("HTTP".into());
+            } else if properties.keys().any(|x| x.starts_with("db.")) {
+                data.type_ = Some("DB".into());
+            }
         }
 
-        data.properties = attrs_to_properties(attrs);
         data
     }
 }
 
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
-        let mut attrs: HashMap<&str, &Value> = event
+        let mut attrs: HashMap<&Key, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (kv.key.as_str(), &kv.value))
+            .map(|kv| (&kv.key, &kv.value))
             .collect();
         let exception = ExceptionDetails {
             type_name: attrs
-                .remove("exception.type")
+                .remove(&semcov::trace::EXCEPTION_TYPE)
                 .map(String::from)
                 .unwrap_or_else(|| "<no type>".into()),
             message: attrs
-                .remove("exception.message")
+                .remove(&semcov::trace::EXCEPTION_MESSAGE)
                 .map(String::from)
                 .unwrap_or_else(|| "<no message>".into()),
-            stack: attrs.remove("exception.stacktrace").map(String::from),
+            stack: attrs
+                .remove(&semcov::trace::EXCEPTION_STACKTRACE)
+                .map(String::from),
         };
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            properties: attrs_to_properties(attrs),
+            properties: Some(
+                attrs
+                    .iter()
+                    .map(|(k, v)| (k.as_str().to_string(), String::from(*v)))
+                    .collect(),
+            )
+            .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
         }
     }
 }
