@@ -171,7 +171,7 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Note: This example requires the **reqwest-client-blocking** feature.
     ///
-    /// ```
+    /// ```no_run
     /// let sample_rate = 0.3;
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
@@ -188,7 +188,7 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Note: This example requires the **reqwest-client-blocking** feature.
     ///
-    /// ```
+    /// ```no_run
     /// # use opentelemetry::{api::KeyValue, sdk};
     /// # use std::sync::Arc;
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
