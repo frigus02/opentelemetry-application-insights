@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
-- Upgrade to `v0.9.0` of `opentelemetry`.
+- Upgrade to `v0.9.0` of `opentelemetry`. This makes span exports use async/await. In order to support different runtimes, you now need to specify a compatible HTTP client.
 
 ## [0.4.0] - 2020-08-14
 
