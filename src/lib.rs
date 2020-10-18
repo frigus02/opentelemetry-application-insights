@@ -15,7 +15,7 @@
 //! use opentelemetry_application_insights::Uninstall;
 //!
 //! fn init_tracer() -> (Tracer, Uninstall)  {
-//!     let instrumentation_key = "...".to_string();
+//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
 //!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
 //!         .with_client(reqwest::blocking::Client::new())
 //!         .install()
@@ -27,9 +27,28 @@
 //! }
 //! ```
 //!
+//! ## Features
+//!
 //! The functions `build` and `install` automatically configure an asynchronous batch exporter if
-//! you enable either the `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise
-//! spans will be exported synchronously.
+//! you enable either the **async-std** or **tokio** feature for the `opentelemetry` crate.
+//! Otherwise spans will be exported synchronously.
+//!
+//! In order to support different async runtimes, the exporter requires you to specify an HTTP
+//! client that works with your chosen runtime. This crate comes with support for:
+//!
+//! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/async-std**
+//!   features and configure the exporter with `with_client(surf::Client::new())`.
+//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
+//!   and configure the exporter with `with_client(reqwest::Client::new())`.
+//! - [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
+//!   configure the exporter with `with_client(reqwest::blocking::Client::new())`.
+//!
+//! [`async-std`]: https://crates.io/crates/async-std
+//! [`reqwest`]: https://crates.io/crates/reqwest
+//! [`surf`]: https://crates.io/crates/surf
+//! [`tokio`]: https://crates.io/crates/tokio
+//!
+//! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 //!
 //! # Attribute mapping
 //!
@@ -169,7 +188,9 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Default: 1.0
     ///
-    /// Note: This example requires the **reqwest-client-blocking** feature.
+    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    ///
+    /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
     /// let sample_rate = 0.3;
@@ -186,7 +207,9 @@ impl<C> PipelineBuilder<C> {
 
     /// Assign the SDK config for the exporter pipeline.
     ///
-    /// Note: This example requires the **reqwest-client-blocking** feature.
+    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    ///
+    /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
     /// # use opentelemetry::{api::KeyValue, sdk};
@@ -213,10 +236,10 @@ impl<C> PipelineBuilder<C>
 where
     C: HttpClient + 'static,
 {
-    /// Build a configured `sdk::Provider` with the recommended defaults.
+    /// Build a configured `TracerProvider` with the recommended defaults.
     ///
     /// This will automatically configure an asynchronous batch exporter if you enable either the
-    /// `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise spans will be
+    /// **async-std** or **tokio** feature for the `opentelemetry` crate. Otherwise spans will be
     /// exported synchronously.
     pub fn build(mut self) -> sdk::trace::TracerProvider {
         let config = self.config.take();
@@ -233,7 +256,7 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `sdk::Provider`. See the `build` function for details about how
+    /// This registers a global `TracerProvider`. See the `build` function for details about how
     /// this provider is configured.
     pub fn install(self) -> (sdk::trace::Tracer, Uninstall) {
         let trace_provider = self.build();
@@ -248,7 +271,7 @@ where
     }
 }
 
-/// Guard that uninstalls the Application Insights trace pipeline when dropped.
+/// Guard that uninstalls the Application Insights trace pipeline when dropped
 #[derive(Debug)]
 pub struct Uninstall(global::TracerProviderGuard);
 

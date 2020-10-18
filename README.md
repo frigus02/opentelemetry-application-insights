@@ -14,7 +14,7 @@ An [Azure Application Insights] exporter implementation for [OpenTelemetry Rust]
 ## Usage
 
 Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-spans:
+spans (this example requires the **reqwest-client-blocking** feature):
 
 ```rust
 use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
@@ -23,6 +23,7 @@ use opentelemetry_application_insights::Uninstall;
 fn init_tracer() -> (Tracer, Uninstall)  {
     let instrumentation_key = "...".to_string();
     opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_client(reqwest::blocking::Client::new())
         .install()
 }
 
@@ -32,9 +33,28 @@ fn main() {
 }
 ```
 
+### Features
+
 The functions `build` and `install` automatically configure an asynchronous batch exporter if
-you enable either the `async-std` or `tokio` feature for the `opentelemetry` crate. Otherwise
-spans will be exported synchronously.
+you enable either the **async-std** or **tokio** feature for the `opentelemetry` crate.
+Otherwise spans will be exported synchronously.
+
+In order to support different async runtimes, the exporter requires you to specify an HTTP
+client that works with your chosen runtime. This crate comes with support for:
+
+- [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/async-std**
+  features and configure the exporter with `with_client(surf::Client::new())`.
+- [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
+  and configure the exporter with `with_client(reqwest::Client::new())`.
+- Or: enable **reqwest-blocking-client** and configure the exporter with
+  `with_client(reqwest::blocking::Client::new())`.
+
+[`async-std`]: https://crates.io/crates/async-std
+[`reqwest`]: https://crates.io/crates/reqwest
+[`surf`]: https://crates.io/crates/surf
+[`tokio`]: https://crates.io/crates/tokio
+
+Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 
 ## Attribute mapping
 
