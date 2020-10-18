@@ -8,26 +8,47 @@
 //! # Usage
 //!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans:
+//! spans (this example requires the **reqwest-client-blocking** feature):
 //!
 //! ```no_run
-//! use opentelemetry::{api::Tracer, sdk};
+//! use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
+//! use opentelemetry_application_insights::Uninstall;
 //!
-//! fn init_tracer() -> sdk::Tracer {
-//!     let instrumentation_key = "...".to_string();
+//! fn init_tracer() -> (Tracer, Uninstall)  {
+//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
 //!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!         .with_client(reqwest::blocking::Client::new())
 //!         .install()
 //! }
 //!
 //! fn main() {
-//!     let tracer = init_tracer();
+//!     let (tracer, _uninstall) = init_tracer();
 //!     tracer.in_span("main", |_cx| {});
 //! }
 //! ```
 //!
+//! ## Features
+//!
 //! The functions `build` and `install` automatically configure an asynchronous batch exporter if
-//! you use this crate with either the `async-std` or `tokio` feature. Otherwise spans will be
-//! exported synchronously.
+//! you enable either the **async-std** or **tokio** feature for the `opentelemetry` crate.
+//! Otherwise spans will be exported synchronously.
+//!
+//! In order to support different async runtimes, the exporter requires you to specify an HTTP
+//! client that works with your chosen runtime. This crate comes with support for:
+//!
+//! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/async-std**
+//!   features and configure the exporter with `with_client(surf::Client::new())`.
+//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
+//!   and configure the exporter with `with_client(reqwest::Client::new())`.
+//! - [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
+//!   configure the exporter with `with_client(reqwest::blocking::Client::new())`.
+//!
+//! [`async-std`]: https://crates.io/crates/async-std
+//! [`reqwest`]: https://crates.io/crates/reqwest
+//! [`surf`]: https://crates.io/crates/surf
+//! [`tokio`]: https://crates.io/crates/tokio
+//!
+//! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 //!
 //! # Attribute mapping
 //!
@@ -107,51 +128,74 @@
 #![cfg_attr(test, deny(warnings))]
 
 mod convert;
+mod http_client;
 mod models;
 mod tags;
 mod uploader;
 
-use convert::{
-    attrs_to_properties, collect_attrs, duration_to_string, span_id_to_string, time_to_string,
-};
+use async_trait::async_trait;
+use convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string};
+pub use http_client::HttpClient;
 use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, MessageData, RemoteDependencyData,
     RequestData, Sanitize,
 };
-use opentelemetry::api::{Event, Provider, SpanKind, StatusCode, Value};
-use opentelemetry::exporter::trace;
+use opentelemetry::api::{
+    trace::{Event, SpanKind, StatusCode, TracerProvider},
+    Key, Value,
+};
+use opentelemetry::exporter::trace::{ExportResult, SpanData, SpanExporter};
 use opentelemetry::global;
 use opentelemetry::sdk;
+use opentelemetry_semantic_conventions as semcov;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
-pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder {
+pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
+        client: (),
+        config: None,
         instrumentation_key,
         sample_rate: 100.0,
-        config: None,
     }
 }
 
 /// Application Insights exporter pipeline builder
 #[derive(Debug)]
-pub struct PipelineBuilder {
+pub struct PipelineBuilder<C> {
+    client: C,
+    config: Option<sdk::trace::Config>,
     instrumentation_key: String,
     sample_rate: f64,
-    config: Option<sdk::Config>,
 }
 
-impl PipelineBuilder {
+impl<C> PipelineBuilder<C> {
+    /// Set HTTP client, which the exporter will use to send telemetry to Application Insights.
+    ///
+    /// Use this to set an HTTP client which fits your async runtime.
+    pub fn with_client<NC>(self, client: NC) -> PipelineBuilder<NC> {
+        PipelineBuilder {
+            client,
+            config: self.config,
+            instrumentation_key: self.instrumentation_key,
+            sample_rate: self.sample_rate,
+        }
+    }
+
     /// Set sample rate, which is passed through to Application Insights. It should be a value
     /// between 0 and 1 and match the rate given to the sampler.
     ///
     /// Default: 1.0
     ///
-    /// ```
+    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    ///
+    /// [`reqwest`]: https://crates.io/crates/reqwest
+    ///
+    /// ```no_run
     /// let sample_rate = 0.3;
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
+    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_sample_rate(sample_rate)
     ///     .install();
     /// ```
@@ -163,70 +207,46 @@ impl PipelineBuilder {
 
     /// Assign the SDK config for the exporter pipeline.
     ///
-    /// ```
+    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    ///
+    /// [`reqwest`]: https://crates.io/crates/reqwest
+    ///
+    /// ```no_run
     /// # use opentelemetry::{api::KeyValue, sdk};
     /// # use std::sync::Arc;
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_sdk_config(sdk::Config {
+    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
+    ///     .with_trace_config(sdk::trace::Config {
     ///         resource: Arc::new(sdk::Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),
     ///         ])),
-    ///         ..sdk::Config::default()
+    ///         ..Default::default()
     ///     })
     ///     .install();
     /// ```
-    pub fn with_sdk_config(self, config: sdk::Config) -> Self {
+    pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
         PipelineBuilder {
             config: Some(config),
             ..self
         }
     }
+}
 
-    /// Install an Application Insights pipeline with the recommended defaults.
+impl<C> PipelineBuilder<C>
+where
+    C: HttpClient + 'static,
+{
+    /// Build a configured `TracerProvider` with the recommended defaults.
     ///
-    /// This registers a global `sdk::Provider`. See the `build` function for details about how
-    /// this provider is configured.
-    pub fn install(self) -> sdk::Tracer {
-        let trace_provider = self.build();
-        let tracer = trace_provider.get_tracer("opentelemetry-application-insights");
-
-        global::set_provider(trace_provider);
-
-        tracer
-    }
-
-    /// Build a configured `sdk::Provider` with the recommended defaults.
-    ///
-    /// This will automatically configure an asynchronous batch exporter if you use this crate with
-    /// either the `async-std` or `tokio` feature. Otherwise spans will be exported synchronously.
-    pub fn build(mut self) -> sdk::Provider {
+    /// This will automatically configure an asynchronous batch exporter if you enable either the
+    /// **async-std** or **tokio** feature for the `opentelemetry` crate. Otherwise spans will be
+    /// exported synchronously.
+    pub fn build(mut self) -> sdk::trace::TracerProvider {
         let config = self.config.take();
-        let exporter = self.init_exporter();
+        let exporter =
+            Exporter::new(self.instrumentation_key, self.client).with_sample_rate(self.sample_rate);
 
-        let mut builder = sdk::Provider::builder();
-
-        #[cfg(feature = "tokio")]
-        {
-            let batch =
-                sdk::BatchSpanProcessor::builder(exporter, tokio::spawn, tokio::time::interval)
-                    .build();
-            builder = builder.with_batch_exporter(batch);
-        }
-        #[cfg(all(feature = "async-std", not(feature = "tokio")))]
-        {
-            let batch = sdk::BatchSpanProcessor::builder(
-                exporter,
-                async_std::task::spawn,
-                async_std::stream::interval,
-            )
-            .build();
-            builder = builder.with_batch_exporter(batch);
-        }
-        #[cfg(all(not(feature = "async-std"), not(feature = "tokio")))]
-        {
-            builder = builder.with_simple_exporter(exporter);
-        }
-
+        let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -234,29 +254,40 @@ impl PipelineBuilder {
         builder.build()
     }
 
-    /// Initialize a new exporter.
+    /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This is useful if you are manually constructing a pipeline.
-    pub fn init_exporter(self) -> Exporter {
-        Exporter {
-            instrumentation_key: self.instrumentation_key,
-            sample_rate: self.sample_rate,
-        }
+    /// This registers a global `TracerProvider`. See the `build` function for details about how
+    /// this provider is configured.
+    pub fn install(self) -> (sdk::trace::Tracer, Uninstall) {
+        let trace_provider = self.build();
+        let tracer = trace_provider.get_tracer(
+            "opentelemetry-application-insights",
+            Some(env!("CARGO_PKG_VERSION")),
+        );
+
+        let provider_guard = global::set_tracer_provider(trace_provider);
+
+        (tracer, Uninstall(provider_guard))
     }
 }
 
+/// Guard that uninstalls the Application Insights trace pipeline when dropped
+#[derive(Debug)]
+pub struct Uninstall(global::TracerProviderGuard);
+
 /// Application Insights span exporter
 #[derive(Debug)]
-pub struct Exporter {
+pub struct Exporter<C> {
+    client: C,
     instrumentation_key: String,
     sample_rate: f64,
 }
 
-impl Exporter {
+impl<C> Exporter<C> {
     /// Create a new exporter.
-    #[deprecated(note = "Use PipelineBuilder instead")]
-    pub fn new(instrumentation_key: String) -> Self {
+    pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
+            client,
             instrumentation_key,
             sample_rate: 100.0,
         }
@@ -266,20 +297,19 @@ impl Exporter {
     /// between 0 and 1 and match the rate given to the sampler.
     ///
     /// Default: 1.0
-    #[deprecated(note = "Use PipelineBuilder instead")]
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
         self
     }
 
-    fn create_envelopes(&self, span: Arc<trace::SpanData>) -> Vec<Envelope> {
+    fn create_envelopes(&self, span: SpanData) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.message_events.len());
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let data: RequestData = span.as_ref().into();
-                let tags = get_tags_for_span(&span, &data.properties);
+                let data: RequestData = (&span).into();
+                let tags = get_tags_for_span(&span);
                 (
                     Data::Request(data),
                     tags,
@@ -287,8 +317,8 @@ impl Exporter {
                 )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let data: RemoteDependencyData = span.as_ref().into();
-                let tags = get_tags_for_span(&span, &data.properties);
+                let data: RemoteDependencyData = (&span).into();
+                let tags = get_tags_for_span(&span);
                 (
                     Data::RemoteDependency(data),
                     tags,
@@ -330,9 +360,13 @@ impl Exporter {
     }
 }
 
-impl trace::SpanExporter for Exporter {
+#[async_trait]
+impl<C> SpanExporter for Exporter<C>
+where
+    C: HttpClient,
+{
     /// Export spans to Application Insights
-    fn export(&self, batch: Vec<Arc<trace::SpanData>>) -> trace::ExportResult {
+    async fn export(&self, batch: Vec<SpanData>) -> ExportResult {
         let mut envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes(span))
@@ -340,27 +374,16 @@ impl trace::SpanExporter for Exporter {
         for envelope in envelopes.iter_mut() {
             envelope.sanitize();
         }
-        uploader::send(envelopes).into()
-    }
 
-    fn shutdown(&self) {}
-}
-
-impl From<uploader::Response> for trace::ExportResult {
-    fn from(response: uploader::Response) -> trace::ExportResult {
-        match response {
-            uploader::Response::Success => Self::Success,
-            uploader::Response::Retry => Self::FailedRetryable,
-            uploader::Response::NoRetry => Self::FailedNotRetryable,
-        }
+        uploader::send(&self.client, envelopes).await
     }
 }
 
-impl From<&trace::SpanData> for RequestData {
-    fn from(span: &trace::SpanData) -> RequestData {
+impl From<&SpanData> for RequestData {
+    fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
             ver: 2,
-            id: span_id_to_string(span.span_context.span_id()),
+            id: span_id_to_string(span.span_reference.span_id()),
             name: Some(span.name.clone()).filter(|x| !x.is_empty()),
             duration: duration_to_string(
                 span.end_time
@@ -371,37 +394,39 @@ impl From<&trace::SpanData> for RequestData {
             success: span.status_code == StatusCode::OK,
             source: None,
             url: None,
-            properties: None,
+            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
         };
 
-        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
-
-        if let Some(method) = attrs.get("http.method") {
-            data.name = Some(if let Some(route) = attrs.get("http.route") {
-                format!("{} {}", String::from(*method), String::from(*route))
-            } else {
-                String::from(*method)
-            });
+        if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
+            data.name = Some(
+                if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
+                    format!("{} {}", String::from(method), String::from(route))
+                } else {
+                    String::from(method)
+                },
+            );
         }
 
-        if let Some(status_code) = attrs.get("http.status_code") {
-            data.response_code = String::from(*status_code);
+        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+            data.response_code = String::from(status_code);
         }
 
-        if let Some(url) = attrs.get("http.url") {
-            data.url = Some(String::from(*url));
-        } else if let Some(target) = attrs.get("http.target") {
-            let mut target = String::from(*target);
+        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+            data.url = Some(String::from(url));
+        } else if let Some(target) = span.attributes.get(&semcov::trace::HTTP_TARGET) {
+            let mut target = String::from(target);
             if !target.starts_with('/') {
                 target.insert(0, '/');
             }
 
-            if let Some((scheme, host)) = opt_zip(attrs.get("http.scheme"), attrs.get("http.host"))
-            {
+            if let Some((scheme, host)) = opt_zip(
+                span.attributes.get(&semcov::trace::HTTP_SCHEME),
+                span.attributes.get(&semcov::trace::HTTP_HOST),
+            ) {
                 data.url = Some(format!(
                     "{}://{}{}",
-                    String::from(*scheme),
-                    String::from(*host),
+                    String::from(scheme),
+                    String::from(host),
                     target
                 ));
             } else {
@@ -409,22 +434,21 @@ impl From<&trace::SpanData> for RequestData {
             }
         }
 
-        if let Some(client_ip) = attrs.get("http.client_ip") {
-            data.source = Some(String::from(*client_ip));
-        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
-            data.source = Some(String::from(*peer_ip));
+        if let Some(client_ip) = span.attributes.get(&semcov::trace::HTTP_CLIENT_IP) {
+            data.source = Some(String::from(client_ip));
+        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
+            data.source = Some(String::from(peer_ip));
         }
 
-        data.properties = attrs_to_properties(attrs);
         data
     }
 }
 
-impl From<&trace::SpanData> for RemoteDependencyData {
-    fn from(span: &trace::SpanData) -> RemoteDependencyData {
+impl From<&SpanData> for RemoteDependencyData {
+    fn from(span: &SpanData) -> RemoteDependencyData {
         let mut data = RemoteDependencyData {
             ver: 2,
-            id: Some(span_id_to_string(span.span_context.span_id())),
+            id: Some(span_id_to_string(span.span_reference.span_id())),
             name: span.name.clone(),
             duration: duration_to_string(
                 span.end_time
@@ -436,89 +460,97 @@ impl From<&trace::SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: None,
+            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
         };
 
-        let attrs = collect_attrs(&span.attributes, span.resource.as_ref());
-
-        if let Some(status_code) = attrs.get("http.status_code") {
-            data.result_code = Some(String::from(*status_code));
+        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+            data.result_code = Some(String::from(status_code));
         }
 
-        if let Some(url) = attrs.get("http.url") {
-            data.data = Some(String::from(*url));
-        } else if let Some(statement) = attrs.get("db.statement") {
-            data.data = Some(String::from(*statement));
+        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+            data.data = Some(String::from(url));
+        } else if let Some(statement) = span.attributes.get(&semcov::trace::DB_STATEMENT) {
+            data.data = Some(String::from(statement));
         }
 
-        if let Some(host) = attrs.get("http.host") {
-            data.target = Some(String::from(*host));
-        } else if let Some(peer_name) = attrs.get("net.peer.name") {
-            if let Some(peer_port) = attrs.get("net.peer.port") {
+        if let Some(host) = span.attributes.get(&semcov::trace::HTTP_HOST) {
+            data.target = Some(String::from(host));
+        } else if let Some(peer_name) = span.attributes.get(&semcov::trace::NET_PEER_NAME) {
+            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
                 data.target = Some(format!(
                     "{}:{}",
-                    String::from(*peer_name),
-                    String::from(*peer_port)
+                    String::from(peer_name),
+                    String::from(peer_port)
                 ));
             } else {
-                data.target = Some(String::from(*peer_name));
+                data.target = Some(String::from(peer_name));
             }
-        } else if let Some(peer_ip) = attrs.get("net.peer.ip") {
-            if let Some(peer_port) = attrs.get("net.peer.port") {
+        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
+            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
                 data.target = Some(format!(
                     "{}:{}",
-                    String::from(*peer_ip),
-                    String::from(*peer_port)
+                    String::from(peer_ip),
+                    String::from(peer_port)
                 ));
             } else {
-                data.target = Some(String::from(*peer_ip));
+                data.target = Some(String::from(peer_ip));
             }
-        } else if let Some(db_name) = attrs.get("db.name") {
-            data.target = Some(String::from(*db_name));
+        } else if let Some(db_name) = span.attributes.get(&semcov::trace::DB_NAME) {
+            data.target = Some(String::from(db_name));
         }
 
         if span.span_kind == SpanKind::Internal {
             data.type_ = Some("InProc".into());
             data.success = Some(true);
-        } else if let Some(db_system) = attrs.get("db.system") {
-            data.type_ = Some(String::from(*db_system));
-        } else if let Some(messaging_system) = attrs.get("messaging.system") {
-            data.type_ = Some(String::from(*messaging_system));
-        } else if let Some(rpc_system) = attrs.get("rpc.system") {
-            data.type_ = Some(String::from(*rpc_system));
-        } else if attrs.keys().any(|x| x.starts_with("http.")) {
-            data.type_ = Some("HTTP".into());
-        } else if attrs.keys().any(|x| x.starts_with("db.")) {
-            data.type_ = Some("DB".into());
+        } else if let Some(db_system) = span.attributes.get(&semcov::trace::DB_SYSTEM) {
+            data.type_ = Some(String::from(db_system));
+        } else if let Some(messaging_system) = span.attributes.get(&semcov::trace::MESSAGING_SYSTEM)
+        {
+            data.type_ = Some(String::from(messaging_system));
+        } else if let Some(rpc_system) = span.attributes.get(&semcov::trace::RPC_SYSTEM) {
+            data.type_ = Some(String::from(rpc_system));
+        } else if let Some(ref properties) = data.properties {
+            if properties.keys().any(|x| x.starts_with("http.")) {
+                data.type_ = Some("HTTP".into());
+            } else if properties.keys().any(|x| x.starts_with("db.")) {
+                data.type_ = Some("DB".into());
+            }
         }
 
-        data.properties = attrs_to_properties(attrs);
         data
     }
 }
 
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
-        let mut attrs: HashMap<&str, &Value> = event
+        let mut attrs: HashMap<&Key, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (kv.key.as_str(), &kv.value))
+            .map(|kv| (&kv.key, &kv.value))
             .collect();
         let exception = ExceptionDetails {
             type_name: attrs
-                .remove("exception.type")
+                .remove(&semcov::trace::EXCEPTION_TYPE)
                 .map(String::from)
                 .unwrap_or_else(|| "<no type>".into()),
             message: attrs
-                .remove("exception.message")
+                .remove(&semcov::trace::EXCEPTION_MESSAGE)
                 .map(String::from)
                 .unwrap_or_else(|| "<no message>".into()),
-            stack: attrs.remove("exception.stacktrace").map(String::from),
+            stack: attrs
+                .remove(&semcov::trace::EXCEPTION_STACKTRACE)
+                .map(String::from),
         };
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            properties: attrs_to_properties(attrs),
+            properties: Some(
+                attrs
+                    .iter()
+                    .map(|(k, v)| (k.as_str().to_string(), String::from(*v)))
+                    .collect(),
+            )
+            .filter(|x: &BTreeMap<String, String>| !x.is_empty()),
         }
     }
 }

@@ -1,5 +1,8 @@
 use crate::models::Envelope;
+use crate::HttpClient;
+use http::Request;
 use log::debug;
+use opentelemetry::exporter::trace::ExportResult;
 use serde::Deserialize;
 
 const URL: &str = "https://dc.services.visualstudio.com/v2/track";
@@ -10,13 +13,6 @@ const STATUS_TOO_MANY_REQUESTS: u16 = 429;
 const STATUS_APPLICATION_INACTIVE: u16 = 439; // Quota
 const STATUS_INTERNAL_SERVER_ERROR: u16 = 500;
 const STATUS_SERVICE_UNAVAILABLE: u16 = 503;
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum Response {
-    Success,
-    Retry,
-    NoRetry,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,38 +31,44 @@ struct TransmissionItem {
 }
 
 /// Sends a telemetry items to the server.
-pub(crate) fn send(items: Vec<Envelope>) -> Response {
-    let payload = match serde_json::to_value(items) {
+pub(crate) async fn send(client: &dyn HttpClient, items: Vec<Envelope>) -> ExportResult {
+    let payload = match serde_json::to_vec(&items) {
         Ok(payload) => payload,
-        Err(_) => return Response::NoRetry,
+        Err(_) => return ExportResult::FailedNotRetryable,
     };
-    let response = ureq::post(URL)
-        .timeout_connect(5_000)
-        .timeout_read(10_000)
-        .timeout_write(10_000)
-        .send_json(payload);
-    match response.status() {
+    let request = match Request::post(URL)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(payload)
+    {
+        Ok(request) => request,
+        Err(_) => return ExportResult::FailedNotRetryable,
+    };
+    let response = match client.send(request).await {
+        Ok(response) => response,
+        Err(_) => return ExportResult::FailedRetryable,
+    };
+    match response.status().as_u16() {
         STATUS_OK => {
             debug!("Upload successful");
-            Response::Success
+            ExportResult::Success
         }
         status @ STATUS_PARTIAL_CONTENT => {
-            let content: Transmission = match response.into_json_deserialize() {
+            let content: Transmission = match serde_json::from_slice(response.body()) {
                 Ok(content) => content,
-                Err(_err) => return Response::NoRetry,
+                Err(_err) => return ExportResult::FailedNotRetryable,
             };
             if content.items_received == content.items_accepted {
                 debug!("Upload successful");
-                Response::Success
+                ExportResult::Success
             } else if content.errors.iter().any(|item| can_retry_item(item)) {
-                debug!("Upload error {}. Some items may be retried", status);
-                Response::Retry
+                debug!("Upload error {}. Some items may be retried. However we don't currently support this.", status);
+                ExportResult::FailedNotRetryable
             } else {
                 debug!(
                     "Upload error {}. No retry possible. Response: {:?}",
                     status, content
                 );
-                Response::NoRetry
+                ExportResult::FailedNotRetryable
             }
         }
         status @ STATUS_REQUEST_TIMEOUT
@@ -74,25 +76,25 @@ pub(crate) fn send(items: Vec<Envelope>) -> Response {
         | status @ STATUS_APPLICATION_INACTIVE
         | status @ STATUS_SERVICE_UNAVAILABLE => {
             debug!("Upload error {}. Retry possible", status);
-            Response::Retry
+            ExportResult::FailedRetryable
         }
         status @ STATUS_INTERNAL_SERVER_ERROR => {
-            if let Ok(content) = response.into_json_deserialize::<Transmission>() {
+            if let Ok(content) = serde_json::from_slice::<Transmission>(response.body()) {
                 if content.errors.iter().any(|item| can_retry_item(item)) {
-                    debug!("Upload error {}. Some items may be retried", status);
-                    Response::Retry
+                    debug!("Upload error {}. Some items may be retried. However we don't currently support this.", status);
+                    ExportResult::FailedNotRetryable
                 } else {
                     debug!("Upload error {}. No retry possible", status);
-                    Response::NoRetry
+                    ExportResult::FailedNotRetryable
                 }
             } else {
                 debug!("Upload error {}. Some items may be retried", status);
-                Response::Retry
+                ExportResult::FailedRetryable
             }
         }
         status => {
             debug!("Upload error {}. No retry possible", status);
-            Response::NoRetry
+            ExportResult::FailedNotRetryable
         }
     }
 }
