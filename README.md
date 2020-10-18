@@ -21,7 +21,7 @@ use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
 use opentelemetry_application_insights::Uninstall;
 
 fn init_tracer() -> (Tracer, Uninstall)  {
-    let instrumentation_key = "...".to_string();
+    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
     opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .with_client(reqwest::blocking::Client::new())
         .install()
@@ -46,8 +46,8 @@ client that works with your chosen runtime. This crate comes with support for:
   features and configure the exporter with `with_client(surf::Client::new())`.
 - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
   and configure the exporter with `with_client(reqwest::Client::new())`.
-- Or: enable **reqwest-blocking-client** and configure the exporter with
-  `with_client(reqwest::blocking::Client::new())`.
+- [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
+  configure the exporter with `with_client(reqwest::blocking::Client::new())`.
 
 [`async-std`]: https://crates.io/crates/async-std
 [`reqwest`]: https://crates.io/crates/reqwest
