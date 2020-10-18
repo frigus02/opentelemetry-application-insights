@@ -1,7 +1,7 @@
+use crate::models::Properties;
 use chrono::{DateTime, SecondsFormat, Utc};
 use opentelemetry::api::trace::{SpanId, TraceId};
 use opentelemetry::sdk::{trace::EvictedHashMap, Resource};
-use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
@@ -32,19 +32,15 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
 pub(crate) fn attrs_to_properties(
     attributes: &EvictedHashMap,
     resource: &Resource,
-) -> Option<BTreeMap<String, String>> {
+) -> Option<Properties> {
     Some(
         attributes
             .iter()
-            .map(|(k, v)| (k.as_str().to_string(), v.into()))
-            .chain(
-                resource
-                    .iter()
-                    .map(|(k, v)| (k.as_str().to_string(), v.into())),
-            )
+            .map(|(k, v)| (k.as_str().into(), v.into()))
+            .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
             .collect(),
     )
-    .filter(|x: &BTreeMap<String, String>| !x.is_empty())
+    .filter(|x: &Properties| !x.is_empty())
 }
 
 #[cfg(test)]

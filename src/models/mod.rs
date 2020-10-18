@@ -20,9 +20,7 @@ pub(crate) use sanitize::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use context_tag_keys::OPERATION_ID;
-    use std::collections::BTreeMap;
-    use std::iter::FromIterator;
+    use context_tag_keys::{Tags, OPERATION_ID};
 
     #[test]
     fn serialization_format() {
@@ -45,20 +43,21 @@ mod tests {
 
     #[test]
     fn sanitization() {
-        let mut envelope = Envelope {
-            name: "x".repeat(2000),
+        let mut tags = Tags::new();
+        tags.insert(OPERATION_ID, "1".repeat(200));
+        let envelope = Envelope {
+            name: "x".repeat(2000).into(),
             time: "2020-06-21:10:40:00Z".into(),
             sample_rate: Some(100.0),
             i_key: None,
-            tags: Some(BTreeMap::from_iter(vec![(OPERATION_ID, "1".repeat(200))])),
+            tags: Some(tags),
             data: Some(Data::Message(MessageData {
                 ver: 2,
-                message: "m".repeat(33000),
+                message: "m".repeat(33000).into(),
                 properties: None,
             })),
         };
-        envelope.sanitize();
-        assert_eq!(1024, envelope.name.len());
+        assert_eq!(1024, envelope.name.as_ref().len());
         assert_eq!(
             128,
             envelope.tags.unwrap().get(&OPERATION_ID).unwrap().len()
@@ -66,7 +65,7 @@ mod tests {
         assert_eq!(
             32768,
             match envelope.data.unwrap() {
-                Data::Message(data) => data.message.len(),
+                Data::Message(data) => data.message.as_ref().len(),
                 _ => panic!("we should not get here"),
             }
         );
