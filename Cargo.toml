@@ -50,3 +50,15 @@ all-features = true
 
 [badges]
 github = { repository = "frigus02/opentelemetry-application-insights", workflow = "CI" }
+
+[[example]]
+name = "http_client_reqwest"
+required-features = ["reqwest-client"]
+
+[[example]]
+name = "http_client_surf"
+required-features = ["surf-client", "opentelemetry/async-std"]
+
+[[example]]
+name = "opentelemetry"
+required-features = ["reqwest-client"]
