@@ -1,4 +1,4 @@
-use crate::models::{ExceptionDetails, Sanitize};
+use crate::models::{ExceptionDetails, Properties};
 use serde::Serialize;
 
 /// An instance of Exception represents a handled or unhandled exception that occurred during
@@ -14,13 +14,5 @@ pub(crate) struct ExceptionData {
 
     /// Collection of custom properties.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
-}
-
-impl Sanitize for ExceptionData {
-    fn sanitize(&mut self) {
-        if let Some(properties) = self.properties.as_mut() {
-            properties.sanitize();
-        }
-    }
+    pub(crate) properties: Option<Properties>,
 }

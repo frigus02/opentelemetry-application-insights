@@ -1,59 +1,45 @@
-use log::debug;
 use std::collections::BTreeMap;
 
-pub(crate) trait Sanitize {
-    fn sanitize(&mut self);
-}
+macro_rules! limited_len_string {
+    ($name:ident, $len:expr) => {
+        #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, serde::Serialize)]
+        pub(crate) struct $name(String);
 
-impl Sanitize for BTreeMap<String, String> {
-    fn sanitize(&mut self) {
-        let long_keys: Vec<_> = self
-            .keys()
-            .filter(|k| k.len() > 150)
-            .map(|k| k.to_owned())
-            .collect();
-        for mut long_key in long_keys {
-            let (mut key, value) = self
-                .remove_entry(&long_key)
-                .expect("value needs to exist. got key by iterating over map");
-            key.truncate(150);
-            if self.insert(key, value).is_some() {
-                long_key.truncate(150);
-                debug!(
-                    "Truncated property name overrides property with the same name: {}",
-                    long_key
-                );
+        impl From<&str> for $name {
+            fn from(s: &str) -> Self {
+                Self(String::from(&s[0..std::cmp::min(s.len(), $len)]))
             }
         }
-        for value in self.values_mut() {
-            value.truncate(8192);
+
+        impl From<String> for $name {
+            fn from(mut s: String) -> Self {
+                s.truncate($len);
+                Self(s)
+            }
         }
-    }
+
+        impl From<&opentelemetry::api::Value> for $name {
+            fn from(v: &opentelemetry::api::Value) -> Self {
+                String::from(v).into()
+            }
+        }
+
+        impl AsRef<str> for $name {
+            #[inline]
+            fn as_ref(&self) -> &str {
+                self.0.as_ref()
+            }
+        }
+    };
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::iter::FromIterator;
+limited_len_string!(LimitedLenString32768, 32768);
+limited_len_string!(LimitedLenString8192, 8192);
+limited_len_string!(LimitedLenString2048, 2048);
+limited_len_string!(LimitedLenString1024, 1024);
+limited_len_string!(LimitedLenString150, 150);
+limited_len_string!(LimitedLenString128, 128);
+limited_len_string!(LimitedLenString64, 64);
+limited_len_string!(LimitedLenString40, 40);
 
-    #[test]
-    fn sanitize_properties() {
-        let mut properties = BTreeMap::from_iter(vec![
-            // Long value
-            ("1".repeat(1), "v".repeat(8200)),
-            // Long key and long value
-            ("2".repeat(160), "v".repeat(8200)),
-            // Long key
-            ("3".repeat(160), "v".repeat(1)),
-            // Long key collides with and replaces other key
-            ("4".repeat(150), "x".repeat(1)),
-            ("4".repeat(160), "y".repeat(1)),
-        ]);
-        properties.sanitize();
-        assert_eq!(4, properties.len());
-        assert_eq!(8192, properties.get("1").unwrap().len());
-        assert_eq!(8192, properties.get(&"2".repeat(150)).unwrap().len());
-        assert_eq!(1, properties.get(&"3".repeat(150)).unwrap().len());
-        assert_eq!("y", properties.get(&"4".repeat(150)).unwrap());
-    }
-}
+pub(crate) type Properties = BTreeMap<LimitedLenString150, LimitedLenString8192>;

@@ -1,14 +1,13 @@
 use crate::convert::{span_id_to_string, trace_id_to_string};
-use crate::models::context_tag_keys::{self as tags, ContextTagKey};
+use crate::models::context_tag_keys::{self as tags, Tags};
 use opentelemetry::{
     api::trace::{SpanId, SpanKind},
     exporter::trace::SpanData,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::collections::BTreeMap;
 
-pub(crate) fn get_tags_for_span(span: &SpanData) -> BTreeMap<ContextTagKey, String> {
-    let mut map = BTreeMap::new();
+pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
+    let mut map = Tags::new();
 
     map.insert(
         tags::OPERATION_ID,
@@ -71,8 +70,8 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> BTreeMap<ContextTagKey, Stri
     map
 }
 
-pub(crate) fn get_tags_for_event(span: &SpanData) -> BTreeMap<ContextTagKey, String> {
-    let mut map = BTreeMap::new();
+pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
+    let mut map = Tags::new();
     map.insert(
         tags::OPERATION_ID,
         trace_id_to_string(span.span_reference.trace_id()),

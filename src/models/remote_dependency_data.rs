@@ -1,4 +1,4 @@
-use crate::models::Sanitize;
+use crate::models::{LimitedLenString1024, LimitedLenString128, LimitedLenString8192, Properties};
 use serde::Serialize;
 
 /// An instance of Remote Dependency represents an interaction of the monitored component with a
@@ -11,16 +11,16 @@ pub(crate) struct RemoteDependencyData {
 
     /// Name of the command initiated with this dependency call. Low cardinality value. Examples
     /// are stored procedure name and URL path template.
-    pub(crate) name: String,
+    pub(crate) name: LimitedLenString1024,
 
     /// Identifier of a dependency call instance. Used for correlation with the request telemetry
     /// item corresponding to this dependency call.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) id: Option<String>,
+    pub(crate) id: Option<LimitedLenString128>,
 
     /// Result code of a dependency call. Examples are SQL error code and HTTP status code.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) result_code: Option<String>,
+    pub(crate) result_code: Option<LimitedLenString1024>,
 
     /// Request duration in format: DD.HH:MM:SS.MMMMMM. Must be less than 1000 days.
     pub(crate) duration: String,
@@ -32,43 +32,19 @@ pub(crate) struct RemoteDependencyData {
     /// Command initiated by this dependency call. Examples are SQL statement and HTTP URL's with
     /// all query parameters.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) data: Option<String>,
+    pub(crate) data: Option<LimitedLenString8192>,
 
     /// Target site of a dependency call. Examples are server name, host address.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) target: Option<String>,
+    pub(crate) target: Option<LimitedLenString1024>,
 
     /// Dependency type name. Very low cardinality value for logical grouping of dependencies and
     /// interpretation of other fields like commandName and resultCode. Examples are SQL, Azure
     /// table, and HTTP.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) type_: Option<String>,
+    pub(crate) type_: Option<LimitedLenString1024>,
 
     /// Collection of custom properties.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) properties: Option<std::collections::BTreeMap<String, String>>,
-}
-
-impl Sanitize for RemoteDependencyData {
-    fn sanitize(&mut self) {
-        self.name.truncate(1024);
-        if let Some(id) = self.id.as_mut() {
-            id.truncate(128);
-        }
-        if let Some(result_code) = self.result_code.as_mut() {
-            result_code.truncate(1024);
-        }
-        if let Some(data) = self.data.as_mut() {
-            data.truncate(8192);
-        }
-        if let Some(type_) = self.type_.as_mut() {
-            type_.truncate(1024);
-        }
-        if let Some(target) = self.target.as_mut() {
-            target.truncate(1024);
-        }
-        if let Some(properties) = self.properties.as_mut() {
-            properties.sanitize();
-        }
-    }
+    pub(crate) properties: Option<Properties>,
 }
