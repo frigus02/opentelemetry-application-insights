@@ -1,8 +1,8 @@
 use crate::convert::{span_id_to_string, trace_id_to_string};
 use crate::models::context_tag_keys::{self as tags, Tags};
 use opentelemetry::{
-    api::trace::{SpanId, SpanKind},
     exporter::trace::SpanData,
+    trace::{SpanId, SpanKind},
 };
 use opentelemetry_semantic_conventions as semcov;
 
@@ -11,7 +11,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
     map.insert(
         tags::OPERATION_ID,
-        trace_id_to_string(span.span_reference.trace_id()),
+        trace_id_to_string(span.span_context.trace_id()),
     );
     if span.parent_span_id != SpanId::invalid() {
         map.insert(
@@ -25,7 +25,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
             if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
                 map.insert(
                     tags::OPERATION_NAME,
-                    format!("{} {}", String::from(method), String::from(route)),
+                    format!("{} {}", method.as_str(), route.as_str()),
                 );
             }
         }
@@ -34,36 +34,42 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     if let Some(user_id) = span.attributes.get(&semcov::trace::ENDUSER_ID) {
         // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
         // fit better?
-        map.insert(tags::USER_AUTH_USER_ID, String::from(user_id));
+        map.insert(tags::USER_AUTH_USER_ID, user_id.as_str().into_owned());
     }
 
     if let Some(service_name) = span.attributes.get(&semcov::resource::SERVICE_NAME) {
-        let mut cloud_role: String = service_name.into();
+        let mut cloud_role = service_name.as_str().into_owned();
         if let Some(service_namespace) = span.attributes.get(&semcov::resource::SERVICE_NAMESPACE) {
             cloud_role.insert_str(0, ".");
-            cloud_role.insert_str(0, &String::from(service_namespace));
+            cloud_role.insert_str(0, &service_namespace.as_str());
         }
 
         map.insert(tags::CLOUD_ROLE, cloud_role);
     }
 
     if let Some(service_instance) = span.attributes.get(&semcov::resource::SERVICE_INSTANCE_ID) {
-        map.insert(tags::CLOUD_ROLE_INSTANCE, String::from(service_instance));
+        map.insert(
+            tags::CLOUD_ROLE_INSTANCE,
+            service_instance.as_str().into_owned(),
+        );
     }
 
     if let Some(service_version) = span.attributes.get(&semcov::resource::SERVICE_VERSION) {
-        map.insert(tags::APPLICATION_VERSION, String::from(service_version));
+        map.insert(
+            tags::APPLICATION_VERSION,
+            service_version.as_str().into_owned(),
+        );
     }
 
     if let Some(sdk_name) = span.attributes.get(&semcov::resource::TELEMETRY_SDK_NAME) {
         let sdk_version = span
             .attributes
             .get(&semcov::resource::TELEMETRY_SDK_VERSION)
-            .map(String::from)
+            .map(|v| v.as_str())
             .unwrap_or_else(|| "0.0.0".into());
         map.insert(
             tags::INTERNAL_SDK_VERSION,
-            format!("{}:{}", String::from(sdk_name), sdk_version),
+            format!("{}:{}", sdk_name.as_str(), sdk_version),
         );
     }
 
@@ -74,11 +80,11 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
     let mut map = Tags::new();
     map.insert(
         tags::OPERATION_ID,
-        trace_id_to_string(span.span_reference.trace_id()),
+        trace_id_to_string(span.span_context.trace_id()),
     );
     map.insert(
         tags::OPERATION_PARENT_ID,
-        span_id_to_string(span.span_reference.span_id()),
+        span_id_to_string(span.span_context.span_id()),
     );
     map
 }

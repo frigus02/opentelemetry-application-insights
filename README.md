@@ -17,7 +17,7 @@ Configure a OpenTelemetry pipeline using the Application Insights exporter and s
 spans (this example requires the **reqwest-client-blocking** feature):
 
 ```rust
-use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
+use opentelemetry::{trace::Tracer as _, sdk::trace::Tracer};
 use opentelemetry_application_insights::Uninstall;
 
 fn init_tracer() -> (Tracer, Uninstall)  {
@@ -73,13 +73,13 @@ The OpenTelemetry SpanKind determines the Application Insights telemetry type:
 | `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
 | `SERVER`, `CONSUMER`             | Request                             |
 
-The Span's status determines the Success field of a Dependency or Request. Success is `true` if
-the status is `OK`; otherwise `false`.
-
-For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
+The Span's status determines the Success field of a Dependency or Request. Success is `false` if
+the status `Error`; otherwise `true`.
 
 The following of the Span's attributes map to special fields in Application Insights (the
 mapping tries to follow the OpenTelemetry semantic conventions for [trace] and [resource]).
+
+Note: for `INTERNAL` Spans the Dependency Type is always `"InProc"`.
 
 [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions

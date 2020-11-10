@@ -1,11 +1,9 @@
 use opentelemetry::{
-    api::{
-        propagation::TextMapPropagator,
-        trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
-        Context, Key,
-    },
     global,
+    propagation::TextMapPropagator,
     sdk::propagation::TraceContextPropagator,
+    trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
+    Context, Key,
 };
 use std::collections::HashMap;
 use std::env;
@@ -17,7 +15,7 @@ use tokio::time::delay_for;
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
     let span = tracer.start("spawn_children");
-    span.set_attribute(Key::new("n").u64(n.into()));
+    span.set_attribute(Key::new("n").i64(n.into()));
     span.set_attribute(Key::new("process_name").string(process_name.clone()));
     let cx = Context::current_with_span(span);
     for _ in 0..n {

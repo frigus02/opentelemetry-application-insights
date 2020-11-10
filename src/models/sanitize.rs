@@ -18,9 +18,9 @@ macro_rules! limited_len_string {
             }
         }
 
-        impl From<&opentelemetry::api::Value> for $name {
-            fn from(v: &opentelemetry::api::Value) -> Self {
-                String::from(v).into()
+        impl From<&opentelemetry::Value> for $name {
+            fn from(v: &opentelemetry::Value) -> Self {
+                v.as_str().into_owned().into()
             }
         }
 

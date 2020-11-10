@@ -1,7 +1,9 @@
 use crate::models::Properties;
 use chrono::{DateTime, SecondsFormat, Utc};
-use opentelemetry::api::trace::{SpanId, TraceId};
-use opentelemetry::sdk::{trace::EvictedHashMap, Resource};
+use opentelemetry::{
+    sdk::{trace::EvictedHashMap, Resource},
+    trace::{SpanId, TraceId},
+};
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
