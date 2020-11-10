@@ -11,7 +11,7 @@
 //! spans (this example requires the **reqwest-client-blocking** feature):
 //!
 //! ```no_run
-//! use opentelemetry::{api::trace::Tracer as _, sdk::trace::Tracer};
+//! use opentelemetry::{trace::Tracer as _, sdk::trace::Tracer};
 //! use opentelemetry_application_insights::Uninstall;
 //!
 //! fn init_tracer() -> (Tracer, Uninstall)  {
@@ -140,13 +140,12 @@ use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData, Properties,
     RemoteDependencyData, RequestData,
 };
-use opentelemetry::api::{
+use opentelemetry::{
+    exporter::trace::{ExportResult, SpanData, SpanExporter},
+    global, sdk,
     trace::{Event, SpanKind, StatusCode, TracerProvider},
     Key, Value,
 };
-use opentelemetry::exporter::trace::{ExportResult, SpanData, SpanExporter};
-use opentelemetry::global;
-use opentelemetry::sdk;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 use tags::{get_tags_for_event, get_tags_for_span};
@@ -212,16 +211,14 @@ impl<C> PipelineBuilder<C> {
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
-    /// # use opentelemetry::{api::KeyValue, sdk};
-    /// # use std::sync::Arc;
+    /// # use opentelemetry::{KeyValue, sdk};
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_trace_config(sdk::trace::Config {
-    ///         resource: Arc::new(sdk::Resource::new(vec![
+    ///     .with_trace_config(sdk::trace::Config::default().with_resource(
+    ///         sdk::Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),
-    ///         ])),
-    ///         ..Default::default()
-    ///     })
+    ///         ]),
+    ///     ))
     ///     .install();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
@@ -366,7 +363,7 @@ where
     C: HttpClient,
 {
     /// Export spans to Application Insights
-    async fn export(&self, batch: Vec<SpanData>) -> ExportResult {
+    async fn export(&mut self, batch: Vec<SpanData>) -> ExportResult {
         let envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes(span))
@@ -380,7 +377,7 @@ impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
             ver: 2,
-            id: span_id_to_string(span.span_reference.span_id()).into(),
+            id: span_id_to_string(span.span_context.span_id()).into(),
             name: Some(LimitedLenString1024::from(span.name.clone()))
                 .filter(|x| !x.as_ref().is_empty()),
             duration: duration_to_string(
@@ -389,7 +386,7 @@ impl From<&SpanData> for RequestData {
                     .unwrap_or_default(),
             ),
             response_code: (span.status_code.clone() as i32).to_string().into(),
-            success: span.status_code == StatusCode::OK,
+            success: span.status_code != StatusCode::Error,
             source: None,
             url: None,
             properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
@@ -398,7 +395,7 @@ impl From<&SpanData> for RequestData {
         if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
             data.name = Some(
                 if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
-                    format!("{} {}", String::from(method), String::from(route)).into()
+                    format!("{} {}", method.as_str(), route.as_str()).into()
                 } else {
                     method.into()
                 },
@@ -412,7 +409,7 @@ impl From<&SpanData> for RequestData {
         if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
             data.url = Some(url.into());
         } else if let Some(target) = span.attributes.get(&semcov::trace::HTTP_TARGET) {
-            let mut target = String::from(target);
+            let mut target = target.as_str().into_owned();
             if !target.starts_with('/') {
                 target.insert(0, '/');
             }
@@ -421,15 +418,8 @@ impl From<&SpanData> for RequestData {
                 span.attributes.get(&semcov::trace::HTTP_SCHEME),
                 span.attributes.get(&semcov::trace::HTTP_HOST),
             ) {
-                data.url = Some(
-                    format!(
-                        "{}://{}{}",
-                        String::from(scheme),
-                        String::from(host),
-                        target
-                    )
-                    .into(),
-                );
+                data.url =
+                    Some(format!("{}://{}{}", scheme.as_str(), host.as_str(), target).into());
             } else {
                 data.url = Some(target.into());
             }
@@ -449,7 +439,7 @@ impl From<&SpanData> for RemoteDependencyData {
     fn from(span: &SpanData) -> RemoteDependencyData {
         let mut data = RemoteDependencyData {
             ver: 2,
-            id: Some(span_id_to_string(span.span_reference.span_id()).into()),
+            id: Some(span_id_to_string(span.span_context.span_id()).into()),
             name: span.name.clone().into(),
             duration: duration_to_string(
                 span.end_time
@@ -457,7 +447,11 @@ impl From<&SpanData> for RemoteDependencyData {
                     .unwrap_or_default(),
             ),
             result_code: Some((span.status_code.clone() as i32).to_string().into()),
-            success: Some(span.status_code == StatusCode::OK),
+            success: match span.status_code {
+                StatusCode::Unset => None,
+                StatusCode::Ok => Some(true),
+                StatusCode::Error => Some(false),
+            },
             data: None,
             target: None,
             type_: None,
@@ -478,15 +472,13 @@ impl From<&SpanData> for RemoteDependencyData {
             data.target = Some(host.into());
         } else if let Some(peer_name) = span.attributes.get(&semcov::trace::NET_PEER_NAME) {
             if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
-                data.target =
-                    Some(format!("{}:{}", String::from(peer_name), String::from(peer_port)).into());
+                data.target = Some(format!("{}:{}", peer_name.as_str(), peer_port.as_str()).into());
             } else {
                 data.target = Some(peer_name.into());
             }
         } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
             if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
-                data.target =
-                    Some(format!("{}:{}", String::from(peer_ip), String::from(peer_port)).into());
+                data.target = Some(format!("{}:{}", peer_ip.as_str(), peer_port.as_str()).into());
             } else {
                 data.target = Some(peer_ip.into());
             }

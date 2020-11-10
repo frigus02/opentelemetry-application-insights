@@ -1,16 +1,13 @@
 use backtrace::Backtrace;
 use opentelemetry::{
-    api::{
-        trace::{SpanKind, Tracer, TracerProvider},
-        KeyValue,
-    },
-    global, sdk,
+    sdk,
+    trace::{get_active_span, SpanKind, Tracer, TracerProvider},
+    KeyValue,
 };
 use std::env;
-use std::sync::Arc;
 
 fn log() {
-    global::tracer("log").get_active_span(|span| {
+    get_active_span(|span| {
         span.add_event(
             "An event!".to_string(),
             vec![KeyValue::new("happened", true)],
@@ -19,7 +16,7 @@ fn log() {
 }
 
 fn exception() {
-    global::tracer("log").get_active_span(|span| {
+    get_active_span(|span| {
         let error: Box<dyn std::error::Error> = "An error".into();
         span.record_exception_with_stacktrace(error.as_ref(), format!("{:?}", Backtrace::new()));
     })
@@ -34,25 +31,23 @@ fn main() {
     let client_provider =
         opentelemetry_application_insights::new_pipeline(instrumentation_key.clone())
             .with_client(reqwest::blocking::Client::new())
-            .with_trace_config(sdk::trace::Config {
-                resource: Arc::new(sdk::Resource::new(vec![
+            .with_trace_config(
+                sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
                     KeyValue::new("service.namespace", "example-attributes"),
                     KeyValue::new("service.name", "client"),
                 ])),
-                ..Default::default()
-            })
+            )
             .build();
     let client_tracer = client_provider.get_tracer("example-attributes", None);
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .with_client(reqwest::blocking::Client::new())
-        .with_trace_config(sdk::trace::Config {
-            resource: Arc::new(sdk::Resource::new(vec![
+        .with_trace_config(
+            sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
                 KeyValue::new("service.namespace", "example-attributes"),
                 KeyValue::new("service.name", "server"),
             ])),
-            ..Default::default()
-        })
+        )
         .build();
     let server_tracer = server_provider.get_tracer("example-attributes", None);
 
