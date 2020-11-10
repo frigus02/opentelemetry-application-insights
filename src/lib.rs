@@ -67,13 +67,13 @@
 //! | `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
 //! | `SERVER`, `CONSUMER`             | Request                             |
 //!
-//! The Span's status determines the Success field of a Dependency or Request. Success is `true` if
-//! the status is `OK`; otherwise `false`.
-//!
-//! For `INTERNAL` Spans the Dependency Type is always `"InProc"` and Success is `true`.
+//! The Span's status determines the Success field of a Dependency or Request. Success is `false` if
+//! the status `Error`; otherwise `true`.
 //!
 //! The following of the Span's attributes map to special fields in Application Insights (the
 //! mapping tries to follow the OpenTelemetry semantic conventions for [trace] and [resource]).
+//!
+//! Note: for `INTERNAL` Spans the Dependency Type is always `"InProc"`.
 //!
 //! [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 //! [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
@@ -488,7 +488,6 @@ impl From<&SpanData> for RemoteDependencyData {
 
         if span.span_kind == SpanKind::Internal {
             data.type_ = Some("InProc".into());
-            data.success = Some(true);
         } else if let Some(db_system) = span.attributes.get(&semcov::trace::DB_SYSTEM) {
             data.type_ = Some(db_system.into());
         } else if let Some(messaging_system) = span.attributes.get(&semcov::trace::MESSAGING_SYSTEM)
