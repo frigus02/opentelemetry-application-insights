@@ -1,10 +1,9 @@
 use crate::models::Envelope;
 use crate::HttpClient;
-use http::Request;
+use http::{Request, Uri};
 use opentelemetry::exporter::trace::ExportResult;
 use serde::Deserialize;
 
-const URL: &str = "https://dc.services.visualstudio.com/v2/track";
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
 const STATUS_REQUEST_TIMEOUT: u16 = 408;
@@ -30,9 +29,13 @@ struct TransmissionItem {
 }
 
 /// Sends a telemetry items to the server.
-pub(crate) async fn send(client: &dyn HttpClient, items: Vec<Envelope>) -> ExportResult {
+pub(crate) async fn send(
+    client: &dyn HttpClient,
+    endpoint: &Uri,
+    items: Vec<Envelope>,
+) -> ExportResult {
     let payload = serde_json::to_vec(&items)?;
-    let request = Request::post(URL)
+    let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
         .body(payload)?;
 

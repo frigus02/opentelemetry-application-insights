@@ -1,4 +1,4 @@
-use opentelemetry::trace::Tracer;
+use opentelemetry::trace::Tracer as _;
 use std::env;
 
 #[tokio::main]
