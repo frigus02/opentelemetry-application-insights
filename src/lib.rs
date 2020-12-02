@@ -11,18 +11,14 @@
 //! spans (this example requires the **reqwest-client-blocking** feature):
 //!
 //! ```no_run
-//! use opentelemetry::{trace::Tracer as _, sdk::trace::Tracer};
-//! use opentelemetry_application_insights::Uninstall;
-//!
-//! fn init_tracer() -> (Tracer, Uninstall)  {
-//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-//!     opentelemetry_application_insights::new_pipeline(instrumentation_key)
-//!         .with_client(reqwest::blocking::Client::new())
-//!         .install()
-//! }
+//! use opentelemetry::trace::Tracer as _;
 //!
 //! fn main() {
-//!     let (tracer, _uninstall) = init_tracer();
+//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+//!     let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!         .with_client(reqwest::blocking::Client::new())
+//!         .install();
+//!
 //!     tracer.in_span("main", |_cx| {});
 //! }
 //! ```
@@ -148,6 +144,8 @@ use opentelemetry::{
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
+use std::convert::TryInto;
+use std::error::Error;
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -155,8 +153,9 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
         client: (),
         config: None,
+        endpoint: None,
         instrumentation_key,
-        sample_rate: 100.0,
+        sample_rate: None,
     }
 }
 
@@ -165,8 +164,9 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
 pub struct PipelineBuilder<C> {
     client: C,
     config: Option<sdk::trace::Config>,
+    endpoint: Option<http::Uri>,
     instrumentation_key: String,
-    sample_rate: f64,
+    sample_rate: Option<f64>,
 }
 
 impl<C> PipelineBuilder<C> {
@@ -177,9 +177,36 @@ impl<C> PipelineBuilder<C> {
         PipelineBuilder {
             client,
             config: self.config,
+            endpoint: self.endpoint,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
         }
+    }
+
+    /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
+    /// exporter will call `/v2/track` on the specified endpoint.
+    ///
+    /// Default: https://dc.services.visualstudio.com
+    ///
+    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    ///
+    /// [`reqwest`]: https://crates.io/crates/reqwest
+    ///
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<std::error::Error + Send + Sync + 'static>> {
+    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
+    ///     .with_endpoint("https://westus2-0.in.applicationinsights.azure.com")?
+    ///     .install();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_endpoint(
+        mut self,
+        endpoint: &str,
+    ) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
+        self.endpoint = Some(format!("{}/v2/track", endpoint).try_into()?);
+        Ok(self)
     }
 
     /// Set sample rate, which is passed through to Application Insights. It should be a value
@@ -192,15 +219,14 @@ impl<C> PipelineBuilder<C> {
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
-    /// let sample_rate = 0.3;
     /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_sample_rate(sample_rate)
+    ///     .with_sample_rate(0.3)
     ///     .install();
     /// ```
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
-        self.sample_rate = sample_rate * 100.0;
+        self.sample_rate = Some(sample_rate * 100.0);
         self
     }
 
@@ -240,8 +266,13 @@ where
     /// exported synchronously.
     pub fn build(mut self) -> sdk::trace::TracerProvider {
         let config = self.config.take();
-        let exporter =
-            Exporter::new(self.instrumentation_key, self.client).with_sample_rate(self.sample_rate);
+        let mut exporter = Exporter::new(self.instrumentation_key, self.client);
+        if let Some(endpoint) = self.endpoint {
+            exporter.endpoint = endpoint;
+        }
+        if let Some(sample_rate) = self.sample_rate {
+            exporter.sample_rate = sample_rate;
+        }
 
         let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
         if let Some(config) = config {
@@ -276,6 +307,7 @@ pub struct Uninstall(global::TracerProviderGuard);
 #[derive(Debug)]
 pub struct Exporter<C> {
     client: C,
+    endpoint: http::Uri,
     instrumentation_key: String,
     sample_rate: f64,
 }
@@ -285,9 +317,24 @@ impl<C> Exporter<C> {
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
             client,
+            endpoint: "https://dc.services.visualstudio.com/v2/track"
+                .try_into()
+                .expect("hardcoded endpoint is valid uri"),
             instrumentation_key,
             sample_rate: 100.0,
         }
+    }
+
+    /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
+    /// exporter will call `/v2/track` on the specified endpoint.
+    ///
+    /// Default: https://dc.services.visualstudio.com
+    pub fn with_endpoint(
+        mut self,
+        endpoint: &str,
+    ) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
+        self.endpoint = format!("{}/v2/track", endpoint).try_into()?;
+        Ok(self)
     }
 
     /// Set sample rate, which is passed through to Application Insights. It should be a value
@@ -369,7 +416,7 @@ where
             .flat_map(|span| self.create_envelopes(span))
             .collect();
 
-        uploader::send(&self.client, envelopes).await
+        uploader::send(&self.client, &self.endpoint, envelopes).await
     }
 }
 
