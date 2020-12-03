@@ -1,5 +1,5 @@
-[![Crates.io 0.6.0](https://img.shields.io/crates/v/opentelemetry-application-insights.svg)](https://crates.io/crates/opentelemetry-application-insights)
-[![Documentation 0.6.0](https://docs.rs/opentelemetry-application-insights/badge.svg)](https://docs.rs/opentelemetry-application-insights)
+[![Crates.io 0.7.0](https://img.shields.io/crates/v/opentelemetry-application-insights.svg)](https://crates.io/crates/opentelemetry-application-insights)
+[![Documentation 0.7.0](https://docs.rs/opentelemetry-application-insights/badge.svg)](https://docs.rs/opentelemetry-application-insights)
 [![Workflow Status](https://github.com/frigus02/opentelemetry-application-insights/workflows/CI/badge.svg)](https://github.com/frigus02/opentelemetry-application-insights/actions?query=workflow%3A%22CI%22)
 
 # opentelemetry-application-insights
@@ -17,18 +17,14 @@ Configure a OpenTelemetry pipeline using the Application Insights exporter and s
 spans (this example requires the **reqwest-client-blocking** feature):
 
 ```rust
-use opentelemetry::{trace::Tracer as _, sdk::trace::Tracer};
-use opentelemetry_application_insights::Uninstall;
-
-fn init_tracer() -> (Tracer, Uninstall)  {
-    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    opentelemetry_application_insights::new_pipeline(instrumentation_key)
-        .with_client(reqwest::blocking::Client::new())
-        .install()
-}
+use opentelemetry::trace::Tracer as _;
 
 fn main() {
-    let (tracer, _uninstall) = init_tracer();
+    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+    let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_client(reqwest::blocking::Client::new())
+        .install();
+
     tracer.in_span("main", |_cx| {});
 }
 ```

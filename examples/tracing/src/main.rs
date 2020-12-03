@@ -1,13 +1,10 @@
-use opentelemetry::{
-    api::{HttpTextFormat, Provider, TraceContextPropagator},
-    sdk,
-};
+use opentelemetry::{propagation::TextMapPropagator, sdk::propagation::TraceContextPropagator};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::sleep;
+use tokio::time::delay_for;
 use tracing::Span;
 use tracing_attributes::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -25,7 +22,7 @@ async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&Span::current().context(), &mut injector);
-    let mut child = Command::new(process_name)
+    let child = Command::new(process_name)
         .arg(
             injector
                 .remove("traceparent")
@@ -33,13 +30,13 @@ async fn spawn_child_process(process_name: &str) {
         )
         .spawn()
         .expect("failed to spawn");
-    child.wait().await.expect("awaiting process failed");
+    child.await.expect("awaiting process failed");
 }
 
 #[instrument]
 async fn run_in_child_process() {
     tracing::info!("leaf fn");
-    sleep(Duration::from_millis(50)).await
+    delay_for(Duration::from_millis(50)).await
 }
 
 #[tokio::main]
@@ -50,11 +47,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key);
-    let provider = sdk::Provider::builder()
-        .with_simple_exporter(exporter)
-        .build();
-    let tracer = provider.get_tracer("example-tracing");
+    let (tracer, _uninstall) =
+        opentelemetry_application_insights::new_pipeline(instrumentation_key)
+            .with_client(reqwest::Client::new())
+            .install();
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.7.0] - 2020-12-02
+
+### Added
+
+- Made ingestion endpoint configurable ([#20](https://github.com/frigus02/opentelemetry-application-insights/issues/20)).
+
 ## [0.6.0] - 2020-11-10
 
 ### Changed
@@ -94,7 +100,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.6.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.3.0...0.4.0
