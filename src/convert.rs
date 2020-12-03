@@ -22,7 +22,7 @@ pub(crate) fn duration_to_string(duration: Duration) -> String {
     let d = micros / 1_000_000 / 60 / 60 / 24;
     let micros_remaining = micros % 1_000_000;
     format!(
-        "{}.{:0>2}:{:0>2}:{:0>2}.{:0>7}",
+        "{}.{:0>2}:{:0>2}:{:0>2}.{:0>6}",
         d, h, m, s, micros_remaining
     )
 }
