@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.7.1] - 2020-12-03
+
+### Fixed
+
+- Request and remote dependency durations were off by a factor of 10 ([#23](https://github.com/frigus02/opentelemetry-application-insights/issues/23)). Thanks to [@twitchax](https://github.com/twitchax) for finding and fixing the bug.
+
 ## [0.7.0] - 2020-12-02
 
 ### Added
@@ -100,7 +106,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.1...HEAD
+[0.7.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.4.0...0.5.0
