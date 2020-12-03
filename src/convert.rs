@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(expected.to_string(), span_id_to_string(id));
     }
 
-    #[test_case(Duration::from_micros(123456789123), "1.10:17:36.0789123" ; "all")]
+    #[test_case(Duration::from_micros(123456789123), "1.10:17:36.789123" ; "all")]
     fn duration(duration: Duration, expected: &'static str) {
         assert_eq!(expected.to_string(), duration_to_string(duration));
     }
