@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use serde::{ser::Serializer, Serialize};
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ContextTagKey {
@@ -200,7 +200,10 @@ pub(crate) static TAG_KEY_LOOKUP: Lazy<BTreeMap<&'static str, ContextTagKey>> = 
         ("ai.operation.name", OPERATION_NAME),
         ("ai.operation.parentId", OPERATION_PARENT_ID),
         ("ai.operation.syntheticSource", OPERATION_SYNTHETIC_SOURCE),
-        ("ai.operation.correlationVector", OPERATION_CORRELATION_VECTOR),
+        (
+            "ai.operation.correlationVector",
+            OPERATION_CORRELATION_VECTOR,
+        ),
         ("ai.session.id", SESSION_ID),
         ("ai.session.isFirst", SESSION_IS_FIRST),
         ("ai.user.accountId", USER_ACCOUNT_ID),
@@ -210,6 +213,8 @@ pub(crate) static TAG_KEY_LOOKUP: Lazy<BTreeMap<&'static str, ContextTagKey>> = 
         ("ai.cloud.roleInstance", CLOUD_ROLE_INSTANCE),
         ("ai.internal.sdkVersion", INTERNAL_SDK_VERSION),
         ("ai.internal.agentVersion", INTERNAL_AGENT_VERSION),
-        ("ai.internal.nodeName", INTERNAL_NODE_NAME)
-    ].into_iter().collect()
+        ("ai.internal.nodeName", INTERNAL_NODE_NAME),
+    ]
+    .into_iter()
+    .collect()
 });

@@ -1,6 +1,12 @@
-use crate::{convert::{span_id_to_string, trace_id_to_string}, models::context_tag_keys::TAG_KEY_LOOKUP};
 use crate::models::context_tag_keys::{self as tags, Tags};
-use opentelemetry::{exporter::trace::SpanData, trace::{SpanId, SpanKind}};
+use crate::{
+    convert::{span_id_to_string, trace_id_to_string},
+    models::context_tag_keys::TAG_KEY_LOOKUP,
+};
+use opentelemetry::{
+    exporter::trace::SpanData,
+    trace::{SpanId, SpanKind},
+};
 use opentelemetry_semantic_conventions as semcov;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
@@ -9,20 +15,20 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     // First, allow the user to explicitly express tags with attributes that start with `ai.`
     // These attributes do not collide with any opentelemetry semantic conventions, so it is
     // assumed that the user intends for them to be a part of the `tags` portion of the envelope.
-    let ai_tags_iter = span.attributes.iter().filter(|a| a.0.as_str().starts_with("ai."));
+    let ai_tags_iter = span
+        .attributes
+        .iter()
+        .filter(|a| a.0.as_str().starts_with("ai."));
     for ai_tag in ai_tags_iter {
         if let Some(ctk) = TAG_KEY_LOOKUP.get(ai_tag.0.as_str()) {
-            map.insert(
-                ctk.clone(), 
-                ai_tag.1.to_string()
-            );
+            map.insert(ctk.clone(), ai_tag.1.to_string());
         }
     }
 
     // Set the operation id and operation parent id.
     map.insert(
         tags::OPERATION_ID,
-        span_id_to_string(span.span_context.span_id()),
+        trace_id_to_string(span.span_context.trace_id()),
     );
     if span.parent_span_id != SpanId::invalid() {
         map.insert(
