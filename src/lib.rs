@@ -74,48 +74,36 @@
 //! [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 //! [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
 //!
-//! | OpenTelemetry attribute key                    | Application Insights field     |
-//! | ---------------------------------------------- | ------------------------------ |
-//! | `service.version`                              | Context: Application version   |
-//! | `enduser.id`                                   | Context: Authenticated user id |
-//! | `service.namespace` + `service.name`           | Context: Cloud role            |
-//! | `service.instance.id`                          | Context: Cloud role instance   |
-//! | `telemetry.sdk.name` + `telemetry.sdk.version` | Context: Internal SDK version  |
-//! | `http.url`                                     | Dependency Data                |
-//! | `db.statement`                                 | Dependency Data                |
-//! | `http.host`                                    | Dependency Target              |
-//! | `net.peer.name` + `net.peer.port`              | Dependency Target              |
-//! | `net.peer.ip` + `net.peer.port`                | Dependency Target              |
-//! | `db.name`                                      | Dependency Target              |
-//! | `http.status_code`                             | Dependency Result code         |
-//! | `db.system`                                    | Dependency Type                |
-//! | `messaging.system`                             | Dependency Type                |
-//! | `rpc.system`                                   | Dependency Type                |
-//! | `"HTTP"` if any `http.` attribute exists       | Dependency Type                |
-//! | `"DB"` if any `db.` attribute exists           | Dependency Type                |
-//! | `http.url`                                     | Request Url                    |
-//! | `http.scheme` + `http.host` + `http.target`    | Request Url                    |
-//! | `http.client_ip`                               | Request Source                 |
-//! | `net.peer.ip`                                  | Request Source                 |
-//! | `http.status_code`                             | Request Response code          |
-//!
+//! | OpenTelemetry attribute key                       | Application Insights field                               |
+//! | ------------------------------------------------- | -----------------------------------------------------    |
+//! | `service.version`                                 | Context: Application version (`ai.application.ver`)      |
+//! | `enduser.id`                                      | Context: Authenticated user id (`ai.user.authUserId`)    |
+//! | `service.namespace` + `service.name`              | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `service.instance.id`                             | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
+//! | `telemetry.sdk.name` + `telemetry.sdk.version`    | Context: Internal SDK version (`ai.internal.sdkVersion`) |
+//! | `SpanKind::Server` + `http.method` + `http.route` | Context: Operation Name (`ai.operation.name`)            |
+//! | `ai.*`                                            | Context: AppInsights Tag (`ai.*`)                        |
+//! | `http.url`                                        | Dependency Data                                          |
+//! | `db.statement`                                    | Dependency Data                                          |
+//! | `http.host`                                       | Dependency Target                                        |
+//! | `net.peer.name` + `net.peer.port`                 | Dependency Target                                        |
+//! | `net.peer.ip` + `net.peer.port`                   | Dependency Target                                        |
+//! | `db.name`                                         | Dependency Target                                        |
+//! | `http.status_code`                                | Dependency Result code                                   |
+//! | `db.system`                                       | Dependency Type                                          |
+//! | `messaging.system`                                | Dependency Type                                          |
+//! | `rpc.system`                                      | Dependency Type                                          |
+//! | `"HTTP"` if any `http.` attribute exists          | Dependency Type                                          |
+//! | `"DB"` if any `db.` attribute exists              | Dependency Type                                          |
+//! | `http.url`                                        | Request Url                                              |
+//! | `http.scheme` + `http.host` + `http.target`       | Request Url                                              |
+//! | `http.client_ip`                                  | Request Source                                           |
+//! | `net.peer.ip`                                     | Request Source                                           |
+//! | `http.status_code`                                | Request Response code                                    |
+//!   
 //! All other attributes are directly converted to custom properties.
 //!
 //! For Requests the attributes `http.method` and `http.route` override the Name.
-//!
-//! #### Automatic Attribute Mappings
-//!
-//! | OpenTelemetry Attribute                           | AppInsights Tag          | Notes                                                                                               |
-//! |---------------------------------------------------|--------------------------|-----------------------------------------------------------------------------------------------------|
-//! | Trace Id                                           | `ai.operation.id`        |                                                                                                     |
-//! | Parent Span Id                                    | `ai.operation.parentId`  |                                                                                                     |
-//! | `SpanKind::Server` + `http.method` + `http.route` | `ai.operation.name`      | The name of the operation becomes `METHOD /the/route`.                                              |
-//! | `enduser.id`                                      | `ai.user.authUserId`     |                                                                                                     |
-//! | `service.name` + `service.namespace`              | `ai.cloud.role`          | The role becomes `NAMESPACE.NAME`.                                                                  |
-//! | `service.instance.id`                             | `ai.cloud.roleInstance`  |                                                                                                     |
-//! | `service.version`                                 | `ai.application.ver`     |                                                                                                     |
-//! | `telemetry.sdk.name`                              | `ai.internal.sdkVersion` |                                                                                                     |
-//! | `ai.*`                                            | `ai.*`                   | All other OpenTelemetry attributes that begin with `ai.` are copied into the AppInsights tags bag.  |
 //!
 //! ## Events
 //!
