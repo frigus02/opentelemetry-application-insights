@@ -1,17 +1,28 @@
-use crate::convert::{span_id_to_string, trace_id_to_string};
+use crate::{convert::{span_id_to_string, trace_id_to_string}, models::context_tag_keys::TAG_KEY_LOOKUP};
 use crate::models::context_tag_keys::{self as tags, Tags};
-use opentelemetry::{
-    exporter::trace::SpanData,
-    trace::{SpanId, SpanKind},
-};
+use opentelemetry::{exporter::trace::SpanData, trace::{SpanId, SpanKind}};
 use opentelemetry_semantic_conventions as semcov;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     let mut map = Tags::new();
 
+    // First, allow the user to explicitly express tags with attributes that start with `ai.`
+    // These attributes do not collide with any opentelemetry semantic conventions, so it is
+    // assumed that the user intends for them to be a part of the `tags` portion of the envelope.
+    let ai_tags_iter = span.attributes.iter().filter(|a| a.0.as_str().starts_with("ai."));
+    for ai_tag in ai_tags_iter {
+        if let Some(ctk) = TAG_KEY_LOOKUP.get(ai_tag.0.as_str()) {
+            map.insert(
+                ctk.clone(), 
+                ai_tag.1.to_string()
+            );
+        }
+    }
+
+    // Set the operation id and operation parent id.
     map.insert(
         tags::OPERATION_ID,
-        trace_id_to_string(span.span_context.trace_id()),
+        span_id_to_string(span.span_context.span_id()),
     );
     if span.parent_span_id != SpanId::invalid() {
         map.insert(
@@ -20,6 +31,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
         );
     }
 
+    // Ensure the name of the operation is `METHOD /the/route/path`.
     if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
         if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
             if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
@@ -40,7 +52,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     if let Some(service_name) = span.attributes.get(&semcov::resource::SERVICE_NAME) {
         let mut cloud_role = service_name.as_str().into_owned();
         if let Some(service_namespace) = span.attributes.get(&semcov::resource::SERVICE_NAMESPACE) {
-            cloud_role.insert_str(0, ".");
+            cloud_role.insert(0, '.');
             cloud_role.insert_str(0, &service_namespace.as_str());
         }
 

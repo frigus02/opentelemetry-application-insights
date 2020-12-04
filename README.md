@@ -109,6 +109,20 @@ All other attributes are directly converted to custom properties.
 
 For Requests the attributes `http.method` and `http.route` override the Name.
 
+#### Automatic Attribute Mappings
+
+| OpenTelemetry Attribute                           | AppInsights Tag          | Notes                                                                                               |
+|---------------------------------------------------|--------------------------|-----------------------------------------------------------------------------------------------------|
+| Span Id                                           | `ai.operation.id`        |                                                                                                     |
+| Parent Span Id                                    | `ai.operation.parentId`  |                                                                                                     |
+| `SpanKind::Server` + `http.method` + `http.route` | `ai.operation.name`      | The name of the operation becomes `METHOD /the/route`.                                              |
+| `enduser.id`                                      | `ai.user.authUserId`     |                                                                                                     |
+| `service.name` + `service.namespace`              | `ai.cloud.role`          | The role becomes `NAMESPACE.NAME`.                                                                  |
+| `service.instance.id`                             | `ai.cloud.roleInstance`  |                                                                                                     |
+| `service.version`                                 | `ai.application.ver`     |                                                                                                     |
+| `telemetry.sdk.name`                              | `ai.internal.sdkVersion` |                                                                                                     |
+| `ai.*`                                            | `ai.*`                   | All other OpenTelemetry attributes that begin with `ai.` are copied into the AppInsights tags bag.  |
+
 ### Events
 
 Events are converted into Exception telemetry if the event name equals `"exception"` (see
