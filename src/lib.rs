@@ -100,7 +100,7 @@
 //! | `http.client_ip`                                  | Request Source                                           |
 //! | `net.peer.ip`                                     | Request Source                                           |
 //! | `http.status_code`                                | Request Response code                                    |
-//!   
+//!
 //! All other attributes are directly converted to custom properties.
 //!
 //! For Requests the attributes `http.method` and `http.route` override the Name.
@@ -121,7 +121,7 @@
 //! All other attributes are directly converted to custom properties.
 //!
 //! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
-#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.7.1")]
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.8.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 

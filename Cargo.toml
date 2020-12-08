@@ -1,6 +1,6 @@
 [package]
 name = "opentelemetry-application-insights"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
 description = "OpenTelemetry exporter for Azure Application Insights"
@@ -34,7 +34,7 @@ reqwest = { version = "0.10", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 surf = { version = "2.0", optional = true }
-once_cell = "1.5.2"
+once_cell = "1"
 
 [dev-dependencies]
 async-std = { version = "1.6.5", features = ["attributes"] }
