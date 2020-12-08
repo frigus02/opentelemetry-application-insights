@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use serde::{ser::Serializer, Serialize};
 use std::collections::BTreeMap;
 
@@ -181,3 +182,39 @@ impl Tags {
         self.0.get(key)
     }
 }
+
+pub(crate) static TAG_KEY_LOOKUP: Lazy<BTreeMap<&'static str, ContextTagKey>> = Lazy::new(|| {
+    vec![
+        ("ai.application.ver", APPLICATION_VERSION),
+        ("ai.device.id", DEVICE_ID),
+        ("ai.device.locale", DEVICE_LOCALE),
+        ("ai.device.model", DEVICE_MODEL),
+        ("ai.device.oemName", DEVICE_OEM_NAME),
+        ("ai.device.osVersion", DEVICE_OS_VERSION),
+        ("ai.device.type", DEVICE_TYPE),
+        ("ai.location.ip", LOCATION_IP),
+        ("ai.location.country", LOCATION_COUNTRY),
+        ("ai.location.province", LOCATION_PROVINCE),
+        ("ai.location.city", LOCATION_CITY),
+        ("ai.operation.id", OPERATION_ID),
+        ("ai.operation.name", OPERATION_NAME),
+        ("ai.operation.parentId", OPERATION_PARENT_ID),
+        ("ai.operation.syntheticSource", OPERATION_SYNTHETIC_SOURCE),
+        (
+            "ai.operation.correlationVector",
+            OPERATION_CORRELATION_VECTOR,
+        ),
+        ("ai.session.id", SESSION_ID),
+        ("ai.session.isFirst", SESSION_IS_FIRST),
+        ("ai.user.accountId", USER_ACCOUNT_ID),
+        ("ai.user.id", USER_ID),
+        ("ai.user.authUserId", USER_AUTH_USER_ID),
+        ("ai.cloud.role", CLOUD_ROLE),
+        ("ai.cloud.roleInstance", CLOUD_ROLE_INSTANCE),
+        ("ai.internal.sdkVersion", INTERNAL_SDK_VERSION),
+        ("ai.internal.agentVersion", INTERNAL_AGENT_VERSION),
+        ("ai.internal.nodeName", INTERNAL_NODE_NAME),
+    ]
+    .into_iter()
+    .collect()
+});
