@@ -1,7 +1,6 @@
-use crate::models::context_tag_keys::{self as tags, Tags};
 use crate::{
     convert::{span_id_to_string, trace_id_to_string},
-    models::context_tag_keys::TAG_KEY_LOOKUP,
+    models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP},
 };
 use opentelemetry::{
     exporter::trace::SpanData,
@@ -20,7 +19,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
         .iter()
         .filter(|a| a.0.as_str().starts_with("ai."));
     for ai_tag in ai_tags_iter {
-        if let Some(ctk) = TAG_KEY_LOOKUP.get(ai_tag.0.as_str()) {
+        if let Some(ctk) = TAG_KEY_LOOKUP.get(ai_tag.0) {
             map.insert(ctk.clone(), ai_tag.1.to_string());
         }
     }
