@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.9.0] - 2020-12-23
+
+### Added
+
+- Constants for span attribute keys, which you can use to set any of the Application nsights conrext properties (tags).
+
 ## [0.8.0] - 2020-12-08
 
 ### Added
@@ -112,7 +118,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.8.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.9.0...HEAD
+[0.9.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.1...0.8.0
 [0.7.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.6.0...0.7.0
