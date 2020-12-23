@@ -134,6 +134,7 @@ mod uploader;
 use async_trait::async_trait;
 use convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string};
 pub use http_client::HttpClient;
+pub use models::context_tag_keys::attrs;
 use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData, Properties,
     RemoteDependencyData, RequestData,
