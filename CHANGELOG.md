@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade to `v0.11.0` of `opentelemetry`.
+
 ## [0.9.0] - 2020-12-23
 
 ### Added

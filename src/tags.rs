@@ -3,7 +3,7 @@ use crate::{
     models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP},
 };
 use opentelemetry::{
-    exporter::trace::SpanData,
+    sdk::export::trace::SpanData,
     trace::{SpanId, SpanKind},
 };
 use opentelemetry_semantic_conventions as semcov;
