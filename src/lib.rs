@@ -140,15 +140,21 @@ use models::{
     RemoteDependencyData, RequestData,
 };
 use opentelemetry::{
-    exporter::trace::{ExportResult, SpanData, SpanExporter},
-    global, sdk,
+    global,
+    sdk::{
+        self,
+        export::{
+            trace::{ExportResult, SpanData, SpanExporter},
+            ExportError,
+        },
+    },
     trace::{Event, SpanKind, StatusCode, TracerProvider},
     Key, Value,
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::error::Error;
+use std::error::Error as StdError;
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -207,7 +213,7 @@ impl<C> PipelineBuilder<C> {
     pub fn with_endpoint(
         mut self,
         endpoint: &str,
-    ) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
+    ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
         self.endpoint = Some(format!("{}/v2/track", endpoint).try_into()?);
         Ok(self)
     }
@@ -335,7 +341,7 @@ impl<C> Exporter<C> {
     pub fn with_endpoint(
         mut self,
         endpoint: &str,
-    ) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
+    ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
         self.endpoint = format!("{}/v2/track", endpoint).try_into()?;
         Ok(self)
     }
@@ -423,6 +429,42 @@ where
     }
 }
 
+/// Errors that occurred during span export.
+#[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
+pub enum Error {
+    /// Application Insights telemetry data failed to serialize to JSON. Telemetry reporting failed
+    /// because of this.
+    ///
+    /// Note: This is an error in this crate. If you spot this, please open an issue.
+    #[error("serializing upload request failed with {0}")]
+    UploadSerializeRequest(serde_json::Error),
+
+    /// Application Insights telemetry response failed to deserialize from JSON.
+    ///
+    /// Telemetry reporting may have worked. But since we could not look into the response, we
+    /// can't be sure.
+    ///
+    /// Note: This is an error in this crate. If you spot this, please open an issue.
+    #[error("deserializing upload response failed with {0}")]
+    UploadDeserializeResponse(serde_json::Error),
+
+    /// Could not complete the HTTP request to Application Insights to send telemetry data.
+    /// Telemetry reporting failed because of this.
+    #[error("sending upload request failed with {0}")]
+    UploadConnection(Box<dyn StdError + Send + Sync + 'static>),
+
+    /// Application Insights returned at least one error for the reported telemetry data.
+    #[error("upload failed with {0}")]
+    Upload(String),
+}
+
+impl ExportError for Error {
+    fn exporter_name(&self) -> &'static str {
+        "application-insights"
+    }
+}
+
 impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
@@ -435,7 +477,7 @@ impl From<&SpanData> for RequestData {
                     .duration_since(span.start_time)
                     .unwrap_or_default(),
             ),
-            response_code: (span.status_code.clone() as i32).to_string().into(),
+            response_code: (span.status_code as i32).to_string().into(),
             success: span.status_code != StatusCode::Error,
             source: None,
             url: None,
@@ -496,7 +538,7 @@ impl From<&SpanData> for RemoteDependencyData {
                     .duration_since(span.start_time)
                     .unwrap_or_default(),
             ),
-            result_code: Some((span.status_code.clone() as i32).to_string().into()),
+            result_code: Some((span.status_code as i32).to_string().into()),
             success: match span.status_code {
                 StatusCode::Unset => None,
                 StatusCode::Ok => Some(true),

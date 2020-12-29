@@ -1,7 +1,6 @@
-use crate::models::Envelope;
-use crate::HttpClient;
+use crate::{models::Envelope, Error, HttpClient};
 use http::{Request, Uri};
-use opentelemetry::exporter::trace::ExportResult;
+use opentelemetry::sdk::export::trace::ExportResult;
 use serde::Deserialize;
 
 const STATUS_OK: u16 = 200;
@@ -34,17 +33,22 @@ pub(crate) async fn send(
     endpoint: &Uri,
     items: Vec<Envelope>,
 ) -> ExportResult {
-    let payload = serde_json::to_vec(&items)?;
+    let payload = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
-        .body(payload)?;
+        .body(payload)
+        .expect("request should be valid");
 
     // TODO Implement retries
-    let response = client.send(request).await?;
+    let response = client
+        .send(request)
+        .await
+        .map_err(Error::UploadConnection)?;
     match response.status().as_u16() {
         STATUS_OK => Ok(()),
         status @ STATUS_PARTIAL_CONTENT => {
-            let content: Transmission = serde_json::from_slice(response.body())?;
+            let content: Transmission = serde_json::from_slice(response.body())
+                .map_err(Error::UploadDeserializeResponse)?;
             if content.items_received == content.items_accepted {
                 Ok(())
             } else if content.errors.iter().any(|item| can_retry_item(item)) {

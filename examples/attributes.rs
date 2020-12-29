@@ -74,8 +74,9 @@ fn main() {
                 KeyValue::new("net.peer.ip", "10.1.2.3"),
                 KeyValue::new("http.target", "/hello/world?name=marry"),
                 KeyValue::new("http.status_code", "200"),
-            ]);
-        let span = server_tracer.build_with_context(builder, &cx);
+            ])
+            .with_parent_context(cx);
+        let span = server_tracer.build(builder);
         server_tracer.with_span(span, |_cx| {
             log();
             exception();
