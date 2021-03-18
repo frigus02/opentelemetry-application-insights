@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- New feature flags for using `rustls` with the `reqwest` clients instead of `nativetls`
+
 ## [0.11.0] - 2021-01-22
 
 ### Changed

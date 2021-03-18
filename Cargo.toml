@@ -19,8 +19,10 @@ exclude = [
 ]
 
 [features]
-reqwest-blocking-client = ["reqwest", "reqwest/blocking"]
-reqwest-client = ["reqwest", "opentelemetry/tokio-support"]
+reqwest-blocking-client = ["reqwest", "reqwest/native-tls", "reqwest/blocking"]
+reqwest-blocking-client-rustls = ["reqwest", "reqwest/rustls-tls", "reqwest/blocking"]
+reqwest-client = ["reqwest", "reqwest/native-tls", "opentelemetry/tokio-support"]
+reqwest-client-rustls = ["reqwest", "reqwest/rustls-tls", "opentelemetry/tokio-support"]
 surf-client = ["surf"]
 
 [dependencies]
@@ -31,7 +33,7 @@ http = "0.2"
 thiserror = "1"
 opentelemetry = "0.12"
 opentelemetry-semantic-conventions = "0.4"
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", optional = true, default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 surf = { version = "2", optional = true }
