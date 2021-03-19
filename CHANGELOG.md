@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.12.0] - 2021-03-19
+
 ### Added
 
 - New feature flags for using `rustls` with the `reqwest` clients instead of `nativetls`
@@ -134,7 +136,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.11.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.12.0...HEAD
+[0.12.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.9.0...0.10.0
 [0.9.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.8.0...0.9.0
@@ -147,4 +150,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [0.3.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.1...0.1.2
-[0.1.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...0.1.1
+[zj0.1.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...0.1.1
