@@ -1,7 +1,12 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::{Request, Response};
-#[cfg(any(feature = "reqwest-blocking-client", feature = "reqwest-client"))]
+#[cfg(any(
+    feature = "reqwest-blocking-client",
+    feature = "reqwest-client",
+    feature = "reqwest-blocking-client-rustls",
+    feature = "reqwest-client-rustls",
+))]
 use std::convert::TryInto;
 use std::fmt::Debug;
 
@@ -22,8 +27,8 @@ pub trait HttpClient: Debug + Send + Sync {
 
 /// `HttpClient` implementation for `reqwest::Client`
 ///
-/// Requires the **reqwest-client** feature.
-#[cfg(feature = "reqwest-client")]
+/// Requires the **reqwest-client** or **reqwest-client-rustls** feature.
+#[cfg(any(feature = "reqwest-client", feature = "reqwest-client-rustls"))]
 #[async_trait]
 impl HttpClient for reqwest::Client {
     async fn send(&self, request: Request<Vec<u8>>) -> Result<Response<Bytes>, BoxError> {
@@ -36,8 +41,11 @@ impl HttpClient for reqwest::Client {
 
 /// `HttpClient` implementation for `reqwest::blocking::Client`
 ///
-/// Requires the **reqwest-blocking-client** feature.
-#[cfg(feature = "reqwest-blocking-client")]
+/// Requires the **reqwest-blocking-client** or **reqwest-blocking-client-rustls** feature.
+#[cfg(any(
+    feature = "reqwest-blocking-client",
+    feature = "reqwest-blocking-client-rustls"
+))]
 #[async_trait]
 impl HttpClient for reqwest::blocking::Client {
     async fn send(&self, request: Request<Vec<u8>>) -> Result<Response<Bytes>, BoxError> {
