@@ -8,10 +8,11 @@ async fn main() {
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
 
-    let (tracer, _uninstall) =
-        opentelemetry_application_insights::new_pipeline(instrumentation_key)
-            .with_client(surf::Client::new())
-            .install();
+    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_client(surf::Client::new())
+        .install_batch(opentelemetry::runtime::AsyncStd);
 
     tracer.in_span("surf-client", |_cx| {});
+
+    opentelemetry::global::shutdown_tracer_provider();
 }

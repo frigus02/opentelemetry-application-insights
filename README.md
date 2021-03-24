@@ -21,26 +21,51 @@ use opentelemetry::trace::Tracer as _;
 
 fn main() {
     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .with_client(reqwest::blocking::Client::new())
-        .install();
+        .install_simple();
 
     tracer.in_span("main", |_cx| {});
 }
 ```
 
-### Features
+### Simple or Batch
 
-The functions `build` and `install` automatically configure an asynchronous batch exporter if
-you enable either the **async-std** or **tokio** feature for the `opentelemetry` crate.
-Otherwise spans will be exported synchronously.
+The functions `build_simple` and `install_simple` build/install a trace pipeline using the
+simple span processor. This means each span is processed and exported synchronously at the time
+it ends.
+
+The functions `build_batch` and `install_batch` use the batch span processor instead. This
+means spans are exported periodically in batches, which can be better for performance. This
+feature requires an async runtime such as Tokio or async-std. If you decide to use a batch span
+processor, make sure to call `opentelemetry::global::shutdown_tracer_provider()` before your
+program exits to ensure all remaining spans are exported properly (this example requires the
+**reqwest-client** and **opentelemetry/rt-tokio** features).
+
+```rust
+use opentelemetry::trace::Tracer as _;
+
+#[tokio::main]
+async fn main() {
+    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_client(reqwest::Client::new())
+        .install_batch(opentelemetry::runtime::Tokio);
+
+    tracer.in_span("main", |_cx| {});
+
+    opentelemetry::global::shutdown_tracer_provider();
+}
+```
+
+### Features
 
 In order to support different async runtimes, the exporter requires you to specify an HTTP
 client that works with your chosen runtime. This crate comes with support for:
 
-- [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/async-std**
+- [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/rt-async-std**
   features and configure the exporter with `with_client(surf::Client::new())`.
-- [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
+- [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/rt-tokio** features
   and configure the exporter with `with_client(reqwest::Client::new())`.
 - [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
   configure the exporter with `with_client(reqwest::blocking::Client::new())`.
