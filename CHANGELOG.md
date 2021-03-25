@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.13.0] - 2021-03-25
+
+### Changed
+
+- Upgrade to `v0.13.0` of `opentelemetry`.
+
+  The choice of simple/batch span processor as well as the async runtime now needs to be made in Rust code:
+
+  - If you previously used `.install()` with the `reqwest::blocking::Client`, you should now use `.install_simple()`.
+  - If you previously used `.install()` with the `reqwest::Client` and the Tokio runtime, you should now use `.install_batch(opentelemetry::runtime::Tokio)` as well as enable to **opentelemetry/rt-tokio** feature.
+  - If you previously used `.install()` with the `surf::Client` and the async-std runtime, you should now use `.install_batch(opentelemetry::runtime::AsyncStd)` as well as enable to **opentelemetry/rt-async-std** feature.
+
 ## [0.12.0] - 2021-03-19
 
 ### Added
@@ -136,7 +148,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.12.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.13.0...HEAD
+[0.13.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.9.0...0.10.0
