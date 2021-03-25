@@ -4,7 +4,7 @@ use std::env;
 use std::error::Error;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tracing::Span;
 use tracing_attributes::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -22,7 +22,7 @@ async fn spawn_child_process(process_name: &str) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&Span::current().context(), &mut injector);
-    let child = Command::new(process_name)
+    let mut child = Command::new(process_name)
         .arg(
             injector
                 .remove("traceparent")
@@ -30,13 +30,13 @@ async fn spawn_child_process(process_name: &str) {
         )
         .spawn()
         .expect("failed to spawn");
-    child.await.expect("awaiting process failed");
+    child.wait().await.expect("awaiting process failed");
 }
 
 #[instrument]
 async fn run_in_child_process() {
     tracing::info!("leaf fn");
-    delay_for(Duration::from_millis(50)).await
+    sleep(Duration::from_millis(50)).await
 }
 
 #[tokio::main]
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let propagator = TraceContextPropagator::new();
             let cx = propagator.extract(&extractor);
             let span = tracing::info_span!("child", otel.kind = "server");
-            span.set_parent(&cx);
+            span.set_parent(cx);
             let _guard = span.enter();
             run_in_child_process().await;
         }
