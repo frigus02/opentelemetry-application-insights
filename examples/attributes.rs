@@ -37,7 +37,7 @@ fn main() {
                     KeyValue::new("service.name", "client"),
                 ])),
             )
-            .build();
+            .build_simple();
     let client_tracer = client_provider.get_tracer("example-attributes", None);
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
@@ -48,7 +48,7 @@ fn main() {
                 KeyValue::new("service.name", "server"),
             ])),
         )
-        .build();
+        .build_simple();
     let server_tracer = server_provider.get_tracer("example-attributes", None);
 
     // An HTTP client make a request

@@ -15,26 +15,51 @@
 //!
 //! fn main() {
 //!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-//!     let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!     let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
 //!         .with_client(reqwest::blocking::Client::new())
-//!         .install();
+//!         .install_simple();
 //!
 //!     tracer.in_span("main", |_cx| {});
 //! }
 //! ```
 //!
-//! ## Features
+//! ## Simple or Batch
 //!
-//! The functions `build` and `install` automatically configure an asynchronous batch exporter if
-//! you enable either the **async-std** or **tokio** feature for the `opentelemetry` crate.
-//! Otherwise spans will be exported synchronously.
+//! The functions `build_simple` and `install_simple` build/install a trace pipeline using the
+//! simple span processor. This means each span is processed and exported synchronously at the time
+//! it ends.
+//!
+//! The functions `build_batch` and `install_batch` use the batch span processor instead. This
+//! means spans are exported periodically in batches, which can be better for performance. This
+//! feature requires an async runtime such as Tokio or async-std. If you decide to use a batch span
+//! processor, make sure to call `opentelemetry::global::shutdown_tracer_provider()` before your
+//! program exits to ensure all remaining spans are exported properly (this example requires the
+//! **reqwest-client** and **opentelemetry/rt-tokio** features).
+//!
+//! ```no_run
+//! use opentelemetry::trace::Tracer as _;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+//!     let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!         .with_client(reqwest::Client::new())
+//!         .install_batch(opentelemetry::runtime::Tokio);
+//!
+//!     tracer.in_span("main", |_cx| {});
+//!
+//!     opentelemetry::global::shutdown_tracer_provider();
+//! }
+//! ```
+//!
+//! ## Features
 //!
 //! In order to support different async runtimes, the exporter requires you to specify an HTTP
 //! client that works with your chosen runtime. This crate comes with support for:
 //!
-//! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/async-std**
+//! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/rt-async-std**
 //!   features and configure the exporter with `with_client(surf::Client::new())`.
-//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/tokio** features
+//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/rt-tokio** features
 //!   and configure the exporter with `with_client(reqwest::Client::new())`.
 //! - [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
 //!   configure the exporter with `with_client(reqwest::blocking::Client::new())`.
@@ -141,6 +166,7 @@ use models::{
 };
 use opentelemetry::{
     global,
+    runtime::Runtime,
     sdk::{
         self,
         export::{
@@ -203,10 +229,10 @@ impl<C> PipelineBuilder<C> {
     ///
     /// ```no_run
     /// # fn main() -> Result<(), Box<std::error::Error + Send + Sync + 'static>> {
-    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_endpoint("https://westus2-0.in.applicationinsights.azure.com")?
-    ///     .install();
+    ///     .install_simple();
     /// # Ok(())
     /// # }
     /// ```
@@ -228,10 +254,10 @@ impl<C> PipelineBuilder<C> {
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
-    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_sample_rate(0.3)
-    ///     .install();
+    ///     .install_simple();
     /// ```
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
@@ -247,14 +273,14 @@ impl<C> PipelineBuilder<C> {
     ///
     /// ```no_run
     /// # use opentelemetry::{KeyValue, sdk};
-    /// let (tracer, _uninstall) = opentelemetry_application_insights::new_pipeline("...".into())
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_trace_config(sdk::trace::Config::default().with_resource(
     ///         sdk::Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),
     ///         ]),
     ///     ))
-    ///     .install();
+    ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
         PipelineBuilder {
@@ -268,13 +294,7 @@ impl<C> PipelineBuilder<C>
 where
     C: HttpClient + 'static,
 {
-    /// Build a configured `TracerProvider` with the recommended defaults.
-    ///
-    /// This will automatically configure an asynchronous batch exporter if you enable either the
-    /// **async-std** or **tokio** feature for the `opentelemetry` crate. Otherwise spans will be
-    /// exported synchronously.
-    pub fn build(mut self) -> sdk::trace::TracerProvider {
-        let config = self.config.take();
+    fn init_exporter(self) -> Exporter<C> {
         let mut exporter = Exporter::new(self.instrumentation_key, self.client);
         if let Some(endpoint) = self.endpoint {
             exporter.endpoint = endpoint;
@@ -283,7 +303,28 @@ where
             exporter.sample_rate = sample_rate;
         }
 
-        let mut builder = sdk::trace::TracerProvider::builder().with_exporter(exporter);
+        exporter
+    }
+
+    /// Build a configured `TracerProvider` with a simple span processor.
+    pub fn build_simple(mut self) -> sdk::trace::TracerProvider {
+        let config = self.config.take();
+        let exporter = self.init_exporter();
+        let mut builder = sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
+        if let Some(config) = config {
+            builder = builder.with_config(config);
+        }
+
+        builder.build()
+    }
+
+    /// Build a configured `TracerProvider` with a batch span processor using the specified
+    /// runtime.
+    pub fn build_batch<R: Runtime>(mut self, runtime: R) -> sdk::trace::TracerProvider {
+        let config = self.config.take();
+        let exporter = self.init_exporter();
+        let mut builder =
+            sdk::trace::TracerProvider::builder().with_default_batch_exporter(exporter, runtime);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -293,24 +334,32 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `TracerProvider`. See the `build` function for details about how
-    /// this provider is configured.
-    pub fn install(self) -> (sdk::trace::Tracer, Uninstall) {
-        let trace_provider = self.build();
+    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// that.
+    pub fn install_simple(self) -> sdk::trace::Tracer {
+        let trace_provider = self.build_simple();
         let tracer = trace_provider.get_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
         );
+        let _previous_provider = global::set_tracer_provider(trace_provider);
+        tracer
+    }
 
-        let provider_guard = global::set_tracer_provider(trace_provider);
-
-        (tracer, Uninstall(provider_guard))
+    /// Install an Application Insights pipeline with the recommended defaults.
+    ///
+    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// that.
+    pub fn install_batch<R: Runtime>(self, runtime: R) -> sdk::trace::Tracer {
+        let trace_provider = self.build_batch(runtime);
+        let tracer = trace_provider.get_tracer(
+            "opentelemetry-application-insights",
+            Some(env!("CARGO_PKG_VERSION")),
+        );
+        let _previous_provider = global::set_tracer_provider(trace_provider);
+        tracer
     }
 }
-
-/// Guard that uninstalls the Application Insights trace pipeline when dropped
-#[derive(Debug)]
-pub struct Uninstall(global::TracerProviderGuard);
 
 /// Application Insights span exporter
 #[derive(Debug)]
@@ -640,7 +689,7 @@ impl From<&Event> for MessageData {
             message: if event.name.is_empty() {
                 "<no message>".into()
             } else {
-                event.name.clone().into()
+                event.name.clone().into_owned().into()
             },
             properties: Some(
                 event
