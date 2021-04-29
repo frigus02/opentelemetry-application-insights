@@ -324,7 +324,7 @@ impl<C> PipelineBuilder<C> {
             .resource
             .merge(&sdk::Resource::new(vec![KeyValue::new(
                 "service.name",
-                name,
+                name.into(),
             )]));
         config.with_resource(merged_resource);
 
