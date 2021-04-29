@@ -175,7 +175,7 @@ use opentelemetry::{
         },
     },
     trace::{Event, SpanKind, StatusCode, TracerProvider},
-    Key, Value,
+    Key, KeyValue, Value,
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -291,7 +291,7 @@ impl<C> PipelineBuilder<C> {
             None => config,
         };
 
-        let merged_resource = base_config.resource.merge(config.resource);
+        let merged_resource = base_config.resource.merge(&config.resource);
         config.with_resource(merged_resource);
 
         PipelineBuilder {
@@ -315,16 +315,17 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<String>>(mut self, name: T) -> Self {
-
         let config = match self.config {
             Some(config) => config,
             None => sdk::trace::Config::default(),
         };
 
-        let merged_resource = config.resource.merge(sdk::Resource::new(vec![KeyValue::new(
-            "service.name",
-            name,
-        )]));
+        let merged_resource = config
+            .resource
+            .merge(&sdk::Resource::new(vec![KeyValue::new(
+                "service.name",
+                name,
+            )]));
         config.with_resource(merged_resource);
 
         PipelineBuilder {
