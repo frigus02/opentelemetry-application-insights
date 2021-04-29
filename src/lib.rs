@@ -286,13 +286,12 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
-        let base_config = match self.config {
-            Some(base_config) => base_config,
-            None => config,
+        let merged_resource = match self.config {
+            Some(base_config) => base_config.resource.merge(&config.resource),
+            None => (*config.resource).clone(),
         };
 
-        let merged_resource = base_config.resource.merge(&config.resource);
-        config.with_resource(merged_resource);
+        let config = config.with_resource(merged_resource);
 
         PipelineBuilder {
             config: Some(config),
@@ -314,7 +313,7 @@ impl<C> PipelineBuilder<C> {
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
-    pub fn with_service_name<T: Into<String>>(mut self, name: T) -> Self {
+    pub fn with_service_name<T: Into<String>>(self, name: T) -> Self {
         let config = match self.config {
             Some(config) => config,
             None => sdk::trace::Config::default(),
@@ -326,7 +325,7 @@ impl<C> PipelineBuilder<C> {
                 "service.name",
                 name.into(),
             )]));
-        config.with_resource(merged_resource);
+        let config = config.with_resource(merged_resource);
 
         PipelineBuilder {
             config: Some(config),
