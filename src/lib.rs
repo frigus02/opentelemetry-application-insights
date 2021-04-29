@@ -315,7 +315,6 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<String>>(mut self, name: T) -> Self {
-        self.service_name = name.into();
 
         let config = match self.config {
             Some(config) => config,
