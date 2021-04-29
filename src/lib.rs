@@ -183,9 +183,6 @@ use std::convert::TryInto;
 use std::error::Error as StdError;
 use tags::{get_tags_for_event, get_tags_for_span};
 
-/// Default service name if no service is configured.
-const DEFAULT_SERVICE_NAME: &str = "unknown_service";
-
 /// Create a new Application Insights exporter pipeline builder
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
@@ -194,7 +191,6 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         endpoint: None,
         instrumentation_key,
         sample_rate: None,
-        service_name: DEFAULT_SERVICE_NAME.to_string(),
     }
 }
 
@@ -206,7 +202,6 @@ pub struct PipelineBuilder<C> {
     endpoint: Option<http::Uri>,
     instrumentation_key: String,
     sample_rate: Option<f64>,
-    service_name: String,
 }
 
 impl<C> PipelineBuilder<C> {
@@ -220,7 +215,6 @@ impl<C> PipelineBuilder<C> {
             endpoint: self.endpoint,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
-            service_name: self.service_name,
         }
     }
 
@@ -273,6 +267,9 @@ impl<C> PipelineBuilder<C> {
 
     /// Assign the SDK config for the exporter pipeline.
     ///
+    /// If there is an existing `sdk::Config` in the `PipelineBuilder` the `sdk::Resource`s
+    /// are merged and any other parameters are overwritten.
+    ///
     /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
     ///
     /// [`reqwest`]: https://crates.io/crates/reqwest
@@ -289,13 +286,24 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
+        let base_config = match self.config {
+            Some(base_config) => base_config,
+            None => config,
+        };
+
+        let merged_resource = base_config.resource.merge(config.resource);
+        config.with_resource(merged_resource);
+
         PipelineBuilder {
             config: Some(config),
             ..self
         }
     }
 
-    /// Assign the service name under which to group traces.
+    /// Assign the service name under which to group traces by adding a service.name
+    /// `sdk::Resource` or overriding a previous setting of it.
+    ///
+    /// If a `sdk::Config` does not exist on the `PipelineBuilder` one will be created.
     ///
     /// This will be translated, along with the service namespace, to the Cloud Role Name.
     ///
@@ -308,7 +316,22 @@ impl<C> PipelineBuilder<C> {
     /// ```
     pub fn with_service_name<T: Into<String>>(mut self, name: T) -> Self {
         self.service_name = name.into();
-        self
+
+        let config = match self.config {
+            Some(config) => config,
+            None => sdk::trace::Config::default(),
+        };
+
+        let merged_resource = config.resource.merge(sdk::Resource::new(vec![KeyValue::new(
+            "service.name",
+            name,
+        )]));
+        config.with_resource(merged_resource);
+
+        PipelineBuilder {
+            config: Some(config),
+            ..self
+        }
     }
 }
 
@@ -390,7 +413,6 @@ pub struct Exporter<C> {
     endpoint: http::Uri,
     instrumentation_key: String,
     sample_rate: f64,
-    service_name: String,
 }
 
 impl<C> Exporter<C> {
@@ -403,7 +425,6 @@ impl<C> Exporter<C> {
                 .expect("hardcoded endpoint is valid uri"),
             instrumentation_key,
             sample_rate: 100.0,
-            service_name: DEFAULT_SERVICE_NAME.to_string(),
         }
     }
 
@@ -429,27 +450,8 @@ impl<C> Exporter<C> {
         self
     }
 
-    /// Assign the service name under which to group traces.
-    ///
-    /// This will be translated, along with the service namespace, to the Cloud Role Name.
-    pub fn with_service_name<T: Into<String>>(mut self, name: T) -> Self {
-        self.service_name = name.into();
-        self
-    }
-
-    fn create_envelopes(&self, mut span: SpanData) -> Vec<Envelope> {
+    fn create_envelopes(&self, span: SpanData) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.message_events.len());
-
-        if span
-            .attributes
-            .get(&semcov::resource::SERVICE_NAME)
-            .is_none()
-        {
-            span.attributes.insert(opentelemetry::KeyValue::new(
-                semcov::resource::SERVICE_NAME,
-                self.service_name.clone(),
-            ))
-        }
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
