@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.14.0] - 2021-05-03
+
+### Added
+
+- Add `with_service_name` function to pipeline builder, which makes it easier to specify a service name (translated to Cloud Role Name in Application Insights). Thanks to [@isobelhooper](https://github.com/isobelhooper) and [@johnchildren](https://github.com/johnchildren).
+
 ## [0.13.0] - 2021-03-25
 
 ### Changed
