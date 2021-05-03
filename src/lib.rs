@@ -175,7 +175,7 @@ use opentelemetry::{
         },
     },
     trace::{Event, SpanKind, StatusCode, TracerProvider},
-    Key, Value,
+    Key, KeyValue, Value,
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -267,6 +267,9 @@ impl<C> PipelineBuilder<C> {
 
     /// Assign the SDK config for the exporter pipeline.
     ///
+    /// If there is an existing `sdk::Config` in the `PipelineBuilder` the `sdk::Resource`s
+    /// are merged and any other parameters are overwritten.
+    ///
     /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
     ///
     /// [`reqwest`]: https://crates.io/crates/reqwest
@@ -283,6 +286,47 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
+        let merged_resource = match self.config {
+            Some(base_config) => base_config.resource.merge(&config.resource),
+            None => (*config.resource).clone(),
+        };
+
+        let config = config.with_resource(merged_resource);
+
+        PipelineBuilder {
+            config: Some(config),
+            ..self
+        }
+    }
+
+    /// Assign the service name under which to group traces by adding a service.name
+    /// `sdk::Resource` or overriding a previous setting of it.
+    ///
+    /// If a `sdk::Config` does not exist on the `PipelineBuilder` one will be created.
+    ///
+    /// This will be translated, along with the service namespace, to the Cloud Role Name.
+    ///
+    /// ```
+    /// # use opentelemetry::{KeyValue, sdk};
+    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
+    ///     .with_client(reqwest::blocking::Client::new())
+    ///     .with_service_name("my-application")
+    ///     .install_simple();
+    /// ```
+    pub fn with_service_name<T: Into<String>>(self, name: T) -> Self {
+        let config = match self.config {
+            Some(config) => config,
+            None => sdk::trace::Config::default(),
+        };
+
+        let merged_resource = config
+            .resource
+            .merge(&sdk::Resource::new(vec![KeyValue::new(
+                "service.name",
+                name.into(),
+            )]));
+        let config = config.with_resource(merged_resource);
+
         PipelineBuilder {
             config: Some(config),
             ..self
