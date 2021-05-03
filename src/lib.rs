@@ -175,12 +175,10 @@ use opentelemetry::{
         },
     },
     trace::{Event, SpanKind, StatusCode, TracerProvider},
-    Key, KeyValue, Value,
+    Key, Value,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::error::Error as StdError;
+use std::{borrow::Cow, collections::HashMap, convert::TryInto, error::Error as StdError};
 use tags::{get_tags_for_event, get_tags_for_span};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -313,18 +311,11 @@ impl<C> PipelineBuilder<C> {
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
-    pub fn with_service_name<T: Into<String>>(self, name: T) -> Self {
-        let config = match self.config {
-            Some(config) => config,
-            None => sdk::trace::Config::default(),
-        };
-
-        let merged_resource = config
-            .resource
-            .merge(&sdk::Resource::new(vec![KeyValue::new(
-                "service.name",
-                name.into(),
-            )]));
+    pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
+        let config = self.config.unwrap_or_default();
+        let merged_resource = config.resource.merge(&sdk::Resource::new(vec![
+            semcov::resource::SERVICE_NAME.string(name),
+        ]));
         let config = config.with_resource(merged_resource);
 
         PipelineBuilder {
