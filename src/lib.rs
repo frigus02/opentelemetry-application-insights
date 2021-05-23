@@ -284,15 +284,20 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
-        let merged_resource = match self.config {
-            Some(base_config) => base_config.resource.merge(&config.resource),
-            None => (*config.resource).clone(),
+        let config = match config.resource {
+            Some(ref resource) => {
+                let merged_resource = match self.config {
+                    Some(base_config) => base_config.resource.map(|r| r.merge(&resource)).unwrap_or(resource.as_ref().clone()),
+                    None => resource.as_ref().clone(),
+                };
+
+                Some(config.with_resource(merged_resource))
+            },
+            None => Some(config)
         };
 
-        let config = config.with_resource(merged_resource);
-
         PipelineBuilder {
-            config: Some(config),
+            config: config,
             ..self
         }
     }
@@ -313,9 +318,10 @@ impl<C> PipelineBuilder<C> {
     /// ```
     pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
         let config = self.config.unwrap_or_default();
-        let merged_resource = config.resource.merge(&sdk::Resource::new(vec![
+        let new_resource = sdk::Resource::new(vec![
             semcov::resource::SERVICE_NAME.string(name),
-        ]));
+        ]);
+        let merged_resource = config.resource.as_ref().map(|r| r.merge(&new_resource)).unwrap_or(new_resource);
         let config = config.with_resource(merged_resource);
 
         PipelineBuilder {
@@ -359,7 +365,7 @@ where
         let config = self.config.take();
         let exporter = self.init_exporter();
         let mut builder =
-            sdk::trace::TracerProvider::builder().with_default_batch_exporter(exporter, runtime);
+            sdk::trace::TracerProvider::builder().with_batch_exporter(exporter, runtime);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -441,7 +447,7 @@ impl<C> Exporter<C> {
     }
 
     fn create_envelopes(&self, span: SpanData) -> Vec<Envelope> {
-        let mut result = Vec::with_capacity(1 + span.message_events.len());
+        let mut result = Vec::with_capacity(1 + span.events.len());
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
@@ -472,7 +478,7 @@ impl<C> Exporter<C> {
             data: Some(data),
         });
 
-        for event in span.message_events.iter() {
+        for event in span.events.iter() {
             let (data, name) = match event.name.as_ref() {
                 "exception" => (
                     Data::Exception(event.into()),
@@ -565,7 +571,7 @@ impl From<&SpanData> for RequestData {
             success: span.status_code != StatusCode::Error,
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
+            properties: attrs_to_properties(&span.attributes, span.resource.clone()),
         };
 
         if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
@@ -631,7 +637,7 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.as_ref()),
+            properties: attrs_to_properties(&span.attributes, span.resource.clone()),
         };
 
         if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
