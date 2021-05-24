@@ -55,16 +55,17 @@
 //! ## Features
 //!
 //! In order to support different async runtimes, the exporter requires you to specify an HTTP
-//! client that works with your chosen runtime. This crate comes with support for:
+//! client that works with your chosen runtime. The [`opentelemetry-http`] crate comes with support
+//! for:
 //!
 //! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/rt-async-std**
 //!   features and configure the exporter with `with_client(surf::Client::new())`.
-//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/rt-tokio** features
-//!   and configure the exporter with `with_client(reqwest::Client::new())`.
-//! - [`reqwest`] for synchronous exports: enable the **reqwest-blocking-client** feature and
-//!   configure the exporter with `with_client(reqwest::blocking::Client::new())`.
+//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/rt-tokio**
+//!   features and configure the exporter with either `with_client(reqwest::Client::new())` or
+//!   `with_client(reqwest::blocking::Client::new())`.
 //!
 //! [`async-std`]: https://crates.io/crates/async-std
+//! [`opentelemetry-http`]: https://crates.io/crates/opentelemetry-http
 //! [`reqwest`]: https://crates.io/crates/reqwest
 //! [`surf`]: https://crates.io/crates/surf
 //! [`tokio`]: https://crates.io/crates/tokio
@@ -151,14 +152,12 @@
 #![cfg_attr(test, deny(warnings))]
 
 mod convert;
-mod http_client;
 mod models;
 mod tags;
 mod uploader;
 
 use async_trait::async_trait;
 use convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string};
-pub use http_client::HttpClient;
 pub use models::context_tag_keys::attrs;
 use models::{
     Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData, Properties,
@@ -177,6 +176,7 @@ use opentelemetry::{
     trace::{Event, SpanKind, StatusCode, TracerProvider},
     Key, Value,
 };
+pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
 use std::{borrow::Cow, collections::HashMap, convert::TryInto, error::Error as StdError};
 use tags::{get_tags_for_event, get_tags_for_span};
