@@ -47,10 +47,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-    let (tracer, _uninstall) =
-        opentelemetry_application_insights::new_pipeline(instrumentation_key)
-            .with_client(reqwest::Client::new())
-            .install();
+    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+        .with_client(reqwest::Client::new())
+        .install_batch(opentelemetry::runtime::Tokio);
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
@@ -72,6 +71,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             spawn_children(5, process_name).await;
         }
     }
+
+    opentelemetry::global::shutdown_tracer_provider();
 
     Ok(())
 }
