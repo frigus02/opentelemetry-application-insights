@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.15.0] - 2021-05-24
+
+### Changed
+
+- Upgrade to `v0.14.0` of `opentelemetry`. Thanks to [@notheotherben](https://github.com/notheotherben).
+
+- Use HttpClient trait from `opentelemetry-http`.
+
 ## [0.14.0] - 2021-05-03
 
 ### Added
@@ -154,7 +162,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.13.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.15.0...HEAD
+[0.15.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.14.0...0.15.0
+[0.14.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.10.0...0.11.0
@@ -169,4 +179,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [0.3.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.1...0.1.2
-[zj0.1.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...0.1.1
+[0.1.1]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.1.0...0.1.1
