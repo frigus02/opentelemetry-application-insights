@@ -14,7 +14,7 @@ use tokio::time::sleep;
 
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
-    let span = tracer.start("spawn_children");
+    let mut span = tracer.start("spawn_children");
     span.set_attribute(Key::new("n").i64(n.into()));
     span.set_attribute(Key::new("process_name").string(process_name.clone()));
     let cx = Context::current_with_span(span);
@@ -27,7 +27,7 @@ async fn spawn_children(n: u32, process_name: String) {
 
 async fn spawn_child_process(process_name: &str) {
     let tracer = global::tracer("spawn_child_process");
-    let span = tracer
+    let mut span = tracer
         .span_builder("spawn_child_process")
         .with_kind(SpanKind::Client)
         .start(&tracer);
@@ -54,7 +54,7 @@ async fn spawn_child_process(process_name: &str) {
 
 async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
-    let span = tracer.start("run_in_child_process");
+    let mut span = tracer.start("run_in_child_process");
     span.add_event("leaf fn".into(), vec![]);
     sleep(Duration::from_millis(50)).await
 }

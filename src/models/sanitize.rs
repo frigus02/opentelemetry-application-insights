@@ -18,6 +18,12 @@ macro_rules! limited_len_string {
             }
         }
 
+        impl <'a> From<std::borrow::Cow<'a, str>> for $name {
+            fn from(s: std::borrow::Cow<'a, str>) -> Self {
+                Self(String::from(&s[0..std::cmp::min(s.len(), $len)]))
+            }
+        }
+
         impl From<&opentelemetry::Value> for $name {
             fn from(v: &opentelemetry::Value) -> Self {
                 v.as_str().into_owned().into()
