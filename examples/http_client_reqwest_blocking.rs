@@ -12,4 +12,6 @@ fn main() {
         .install_simple();
 
     tracer.in_span("reqwest-blocking-client", |_cx| {});
+
+    opentelemetry::global::shutdown_tracer_provider();
 }
