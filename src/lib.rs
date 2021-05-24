@@ -287,19 +287,19 @@ impl<C> PipelineBuilder<C> {
         let config = match config.resource {
             Some(ref resource) => {
                 let merged_resource = match self.config {
-                    Some(base_config) => base_config.resource.map(|r| r.merge(&resource)).unwrap_or(resource.as_ref().clone()),
+                    Some(base_config) => base_config
+                        .resource
+                        .map(|r| r.merge(&resource))
+                        .unwrap_or_else(|| resource.as_ref().clone()),
                     None => resource.as_ref().clone(),
                 };
 
                 Some(config.with_resource(merged_resource))
-            },
-            None => Some(config)
+            }
+            None => Some(config),
         };
 
-        PipelineBuilder {
-            config: config,
-            ..self
-        }
+        PipelineBuilder { config, ..self }
     }
 
     /// Assign the service name under which to group traces by adding a service.name
@@ -318,10 +318,12 @@ impl<C> PipelineBuilder<C> {
     /// ```
     pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
         let config = self.config.unwrap_or_default();
-        let new_resource = sdk::Resource::new(vec![
-            semcov::resource::SERVICE_NAME.string(name),
-        ]);
-        let merged_resource = config.resource.as_ref().map(|r| r.merge(&new_resource)).unwrap_or(new_resource);
+        let new_resource = sdk::Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
+        let merged_resource = config
+            .resource
+            .as_ref()
+            .map(|r| r.merge(&new_resource))
+            .unwrap_or(new_resource);
         let config = config.with_resource(merged_resource);
 
         PipelineBuilder {

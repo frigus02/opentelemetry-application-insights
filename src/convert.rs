@@ -4,8 +4,10 @@ use opentelemetry::{
     sdk::{trace::EvictedHashMap, Resource},
     trace::{SpanId, TraceId},
 };
-use std::time::{Duration, SystemTime};
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
     format!("{:032x}", trace_id.to_u128())
@@ -36,25 +38,19 @@ pub(crate) fn attrs_to_properties(
     attributes: &EvictedHashMap,
     resource: Option<Arc<Resource>>,
 ) -> Option<Properties> {
-    let properties = attributes
+    let properties_from_attrs = attributes
         .iter()
         .map(|(k, v)| (k.as_str().into(), v.into()));
 
-    if let Some(resource) = resource {
-        Some(
-            properties
-                .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
-                .collect(),
-        )
-        .filter(|x: &Properties| !x.is_empty())
+    let properties = if let Some(resource) = resource {
+        properties_from_attrs
+            .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
+            .collect()
     } else {
-        Some(
-            properties.collect(),
-        )
-        .filter(|x: &Properties| !x.is_empty())
-    }
+        properties_from_attrs.collect()
+    };
 
-
+    Some(properties).filter(|x: &Properties| !x.is_empty())
 }
 
 #[cfg(test)]
