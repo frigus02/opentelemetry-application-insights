@@ -165,13 +165,13 @@ use models::{
 };
 use opentelemetry::{
     global,
-    runtime::Runtime,
     sdk::{
         self,
         export::{
             trace::{ExportResult, SpanData, SpanExporter},
             ExportError,
         },
+        trace::TraceRuntime,
     },
     trace::{Event, SpanKind, StatusCode, TracerProvider},
     Key, Value,
@@ -363,7 +363,7 @@ where
 
     /// Build a configured `TracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: Runtime>(mut self, runtime: R) -> sdk::trace::TracerProvider {
+    pub fn build_batch<R: TraceRuntime>(mut self, runtime: R) -> sdk::trace::TracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
         let mut builder =
@@ -393,7 +393,7 @@ where
     ///
     /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
     /// that.
-    pub fn install_batch<R: Runtime>(self, runtime: R) -> sdk::trace::Tracer {
+    pub fn install_batch<R: TraceRuntime>(self, runtime: R) -> sdk::trace::Tracer {
         let trace_provider = self.build_batch(runtime);
         let tracer = trace_provider.get_tracer(
             "opentelemetry-application-insights",
