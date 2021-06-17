@@ -147,7 +147,7 @@
 //! All other attributes are directly converted to custom properties.
 //!
 //! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
-#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.15.0")]
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.16.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(test, deny(warnings))]
 
