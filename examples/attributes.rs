@@ -38,7 +38,7 @@ fn main() {
                 ])),
             )
             .build_simple();
-    let client_tracer = client_provider.get_tracer("example-attributes", None);
+    let client_tracer = client_provider.tracer("example-attributes", None);
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .with_client(reqwest::blocking::Client::new())
@@ -49,7 +49,7 @@ fn main() {
             ])),
         )
         .build_simple();
-    let server_tracer = server_provider.get_tracer("example-attributes", None);
+    let server_tracer = server_provider.tracer("example-attributes", None);
 
     // An HTTP client make a request
     let span = client_tracer
