@@ -283,23 +283,19 @@ impl<C> PipelineBuilder<C> {
     ///     ))
     ///     .install_simple();
     /// ```
-    pub fn with_trace_config(self, config: sdk::trace::Config) -> Self {
-        let config = match config.resource {
-            Some(ref resource) => {
-                let merged_resource = match self.config {
-                    Some(base_config) => base_config
-                        .resource
-                        .map(|r| r.merge(&resource))
-                        .unwrap_or_else(|| resource.as_ref().clone()),
-                    None => resource.as_ref().clone(),
-                };
-
-                Some(config.with_resource(merged_resource))
+    pub fn with_trace_config(self, mut config: sdk::trace::Config) -> Self {
+        if let Some(mut old_config) = self.config {
+            if let Some(old_resource) = old_config.resource.take() {
+                let merged_resource =
+                    old_resource.merge(config.resource.take().unwrap_or_default());
+                config = config.with_resource(merged_resource);
             }
-            None => Some(config),
-        };
+        }
 
-        PipelineBuilder { config, ..self }
+        PipelineBuilder {
+            config: Some(config),
+            ..self
+        }
     }
 
     /// Assign the service name under which to group traces by adding a service.name
@@ -317,11 +313,11 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
-        let config = self.config.unwrap_or_default();
+        let mut config = self.config.unwrap_or_default();
         let new_resource = sdk::Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
         let merged_resource = config
             .resource
-            .as_ref()
+            .take()
             .map(|r| r.merge(&new_resource))
             .unwrap_or(new_resource);
         let config = config.with_resource(merged_resource);
@@ -381,7 +377,7 @@ where
     /// that.
     pub fn install_simple(self) -> sdk::trace::Tracer {
         let trace_provider = self.build_simple();
-        let tracer = trace_provider.get_tracer(
+        let tracer = trace_provider.tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
         );
@@ -395,7 +391,7 @@ where
     /// that.
     pub fn install_batch<R: TraceRuntime>(self, runtime: R) -> sdk::trace::Tracer {
         let trace_provider = self.build_batch(runtime);
-        let tracer = trace_provider.get_tracer(
+        let tracer = trace_provider.tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
         );
