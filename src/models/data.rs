@@ -1,3 +1,5 @@
+#[cfg(feature = "metrics")]
+use crate::models::MetricData;
 use crate::models::{ExceptionData, MessageData, RemoteDependencyData, RequestData};
 use serde::Serialize;
 
@@ -9,6 +11,9 @@ pub(crate) enum Data {
     Exception(ExceptionData),
     #[serde(rename = "MessageData")]
     Message(MessageData),
+    #[cfg(feature = "metrics")]
+    #[serde(rename = "MetricData")]
+    Metric(MetricData),
     #[serde(rename = "RemoteDependencyData")]
     RemoteDependency(RemoteDependencyData),
     #[serde(rename = "RequestData")]

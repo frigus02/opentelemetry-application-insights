@@ -43,6 +43,7 @@ limited_len_string!(LimitedLenString32768, 32768);
 limited_len_string!(LimitedLenString8192, 8192);
 limited_len_string!(LimitedLenString2048, 2048);
 limited_len_string!(LimitedLenString1024, 1024);
+limited_len_string!(LimitedLenString256, 256);
 limited_len_string!(LimitedLenString150, 150);
 limited_len_string!(LimitedLenString128, 128);
 limited_len_string!(LimitedLenString64, 64);

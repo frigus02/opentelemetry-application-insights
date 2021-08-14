@@ -31,6 +31,11 @@ impl Tags {
     pub(crate) fn get(&self, key: &ContextTagKey) -> Option<&String> {
         self.0.get(key.key)
     }
+
+    #[cfg(feature = "metrics")]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 macro_rules! context_tag_keys {

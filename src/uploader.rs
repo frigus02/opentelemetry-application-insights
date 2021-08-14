@@ -1,7 +1,9 @@
 use crate::{models::Envelope, Error, HttpClient};
-use http::{Request, Uri};
-use opentelemetry::sdk::export::trace::ExportResult;
+use bytes::Bytes;
+use http::{Request, Response, Uri};
 use serde::Deserialize;
+#[cfg(feature = "metrics")]
+use std::io::Read;
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -32,7 +34,7 @@ pub(crate) async fn send(
     client: &dyn HttpClient,
     endpoint: &Uri,
     items: Vec<Envelope>,
-) -> ExportResult {
+) -> Result<(), Error> {
     let payload = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
@@ -44,6 +46,42 @@ pub(crate) async fn send(
         .send(request)
         .await
         .map_err(Error::UploadConnection)?;
+    handle_response(response)
+}
+
+/// Sends a telemetry items to the server.
+#[cfg(feature = "metrics")]
+pub(crate) fn send_sync(endpoint: &Uri, items: Vec<Envelope>) -> Result<(), Error> {
+    let payload = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
+
+    // TODO Implement retries
+    let response = match ureq::post(&endpoint.to_string())
+        .set(http::header::CONTENT_TYPE.as_str(), "application/json")
+        .send_bytes(&payload)
+    {
+        Ok(response) => response,
+        Err(ureq::Error::Status(_, response)) => response,
+        Err(ureq::Error::Transport(err)) => return Err(Error::UploadConnection(err.into())),
+    };
+    let status = response.status();
+    let len = response
+        .header(http::header::CONTENT_LENGTH.as_str())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_default();
+    let mut bytes = Vec::with_capacity(len);
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|err| Error::UploadConnection(err.into()))?;
+    handle_response(
+        Response::builder()
+            .status(status)
+            .body(Bytes::from(bytes))
+            .map_err(|err| Error::UploadConnection(err.into()))?,
+    )
+}
+
+fn handle_response(response: Response<Bytes>) -> Result<(), Error> {
     match response.status().as_u16() {
         STATUS_OK => Ok(()),
         status @ STATUS_PARTIAL_CONTENT => {
@@ -52,13 +90,15 @@ pub(crate) async fn send(
             if content.items_received == content.items_accepted {
                 Ok(())
             } else if content.errors.iter().any(|item| can_retry_item(item)) {
-                Err(format!("Upload error {}. Some items may be retried. However we don't currently support this.", status).into())
+                Err(Error::Upload(format!(
+                    "{}: Some items may be retried. However we don't currently support this.",
+                    status
+                )))
             } else {
-                Err(format!(
-                    "Upload error {}. No retry possible. Response: {:?}",
+                Err(Error::Upload(format!(
+                    "{}: No retry possible. Response: {:?}",
                     status, content
-                )
-                .into())
+                )))
             }
         }
         status @ STATUS_REQUEST_TIMEOUT
@@ -66,21 +106,27 @@ pub(crate) async fn send(
         | status @ STATUS_APPLICATION_INACTIVE
         | status @ STATUS_SERVICE_UNAVAILABLE => {
             // TODO Implement retries
-            Err(format!("Upload error {}. Retry possible", status).into())
+            Err(Error::Upload(format!("{}: Retry possible", status)))
         }
         status @ STATUS_INTERNAL_SERVER_ERROR => {
             if let Ok(content) = serde_json::from_slice::<Transmission>(response.body()) {
                 if content.errors.iter().any(|item| can_retry_item(item)) {
-                    Err(format!("Upload error {}. Some items may be retried. However we don't currently support this.", status).into())
+                    Err(Error::Upload(format!(
+                        "{}: Some items may be retried. However we don't currently support this.",
+                        status
+                    )))
                 } else {
-                    Err(format!("Upload error {}. No retry possible", status).into())
+                    Err(Error::Upload(format!("{}: No retry possible", status)))
                 }
             } else {
                 // TODO Implement retries
-                Err(format!("Upload error {}. Some items may be retried", status).into())
+                Err(Error::Upload(format!(
+                    "{}: Some items may be retried",
+                    status
+                )))
             }
         }
-        status => Err(format!("Upload error {}. No retry possible", status).into()),
+        status => Err(Error::Upload(format!("{}: No retry possible", status))),
     }
 }
 
