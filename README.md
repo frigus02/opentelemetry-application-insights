@@ -83,8 +83,8 @@ Alternatively you can bring any other HTTP client by implementing the `HttpClien
 Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
 Rust implementation.
 
-Please note: The metrics export configuration is still a bit rough in
-`opentelemetry-appapplication-insights`. But once configured it should work as expected.
+Please note: The metrics export configuration is still a bit rough in this crate. But once
+configured it should work as expected.
 
 This requires the **metrics** feature.
 

@@ -77,8 +77,8 @@
 //! Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
 //! Rust implementation.
 //!
-//! Please note: The metrics export configuration is still a bit rough in
-//! `opentelemetry-appapplication-insights`. But once configured it should work as expected.
+//! Please note: The metrics export configuration is still a bit rough in this crate. But once
+//! configured it should work as expected.
 //!
 //! This requires the **metrics** feature.
 //!
@@ -264,7 +264,7 @@ impl<C> PipelineBuilder<C> {
     /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
     /// exporter will call `/v2/track` on the specified endpoint.
     ///
-    /// Default: https://dc.services.visualstudio.com
+    /// Default: <https://dc.services.visualstudio.com>
     ///
     /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
     ///
@@ -470,7 +470,7 @@ impl<C> Exporter<C> {
     /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
     /// exporter will call `/v2/track` on the specified endpoint.
     ///
-    /// Default: https://dc.services.visualstudio.com
+    /// Default: <https://dc.services.visualstudio.com>
     pub fn with_endpoint(
         mut self,
         endpoint: &str,

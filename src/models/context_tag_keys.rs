@@ -188,7 +188,7 @@ context_tag_keys! {
     CLOUD_ROLE_INSTANCE("ai.cloud.roleInstance", 256),
 
     /// SDK version. See
-    /// https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SDK-AUTHORING.md#sdk-version-specification
+    /// <https://github.com/Microsoft/ApplicationInsights-Home/blob/master/SDK-AUTHORING.md#sdk-version-specification>
     /// for information.
     INTERNAL_SDK_VERSION("ai.internal.sdkVersion", 64),
 
