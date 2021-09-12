@@ -108,7 +108,7 @@ impl From<&SpanData> for RequestData {
             success: span.status_code != StatusCode::Error,
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.clone()),
+            properties: attrs_to_properties(&span.attributes, span.resource.as_deref()),
         };
 
         if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
@@ -174,7 +174,7 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.clone()),
+            properties: attrs_to_properties(&span.attributes, span.resource.as_deref()),
         };
 
         if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {

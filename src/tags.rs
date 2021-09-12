@@ -13,7 +13,11 @@ use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
-    let mut tags = get_tags_from_attrs(&span.attributes);
+    let mut tags = if let Some(resource) = span.resource.as_deref() {
+        get_tags_from_attrs(resource.iter().chain(span.attributes.iter()))
+    } else {
+        get_tags_from_attrs(span.attributes.iter())
+    };
 
     // Set the operation id and operation parent id.
     tags.insert(
