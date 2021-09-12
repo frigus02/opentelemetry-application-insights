@@ -1,19 +1,11 @@
 use opentelemetry::{
-    baggage::BaggageExt,
     global,
-    metrics::ObserverResult,
+    metrics::{ObserverResult, Unit},
     sdk::{self, metrics::controllers},
-    Context, Key, KeyValue,
+    KeyValue,
 };
+use rand::{thread_rng, Rng};
 use std::{env, time::Duration};
-
-fn common_attributes() -> Vec<KeyValue> {
-    vec![
-        KeyValue::new("A", "1"),
-        KeyValue::new("B", "2"),
-        KeyValue::new("C", "3"),
-    ]
-}
 
 #[tokio::main]
 async fn main() {
@@ -35,20 +27,40 @@ async fn main() {
 
     global::set_meter_provider(controller.provider());
 
-    let meter = global::meter("ex.com/basic");
+    let meter = global::meter("custom.instrumentation");
 
-    let one_metric_callback = |res: ObserverResult<f64>| res.observe(1.0, &common_attributes());
+    // Observer
+    let cpu_utilization_callback = |res: ObserverResult<f64>| {
+        let mut rng = thread_rng();
+        res.observe(
+            rng.gen_range(0.1..0.2),
+            &[KeyValue::new("state", "idle"), KeyValue::new("cpu", 0)],
+        )
+    };
     let _ = meter
-        .f64_value_observer("ex.com.one", one_metric_callback)
-        .with_description("A ValueObserver set to 1.0")
+        .f64_value_observer("system.cpu.utilization", cpu_utilization_callback)
+        .with_unit(Unit::new("1"))
         .init();
 
-    let value_recorder = meter.f64_value_recorder("ex.com.two").init();
-    meter.record_batch_with_context(
-        &Context::current_with_baggage(vec![Key::from("ex.com/another").string("xyz")]),
-        &common_attributes(),
-        vec![value_recorder.measurement(2.0)],
-    );
+    // Recorder
+    let value_recorder = meter
+        .i64_value_recorder("http.server.duration")
+        .with_unit(Unit::new("milliseconds"))
+        .init();
+    let mut rng = thread_rng();
+    for _ in 1..5 {
+        value_recorder.record(
+            rng.gen_range(200..300),
+            &[
+                KeyValue::new("http.method", "GET"),
+                KeyValue::new("http.host", "10.1.2.4"),
+                KeyValue::new("http.scheme", "http"),
+                KeyValue::new("http.target", "/hello/world?name={}"),
+                KeyValue::new("http.status_code", "200"),
+            ],
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 }
