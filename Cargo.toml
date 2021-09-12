@@ -18,6 +18,10 @@ exclude = [
     "README.tpl",
 ]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 reqwest-blocking-client = ["reqwest-client"]
 reqwest-blocking-client-rustls = ["reqwest-client-rustls"]
@@ -52,9 +56,6 @@ surf = "2.2.0"
 test-case = "1.1.0"
 tokio = { version = "1.7.0", features = ["rt", "macros", "process", "time"] }
 version-sync = "0.9.2"
-
-[package.metadata.docs.rs]
-all-features = true
 
 [badges]
 github = { repository = "frigus02/opentelemetry-application-insights", workflow = "CI" }

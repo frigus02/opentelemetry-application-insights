@@ -19,6 +19,7 @@ use opentelemetry::{
 };
 use std::convert::{TryFrom, TryInto};
 
+#[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 impl<C> ExportKindFor for Exporter<C>
 where
     C: std::fmt::Debug,
@@ -28,6 +29,7 @@ where
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 impl<C> MetricsExporter for Exporter<C>
 where
     C: std::fmt::Debug,
