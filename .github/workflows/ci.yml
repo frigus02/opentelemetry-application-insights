@@ -20,10 +20,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-      - name: Run cargo test (all features)
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
           args: --all-features
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1

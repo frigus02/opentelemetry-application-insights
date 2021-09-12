@@ -58,7 +58,7 @@ async fn main() {
 }
 ```
 
-### Features
+### Async runtimes and HTTP clients
 
 In order to support different async runtimes, the exporter requires you to specify an HTTP
 client that works with your chosen runtime. The [`opentelemetry-http`] crate comes with support
@@ -77,6 +77,46 @@ for:
 [`tokio`]: https://crates.io/crates/tokio
 
 Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
+
+### Metrics
+
+Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
+Rust implementation.
+
+Please note: The metrics export configuration is still a bit rough in
+`opentelemetry-appapplication-insights`. But once configured it should work as expected.
+
+This requires the **metrics** feature.
+
+```rust
+use opentelemetry::{global, sdk};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    // Setup exporter
+    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
+    let controller = sdk::metrics::controllers::push(
+        sdk::metrics::selectors::simple::Selector::Exact,
+        sdk::export::metrics::ExportKindSelector::Stateless,
+        exporter,
+        tokio::spawn,
+        opentelemetry::util::tokio_interval_stream,
+    )
+    .with_period(Duration::from_secs(1))
+    .build();
+    global::set_meter_provider(controller.provider());
+
+    // Record value
+    let meter = global::meter("example");
+    let value_recorder = meter.f64_value_recorder("pi").init();
+    value_recorder.record(3.14, &[]);
+
+    // Give exporter some time to export values before exiting
+    tokio::time::sleep(Duration::from_secs(5)).await;
+}
+```
 
 ## Attribute mapping
 
@@ -153,6 +193,23 @@ All other events are converted into Trace telemetry.
 All other attributes are directly converted to custom properties.
 
 [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
+
+### Metrics
+
+Metrics get reported to Application Insights as Metric Data. The [`Aggregator`] (chosen through
+the [`Selector`] passed to the controller) determines how the data is represented.
+
+| Aggregator     | Data representation                                       |
+| -------------- | --------------------------------------------------------- |
+| Array          | list of measurements                                      |
+| DDSketch       | aggregation with value, min, max and count                |
+| Histogram      | aggregation with sum and count (buckets are not exported) |
+| LastValue      | one measurement                                           |
+| MinMaxSumCount | aggregation with value, min, max and count                |
+| Sum            | aggregation with only a value                             |
+
+[`Aggregator`]: https://docs.rs/opentelemetry/0.16.0/opentelemetry/sdk/export/metrics/trait.Aggregator.html
+[`Selector`]: https://docs.rs/opentelemetry/0.16.0/opentelemetry/sdk/metrics/selectors/simple/enum.Selector.html
 
 ## Application Insights integration
 

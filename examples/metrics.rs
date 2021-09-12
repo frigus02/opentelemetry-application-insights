@@ -1,4 +1,3 @@
-use futures::stream::{Stream, StreamExt};
 use opentelemetry::{
     baggage::BaggageExt,
     global,
@@ -7,11 +6,6 @@ use opentelemetry::{
     Context, Key, KeyValue,
 };
 use std::{env, time::Duration};
-
-// Skip first immediate tick from tokio, not needed for async_std.
-fn delayed_interval(duration: Duration) -> impl Stream<Item = tokio::time::Instant> {
-    opentelemetry::util::tokio_interval_stream(duration).skip(1)
-}
 
 fn common_attributes() -> Vec<KeyValue> {
     vec![
@@ -34,9 +28,8 @@ async fn main() {
         sdk::export::metrics::ExportKindSelector::Stateless,
         exporter,
         tokio::spawn,
-        delayed_interval,
+        opentelemetry::util::tokio_interval_stream,
     )
-    .with_stateful(true)
     .with_period(Duration::from_secs(1))
     .build();
 

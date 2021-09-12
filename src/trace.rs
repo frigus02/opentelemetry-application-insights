@@ -1,10 +1,12 @@
-use crate::convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string};
-use crate::models::{
-    Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData, Properties,
-    RemoteDependencyData, RequestData,
+use crate::{
+    convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string},
+    models::{
+        Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData,
+        Properties, RemoteDependencyData, RequestData,
+    },
+    tags::{get_tags_for_event, get_tags_for_span},
+    Exporter,
 };
-use crate::tags::{get_tags_for_event, get_tags_for_span};
-use crate::Exporter;
 use async_trait::async_trait;
 use opentelemetry::{
     sdk::export::trace::{ExportResult, SpanData, SpanExporter},

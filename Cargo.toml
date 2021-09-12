@@ -45,7 +45,6 @@ ureq = { version = "2", optional = true }
 async-std = { version = "1.9.0", features = ["attributes"] }
 backtrace = "0.3.60"
 env_logger = "0.9.0"
-futures = "0.3.16"
 opentelemetry = { version = "0.16", features = ["rt-tokio"] }
 opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
 surf = "2.2.0"

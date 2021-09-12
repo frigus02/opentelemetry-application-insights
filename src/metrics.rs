@@ -1,7 +1,9 @@
-use crate::convert::time_to_string;
-use crate::models::{Data, DataPoint, DataPointType, Envelope, MetricData, Properties};
-use crate::tags::get_tags_for_metric;
-use crate::Exporter;
+use crate::{
+    convert::time_to_string,
+    models::{Data, DataPoint, DataPointType, Envelope, MetricData, Properties},
+    tags::get_tags_for_metric,
+    Exporter,
+};
 use opentelemetry::{
     metrics::{Descriptor, MetricsError, Result as MetricsResult},
     sdk::{
@@ -61,10 +63,10 @@ where
     }
 }
 
-impl<'a> TryFrom<&Record<'a>> for MetricData {
+impl TryFrom<&Record<'_>> for MetricData {
     type Error = MetricsError;
 
-    fn try_from(record: &Record<'a>) -> Result<Self, Self::Error> {
+    fn try_from(record: &Record<'_>) -> Result<Self, Self::Error> {
         let agg = record.aggregator().ok_or(MetricsError::NoDataCollected)?;
         let desc = record.descriptor();
         let kind = desc.number_kind();
@@ -151,9 +153,9 @@ impl<'a> TryFrom<&Record<'a>> for MetricData {
         }
 
         let properties: Properties = record
-            .attributes()
+            .resource()
             .iter()
-            .chain(record.resource().iter())
+            .chain(record.attributes().iter())
             .map(|(k, v)| (k.as_str().into(), v.into()))
             .collect();
 
