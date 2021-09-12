@@ -4,10 +4,7 @@ use opentelemetry::{
     sdk::{trace::EvictedHashMap, Resource},
     trace::{SpanId, TraceId},
 };
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 pub(crate) fn trace_id_to_string(trace_id: TraceId) -> String {
     format!("{:032x}", trace_id.to_u128())
@@ -36,7 +33,7 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
 
 pub(crate) fn attrs_to_properties(
     attributes: &EvictedHashMap,
-    resource: Option<Arc<Resource>>,
+    resource: Option<&Resource>,
 ) -> Option<Properties> {
     let properties_from_attrs = attributes
         .iter()

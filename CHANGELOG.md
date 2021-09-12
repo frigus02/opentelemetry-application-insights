@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Add support for metrics.
+- Take span resource into account for tags. Before a `service.name` in the resource would not populate the Cloud role name tag. Now it does.
+
 ## [0.17.0] - 2021-08-08
 
 - Upgrade to `v0.16.0` of `opentelemetry`.
