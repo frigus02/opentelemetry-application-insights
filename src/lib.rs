@@ -72,45 +72,50 @@
 //!
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 //!
-//! ## Metrics
-//!
-//! Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
-//! Rust implementation.
-//!
-//! Please note: The metrics export configuration is still a bit rough in this crate. But once
-//! configured it should work as expected.
-//!
-//! This requires the **metrics** feature.
-//!
-//! ```no_run
-//! use opentelemetry::{global, sdk};
-//! use std::time::Duration;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     // Setup exporter
-//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-//!     let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
-//!     let controller = sdk::metrics::controllers::push(
-//!         sdk::metrics::selectors::simple::Selector::Exact,
-//!         sdk::export::metrics::ExportKindSelector::Stateless,
-//!         exporter,
-//!         tokio::spawn,
-//!         opentelemetry::util::tokio_interval_stream,
-//!     )
-//!     .with_period(Duration::from_secs(1))
-//!     .build();
-//!     global::set_meter_provider(controller.provider());
-//!
-//!     // Record value
-//!     let meter = global::meter("example");
-//!     let value_recorder = meter.f64_value_recorder("pi").init();
-//!     value_recorder.record(3.14, &[]);
-//!
-//!     // Give exporter some time to export values before exiting
-//!     tokio::time::sleep(Duration::from_secs(5)).await;
-//! }
-//! ```
+#![cfg_attr(
+    feature = "metrics",
+    doc = r#"
+## Metrics
+
+Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
+Rust implementation.
+
+Please note: The metrics export configuration is still a bit rough in this crate. But once
+configured it should work as expected.
+
+This requires the **metrics** feature.
+
+```no_run
+use opentelemetry::{global, sdk};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    // Setup exporter
+    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
+    let controller = sdk::metrics::controllers::push(
+        sdk::metrics::selectors::simple::Selector::Exact,
+        sdk::export::metrics::ExportKindSelector::Stateless,
+        exporter,
+        tokio::spawn,
+        opentelemetry::util::tokio_interval_stream,
+    )
+    .with_period(Duration::from_secs(1))
+    .build();
+    global::set_meter_provider(controller.provider());
+
+    // Record value
+    let meter = global::meter("example");
+    let value_recorder = meter.f64_value_recorder("pi").init();
+    value_recorder.record(3.14, &[]);
+
+    // Give exporter some time to export values before exiting
+    tokio::time::sleep(Duration::from_secs(5)).await;
+}
+```
+"#
+)]
 //!
 //! # Attribute mapping
 //!
@@ -272,7 +277,7 @@ impl<C> PipelineBuilder<C> {
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
-    /// # fn main() -> Result<(), Box<std::error::Error + Send + Sync + 'static>> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_endpoint("https://westus2-0.in.applicationinsights.azure.com")?
