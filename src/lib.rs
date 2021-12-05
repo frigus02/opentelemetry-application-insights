@@ -218,6 +218,8 @@ mod convert;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
+#[cfg(doctest)]
+mod readme_test;
 mod tags;
 mod trace;
 mod uploader;

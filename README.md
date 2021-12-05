@@ -12,7 +12,7 @@ An [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-mon
 
 Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating spans (this example requires the **reqwest-client** feature):
 
-```rust
+```rust,no_run
 use opentelemetry::trace::Tracer as _;
 
 fn main() {
