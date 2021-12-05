@@ -8,7 +8,7 @@
 //! # Usage
 //!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans (this example requires the **reqwest-client-blocking** feature):
+//! spans (this example requires the **reqwest-client** feature):
 //!
 //! ```no_run
 //! use opentelemetry::trace::Tracer as _;
