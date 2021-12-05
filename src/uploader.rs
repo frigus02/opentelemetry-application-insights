@@ -24,9 +24,7 @@ struct Transmission {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TransmissionItem {
-    index: usize,
     status_code: u16,
-    message: String,
 }
 
 /// Sends a telemetry items to the server.
@@ -89,7 +87,7 @@ fn handle_response(response: Response<Bytes>) -> Result<(), Error> {
                 .map_err(Error::UploadDeserializeResponse)?;
             if content.items_received == content.items_accepted {
                 Ok(())
-            } else if content.errors.iter().any(|item| can_retry_item(item)) {
+            } else if content.errors.iter().any(can_retry_item) {
                 Err(Error::Upload(format!(
                     "{}: Some items may be retried. However we don't currently support this.",
                     status
@@ -110,7 +108,7 @@ fn handle_response(response: Response<Bytes>) -> Result<(), Error> {
         }
         status @ STATUS_INTERNAL_SERVER_ERROR => {
             if let Ok(content) = serde_json::from_slice::<Transmission>(response.body()) {
-                if content.errors.iter().any(|item| can_retry_item(item)) {
+                if content.errors.iter().any(can_retry_item) {
                     Err(Error::Upload(format!(
                         "{}: Some items may be retried. However we don't currently support this.",
                         status
