@@ -1,6 +1,6 @@
 #[test]
-fn readme_deps() {
-    version_sync::assert_markdown_deps_updated!("README.md");
+fn changelog() {
+    version_sync::assert_contains_substring!("CHANGELOG.md", "## [{version}]");
 }
 
 #[test]

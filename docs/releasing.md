@@ -8,8 +8,6 @@ In order to release a new version, follow these steps.
 
 1. Update the version number in the `html_root_url` tag in [lib.rs](../src/lib.rs).
 
-1. Update the [README.md](../README.md) by running `cargo readme -o README.md` in the root of the repository.
-
 1. Commit the changes.
 
 1. Tag the commit.
