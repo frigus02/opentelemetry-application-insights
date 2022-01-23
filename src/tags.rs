@@ -1,7 +1,4 @@
-use crate::{
-    convert::{span_id_to_string, trace_id_to_string},
-    models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP},
-};
+use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
 #[cfg(feature = "metrics")]
 use opentelemetry::sdk::export::metrics::Record;
 use opentelemetry::{
@@ -20,15 +17,9 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     };
 
     // Set the operation id and operation parent id.
-    tags.insert(
-        tags::OPERATION_ID,
-        trace_id_to_string(span.span_context.trace_id()),
-    );
-    if span.parent_span_id != SpanId::invalid() {
-        tags.insert(
-            tags::OPERATION_PARENT_ID,
-            span_id_to_string(span.parent_span_id),
-        );
+    tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
+    if span.parent_span_id != SpanId::INVALID {
+        tags.insert(tags::OPERATION_PARENT_ID, span.parent_span_id.to_string());
     }
 
     // Ensure the name of the operation is `METHOD /the/route/path`.
@@ -48,13 +39,10 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
 pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
     let mut tags = Tags::new();
-    tags.insert(
-        tags::OPERATION_ID,
-        trace_id_to_string(span.span_context.trace_id()),
-    );
+    tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
     tags.insert(
         tags::OPERATION_PARENT_ID,
-        span_id_to_string(span.span_context.span_id()),
+        span.span_context.span_id().to_string(),
     );
     tags
 }

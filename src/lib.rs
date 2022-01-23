@@ -430,9 +430,10 @@ where
     /// that.
     pub fn install_simple(self) -> sdk::trace::Tracer {
         let trace_provider = self.build_simple();
-        let tracer = trace_provider.tracer(
+        let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer
@@ -444,9 +445,10 @@ where
     /// that.
     pub fn install_batch<R: TraceRuntime>(self, runtime: R) -> sdk::trace::Tracer {
         let trace_provider = self.build_batch(runtime);
-        let tracer = trace_provider.tracer(
+        let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer

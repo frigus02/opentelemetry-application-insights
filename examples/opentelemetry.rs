@@ -55,7 +55,7 @@ async fn spawn_child_process(process_name: &str) {
 async fn run_in_child_process() {
     let tracer = global::tracer("run_in_child_process");
     let mut span = tracer.start("run_in_child_process");
-    span.add_event("leaf fn".into(), vec![]);
+    span.add_event("leaf fn", vec![]);
     sleep(Duration::from_millis(50)).await
 }
 
