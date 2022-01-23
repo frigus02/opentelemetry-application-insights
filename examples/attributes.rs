@@ -8,10 +8,7 @@ use std::env;
 
 fn log() {
     get_active_span(|span| {
-        span.add_event(
-            "An event!".to_string(),
-            vec![KeyValue::new("happened", true)],
-        );
+        span.add_event("An event!", vec![KeyValue::new("happened", true)]);
     })
 }
 
