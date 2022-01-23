@@ -38,7 +38,7 @@ fn main() {
                 ])),
             )
             .build_simple();
-    let client_tracer = client_provider.tracer("example-attributes", None);
+    let client_tracer = client_provider.tracer("example-attributes");
 
     let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
         .with_client(reqwest::blocking::Client::new())
@@ -49,7 +49,7 @@ fn main() {
             ])),
         )
         .build_simple();
-    let server_tracer = server_provider.tracer("example-attributes", None);
+    let server_tracer = server_provider.tracer("example-attributes");
 
     // An HTTP client make a request
     let span = client_tracer
@@ -74,9 +74,8 @@ fn main() {
                 KeyValue::new("net.peer.ip", "10.1.2.3"),
                 KeyValue::new("http.target", "/hello/world?name=marry"),
                 KeyValue::new("http.status_code", "200"),
-            ])
-            .with_parent_context(cx);
-        let span = server_tracer.build(builder);
+            ]);
+        let span = server_tracer.build_with_context(builder, &cx);
         server_tracer.with_span(span, |_cx| {
             log();
             exception();

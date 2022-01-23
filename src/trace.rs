@@ -1,5 +1,5 @@
 use crate::{
-    convert::{attrs_to_properties, duration_to_string, span_id_to_string, time_to_string},
+    convert::{attrs_to_properties, duration_to_string, time_to_string},
     models::{
         Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData,
         Properties, RemoteDependencyData, RequestData,
@@ -96,7 +96,7 @@ impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
             ver: 2,
-            id: span_id_to_string(span.span_context.span_id()).into(),
+            id: span.span_context.span_id().to_string().into(),
             name: Some(LimitedLenString1024::from(span.name.clone()))
                 .filter(|x| !x.as_ref().is_empty()),
             duration: duration_to_string(
@@ -158,7 +158,7 @@ impl From<&SpanData> for RemoteDependencyData {
     fn from(span: &SpanData) -> RemoteDependencyData {
         let mut data = RemoteDependencyData {
             ver: 2,
-            id: Some(span_id_to_string(span.span_context.span_id()).into()),
+            id: Some(span.span_context.span_id().to_string().into()),
             name: span.name.clone().into(),
             duration: duration_to_string(
                 span.end_time
