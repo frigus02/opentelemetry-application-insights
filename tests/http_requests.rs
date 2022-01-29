@@ -79,7 +79,7 @@ fn traces_simple() {
             // Force the server span to be sent before the client span. Without this on Jan's PC
             // the server span gets sent after the client span, but on GitHub Actions it's the
             // other way around.
-            std::thread::sleep(Duration::from_millis(1000));
+            std::thread::sleep(Duration::from_secs(1));
         });
     });
     let traces_simple = requests_to_string(requests);
@@ -100,12 +100,12 @@ async fn traces_batch_async_std() {
     insta::assert_snapshot!(traces_batch_async_std);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn traces_batch_tokio() {
     let requests = record(TokioTick, |client| {
         let tracer_provider = new_pipeline(INSTRUMENTATION_KEY.into())
             .with_client(client)
-            .build_batch(opentelemetry::runtime::Tokio);
+            .build_batch(opentelemetry::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("tokio", |_cx| {});
@@ -120,7 +120,10 @@ mod recording_client {
     use bytes::Bytes;
     use http::{Request, Response};
     use opentelemetry_http::{HttpClient, HttpError};
-    use std::sync::{Arc, Mutex};
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     #[derive(Debug, Clone)]
     pub struct RecordingClient {
@@ -152,6 +155,11 @@ mod recording_client {
             requests: Arc::clone(&requests),
             tick: Arc::new(tick),
         });
+
+        // Give async runtime some time to quit. I don't see any way to properly wait for tasks
+        // spawned with async-std.
+        std::thread::sleep(Duration::from_secs(1));
+
         Arc::try_unwrap(requests)
             .expect("client is dropped everywhere")
             .into_inner()
