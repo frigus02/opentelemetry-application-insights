@@ -1,7 +1,7 @@
 ---
 source: tests/http_requests.rs
-assertion_line: 22
-expression: requests
+assertion_line: 117
+expression: traces_simple
 
 ---
 POST /v2/track HTTP/1.1
