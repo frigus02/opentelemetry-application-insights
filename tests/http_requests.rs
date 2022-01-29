@@ -15,6 +15,7 @@ use opentelemetry::{
 use opentelemetry_application_insights::new_pipeline;
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
+use std::time::Duration;
 use tick::{AsyncStdTick, NoTick, TokioTick};
 
 // Fake instrumentation key (this is a random uuid)
@@ -74,6 +75,11 @@ fn traces_simple() {
                     span.record_exception_with_stacktrace(error.as_ref(), "a backtrace");
                 });
             });
+
+            // Force the server span to be sent before the client span. Without this on Jan's PC
+            // the server span gets sent after the client span, but on GitHub Actions it's the
+            // other way around.
+            std::thread::sleep(Duration::from_millis(1000));
         });
     });
     let traces_simple = requests_to_string(requests);
