@@ -511,6 +511,13 @@ pub enum Error {
     #[error("serializing upload request failed with {0}")]
     UploadSerializeRequest(serde_json::Error),
 
+    /// Application Insights telemetry data failed serialize or compress. Telemetry reporting failed
+    /// because of this.
+    ///
+    /// Note: This is an error in this crate. If you spot this, please open an issue.
+    #[error("compressing upload request failed with {0}")]
+    UploadCompressRequest(std::io::Error),
+
     /// Application Insights telemetry response failed to deserialize from JSON.
     ///
     /// Telemetry reporting may have worked. But since we could not look into the response, we
