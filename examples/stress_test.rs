@@ -14,7 +14,7 @@ async fn mock_sql_call(n: u64, duration: u64) {
     let end_time = now.add(Duration::from_millis(duration));
     tracer
         .span_builder("test_db")
-        .with_kind(opentelemetry::trace::SpanKind::Client)
+        .with_kind(SpanKind::Client)
         .with_attributes(vec![
             KeyValue::new("service.name", "test-database"),
             KeyValue::new("db.system", "SQL"),
