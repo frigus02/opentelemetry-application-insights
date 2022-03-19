@@ -86,3 +86,7 @@ required-features = ["metrics"]
 [[example]]
 name = "opentelemetry"
 required-features = ["reqwest-client", "opentelemetry/rt-tokio"]
+
+[[example]]
+name = "stress_test"
+required-features = ["reqwest-client", "opentelemetry/rt-tokio"]
