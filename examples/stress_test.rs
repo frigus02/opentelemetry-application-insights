@@ -1,4 +1,8 @@
-use opentelemetry::{global, trace::{FutureExt, SpanKind, TraceContextExt, Tracer}, Context, KeyValue};
+use opentelemetry::{
+    global,
+    trace::{FutureExt, SpanKind, TraceContextExt, Tracer},
+    Context, KeyValue,
+};
 use std::env;
 use std::error::Error;
 use std::ops::Add;
@@ -8,14 +12,20 @@ async fn mock_sql_call(n: u64, duration: u64) {
     let tracer = global::tracer("run_in_child_process_new");
     let now = SystemTime::now();
     let end_time = now.add(Duration::from_millis(duration));
-    tracer.span_builder("test_db")
+    tracer
+        .span_builder("test_db")
         .with_kind(opentelemetry::trace::SpanKind::Client)
         .with_attributes(vec![
             KeyValue::new("service.name", "test-database"),
             KeyValue::new("db.system", "SQL"),
-            KeyValue::new("db.statement", format!("SELECT * FROM test WHERE test_id = {}", n)),
+            KeyValue::new(
+                "db.statement",
+                format!("SELECT * FROM test WHERE test_id = {}", n),
+            ),
         ])
-        .with_start_time(now).with_end_time(end_time).start(&tracer);
+        .with_start_time(now)
+        .with_end_time(end_time)
+        .start(&tracer);
 }
 
 async fn mock_serve_http_request(n: u64) {
@@ -23,7 +33,8 @@ async fn mock_serve_http_request(n: u64) {
     let now = SystemTime::now();
     let duration = 10 + (n % 50);
     let end_time = now.add(Duration::from_millis(duration));
-    let span = tracer.span_builder("localhost")
+    let span = tracer
+        .span_builder("localhost")
         .with_attributes(vec![
             KeyValue::new("http.status_code", 200),
             KeyValue::new("http.client_id", "127.0.0.1"),
@@ -36,7 +47,8 @@ async fn mock_serve_http_request(n: u64) {
             KeyValue::new("http.host", "localhost:80"),
             KeyValue::new("service.name", "test-http-server"),
         ])
-        .with_start_time(now).with_end_time(end_time)
+        .with_start_time(now)
+        .with_end_time(end_time)
         .with_kind(SpanKind::Server)
         .start(&tracer);
 
@@ -51,8 +63,8 @@ async fn mock_serve_http_request(n: u64) {
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let instrumentation_key = env::var("INSTRUMENTATION_KEY")
-        .expect("env var INSTRUMENTATION_KEY should exist");
+    let instrumentation_key =
+        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
 
     // Please note with large NUM_ROOT_SPANS settings the batch span processor might start falling behind
     // You can mitigate this by configuring the batch span processor using the standard SDK environment variables
@@ -84,7 +96,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let duration = timer.elapsed();
 
-    println!("Finished uploading {} root spans in: {:?}", num_root_spans, duration);
+    println!(
+        "Finished uploading {} root spans in: {:?}",
+        num_root_spans, duration
+    );
 
     Ok(())
 }
