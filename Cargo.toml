@@ -51,14 +51,14 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 backtrace = "0.3.64"
 doc-comment = "0.3.3"
 env_logger = "0.9.0"
-insta = "1.12.0"
+insta = "1.13.0"
 opentelemetry = { version = "0.17", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
 opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
-rand = "0.8.4"
-regex = "1.5.4"
+rand = "0.8.5"
+regex = "1.5.5"
 surf = "2.3.2"
-test-case = "1.2.1"
-tokio = { version = "1.16.1", features = ["rt", "macros", "process", "time"] }
+test-case = "2.0.0"
+tokio = { version = "1.17.0", features = ["rt", "macros", "process", "time"] }
 version-sync = { version = "0.9.4", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
 
 [badges]
