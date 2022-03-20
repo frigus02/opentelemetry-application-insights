@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.20.0] - 2022-03-20
+
 - Use gzip compression (`Content-Encoding: gzip`) for `POST /v2/track` HTTP request.
 
 ## [0.19.0] - 2022-01-23
@@ -181,7 +183,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.19.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.20.0...HEAD
+[0.20.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.18.0...0.19.0
 [0.18.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.17.0...0.18.0
 [0.17.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.16.0...0.17.0
