@@ -119,6 +119,7 @@ mod recording_client {
     use async_trait::async_trait;
     use bytes::Bytes;
     use http::{Request, Response};
+    use opentelemetry_application_insights::StreamingHttpClient;
     use opentelemetry_http::{HttpClient, HttpError};
     use std::{
         sync::{Arc, Mutex},
@@ -145,6 +146,9 @@ mod recording_client {
                 .expect("response is fell formed"))
         }
     }
+
+    #[async_trait]
+    impl StreamingHttpClient for RecordingClient {}
 
     pub fn record(
         tick: impl Tick + 'static,
@@ -206,6 +210,7 @@ mod tick {
 }
 
 mod format {
+
     use flate2::read::GzDecoder;
     use http::Request;
     use regex::Regex;
@@ -232,7 +237,11 @@ mod format {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        let body = strip_changing_values(&pretty_print_json(req.body()));
+        let is_gzipped = req
+            .headers()
+            .iter()
+            .any(|(name, value)| name == http::header::CONTENT_ENCODING && value == "gzip");
+        let body = strip_changing_values(&pretty_print_json(req.body(), is_gzipped));
         format!("{method} {path} {version}\nhost: {host}\n{headers}\n\n{body}")
     }
 
@@ -250,10 +259,17 @@ mod format {
         })
     }
 
-    fn pretty_print_json(body: &[u8]) -> String {
-        let gzip_decoder = GzDecoder::new(body);
-        let json: serde_json::Value =
-            serde_json::from_reader(gzip_decoder).expect("body is valid json");
+    fn pretty_print_json(body: &[u8], is_gzipped: bool) -> String {
+        let json: serde_json::Value = if is_gzipped {
+            let gzip_decoder = GzDecoder::new(body);
+            serde_json::from_reader(gzip_decoder).expect("body is valid json")
+        } else {
+            match serde_json::from_slice(body) {
+                Ok(json) => json,
+                Err(_) => return String::from_utf8_lossy(body).into_owned(),
+            }
+        };
+
         serde_json::to_string_pretty(&json).unwrap()
     }
 }

@@ -1,3 +1,4 @@
+use crate::StreamingHttpClient;
 use crate::{
     convert::{attrs_to_properties, duration_to_string, time_to_string},
     models::{
@@ -13,7 +14,6 @@ use opentelemetry::{
     trace::{Event, SpanKind, StatusCode},
     Key, Value,
 };
-use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
@@ -78,7 +78,7 @@ impl<C> Exporter<C> {
 #[async_trait]
 impl<C> SpanExporter for Exporter<C>
 where
-    C: HttpClient,
+    C: StreamingHttpClient,
 {
     /// Export spans to Application Insights
     async fn export(&mut self, batch: Vec<SpanData>) -> ExportResult {

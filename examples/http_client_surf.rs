@@ -12,7 +12,8 @@ async fn main() {
         .with_client(surf::Client::new())
         .install_batch(opentelemetry::runtime::AsyncStd);
 
-    tracer.in_span("surf-client", |_cx| {});
+    tracer.in_span("surf-client-1", |_cx| {});
+    tracer.in_span("surf-client-2", |_cx| {});
 
     opentelemetry::global::shutdown_tracer_provider();
 }

@@ -70,7 +70,7 @@
 //! [`surf`]: https://crates.io/crates/surf
 //! [`tokio`]: https://crates.io/crates/tokio
 //!
-//! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
+//! Alternatively you can bring any other HTTP client by implementing the `StreamingHttpClient` trait.
 //!
 #![cfg_attr(
     feature = "metrics",
@@ -215,6 +215,7 @@ async fn main() {
 #![cfg_attr(test, deny(warnings))]
 
 mod convert;
+mod http_client;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
@@ -224,13 +225,14 @@ mod tags;
 mod trace;
 mod uploader;
 
+pub use http_client::{StreamingBody, StreamingHttpClient};
 pub use models::context_tag_keys::attrs;
 use opentelemetry::{
     global,
     sdk::{self, export::ExportError, trace::TraceRuntime},
     trace::TracerProvider,
 };
-pub use opentelemetry_http::HttpClient;
+pub use opentelemetry_http::HttpError;
 use opentelemetry_semantic_conventions as semcov;
 use std::{borrow::Cow, convert::TryInto, error::Error as StdError};
 
@@ -384,7 +386,7 @@ impl<C> PipelineBuilder<C> {
 
 impl<C> PipelineBuilder<C>
 where
-    C: HttpClient + 'static,
+    C: StreamingHttpClient + 'static,
 {
     fn init_exporter(self) -> Exporter<C> {
         let mut exporter = Exporter::new(self.instrumentation_key, self.client);
