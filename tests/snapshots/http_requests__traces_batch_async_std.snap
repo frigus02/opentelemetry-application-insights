@@ -1,12 +1,13 @@
 ---
 source: tests/http_requests.rs
-assertion_line: 131
+assertion_line: 100
 expression: traces_batch_async_std
 
 ---
 POST /v2/track HTTP/1.1
 host: dc.services.visualstudio.com
 content-type: application/json
+content-encoding: gzip
 
 [
   {

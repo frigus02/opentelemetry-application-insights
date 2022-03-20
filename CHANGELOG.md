@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Use gzip compression (`Content-Encoding: gzip`) for `POST /v2/track` HTTP request.
+
 ## [0.19.0] - 2022-01-23
 
 - Upgrade to `v0.17.0` of `opentelemetry`.

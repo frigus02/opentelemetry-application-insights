@@ -1,9 +1,11 @@
 use crate::{models::Envelope, Error, HttpClient};
 use bytes::Bytes;
+use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
 use serde::Deserialize;
 #[cfg(feature = "metrics")]
 use std::io::Read;
+use std::io::Write;
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -33,9 +35,10 @@ pub(crate) async fn send(
     endpoint: &Uri,
     items: Vec<Envelope>,
 ) -> Result<(), Error> {
-    let payload = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
+    let payload = serialize_request_body(items)?;
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::CONTENT_ENCODING, "gzip")
         .body(payload)
         .expect("request should be valid");
 
@@ -50,11 +53,12 @@ pub(crate) async fn send(
 /// Sends a telemetry items to the server.
 #[cfg(feature = "metrics")]
 pub(crate) fn send_sync(endpoint: &Uri, items: Vec<Envelope>) -> Result<(), Error> {
-    let payload = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
+    let payload = serialize_request_body(items)?;
 
     // TODO Implement retries
     let response = match ureq::post(&endpoint.to_string())
         .set(http::header::CONTENT_TYPE.as_str(), "application/json")
+        .set(http::header::CONTENT_ENCODING.as_str(), "gzip")
         .send_bytes(&payload)
     {
         Ok(response) => response,
@@ -77,6 +81,20 @@ pub(crate) fn send_sync(endpoint: &Uri, items: Vec<Envelope>) -> Result<(), Erro
             .body(Bytes::from(bytes))
             .map_err(|err| Error::UploadConnection(err.into()))?,
     )
+}
+
+fn serialize_request_body(items: Vec<Envelope>) -> Result<Vec<u8>, Error> {
+    // Weirdly gzip_encoder.write_all(serde_json::to_vec()) seems to be faster than
+    // serde_json::to_writer(gzip_encoder). In a local test operating on items that result in
+    // ~13MiB of JSON, this is what I've seen:
+    // gzip_encoder.write_all(serde_json::to_vec()): 159ms
+    // serde_json::to_writer(gzip_encoder):          247ms
+    let serialized = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
+    let mut gzip_encoder = GzEncoder::new(Vec::new(), Compression::default());
+    gzip_encoder
+        .write_all(&serialized)
+        .map_err(Error::UploadCompressRequest)?;
+    gzip_encoder.finish().map_err(Error::UploadCompressRequest)
 }
 
 fn handle_response(response: Response<Bytes>) -> Result<(), Error> {

@@ -206,6 +206,7 @@ mod tick {
 }
 
 mod format {
+    use flate2::read::GzDecoder;
     use http::Request;
     use regex::Regex;
 
@@ -250,7 +251,9 @@ mod format {
     }
 
     fn pretty_print_json(body: &[u8]) -> String {
-        let json: serde_json::Value = serde_json::from_slice(body).expect("body is valid json");
+        let gzip_decoder = GzDecoder::new(body);
+        let json: serde_json::Value =
+            serde_json::from_reader(gzip_decoder).expect("body is valid json");
         serde_json::to_string_pretty(&json).unwrap()
     }
 }
