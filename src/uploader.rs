@@ -1,14 +1,13 @@
-use crate::{models::Envelope, Error, StreamingBody, StreamingHttpClient};
+use crate::{models::Envelope, Error, StreamingHttpClient};
 use bytes::Bytes;
+#[cfg(feature = "metrics")]
 use flate2::{write::GzEncoder, Compression};
-use futures_util::Stream;
+use futures_util::io::Cursor;
 use http::{Request, Response, Uri};
 use serde::Deserialize;
 use std::convert::TryFrom;
 #[cfg(feature = "metrics")]
-use std::io::Read;
-use std::io::Write;
-use std::pin::Pin;
+use std::io::{Read, Write};
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -32,61 +31,33 @@ struct TransmissionItem {
     status_code: u16,
 }
 
-fn serialize_item_newline(item: Envelope, newline: bool) -> Result<Vec<u8>, std::io::Error> {
-    let mut result = serde_json::to_vec(&item)?;
-    if newline {
-        result.insert(0, u8::try_from('\n').unwrap());
-    }
-
-    // TODO: should probably create GzEncoder only once and pipe the entire stream through it
-    // rather than creating a new one for each item.
-    let mut gzip_encoder = GzEncoder::new(Vec::new(), Compression::default());
-    gzip_encoder.write_all(&result)?;
-    gzip_encoder.finish()
-}
-
-struct Body {
-    items: Vec<Envelope>,
-    started: bool,
-}
-
-impl Stream for Body {
-    type Item = Result<Vec<u8>, std::io::Error>;
-
-    fn poll_next(
-        self: Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let this = Pin::into_inner(self);
-        let next = match this.items.pop() {
-            Some(next) => serialize_item_newline(next, this.started),
-            None => return std::task::Poll::Ready(None),
-        };
-        this.started = true;
-        std::task::Poll::Ready(Some(next))
-    }
-}
-
 /// Sends a telemetry items to the server.
 pub(crate) async fn send<C: StreamingHttpClient>(
     client: &C,
     endpoint: &Uri,
     items: Vec<Envelope>,
 ) -> Result<(), Error> {
-    let body: StreamingBody = Box::pin(Body {
-        items,
-        started: false,
-    });
+    let (first, rest) = match items.split_first() {
+        Some((first, rest)) => (first, rest),
+        None => return Ok(()),
+    };
+    let mut serialized = serde_json::to_vec(&first).map_err(Error::UploadSerializeRequest)?;
+    for other in rest {
+        serialized.push(u8::try_from('\n').unwrap());
+        serialized.append(&mut serde_json::to_vec(&other).map_err(Error::UploadSerializeRequest)?);
+    }
+    let gzip_encoder =
+        async_compression::futures::bufread::GzipEncoder::new(Cursor::new(serialized));
 
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/x-json-stream")
         .header(http::header::CONTENT_ENCODING, "gzip")
-        .body(body)
+        .body(gzip_encoder)
         .expect("request should be valid");
 
     // TODO Implement retries
     let response = client
-        .send_streaming(request)
+        .send_streaming_2(request)
         .await
         .map_err(Error::UploadConnection)?;
     handle_response(response)
