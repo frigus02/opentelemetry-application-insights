@@ -45,7 +45,11 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
 
 #[cfg(feature = "metrics")]
 pub(crate) fn get_tags_for_metric(record: &Record) -> Tags {
-    get_tags_from_attrs(record.resource().iter().chain(record.attributes().iter()))
+    // TODO: should use
+    // - res (argument to MetricsExporter::export)
+    // - library attributes
+    // - record.attributes()
+    get_tags_from_attrs(record.attributes().iter())
 }
 
 fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags

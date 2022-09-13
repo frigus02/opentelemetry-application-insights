@@ -198,14 +198,11 @@ async fn main() {
 //! Metrics get reported to Application Insights as Metric Data. The [`Aggregator`] (chosen through
 //! the [`Selector`] passed to the controller) determines how the data is represented.
 //!
-//! | Aggregator     | Data representation                                       |
-//! | -------------- | --------------------------------------------------------- |
-//! | Array          | list of measurements                                      |
-//! | DDSketch       | aggregation with value, min, max and count                |
-//! | Histogram      | aggregation with sum and count (buckets are not exported) |
-//! | LastValue      | one measurement                                           |
-//! | MinMaxSumCount | aggregation with value, min, max and count                |
-//! | Sum            | aggregation with only a value                             |
+//! | Aggregator | Data representation                                       |
+//! | ---------- | --------------------------------------------------------- |
+//! | Histogram  | aggregation with sum and count (buckets are not exported) |
+//! | LastValue  | one measurement                                           |
+//! | Sum        | aggregation with only a value                             |
 //!
 //! [`Aggregator`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/export/metrics/trait.Aggregator.html
 //! [`Selector`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/metrics/selectors/simple/enum.Selector.html
