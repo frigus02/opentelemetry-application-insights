@@ -229,10 +229,11 @@ use opentelemetry::{
     global,
     sdk::{self, export::ExportError, trace::TraceRuntime},
     trace::TracerProvider,
+    StringValue,
 };
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, convert::TryInto, error::Error as StdError};
+use std::{convert::TryInto, error::Error as StdError, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
@@ -337,12 +338,9 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, mut config: sdk::trace::Config) -> Self {
-        if let Some(mut old_config) = self.config {
-            if let Some(old_resource) = old_config.resource.take() {
-                let merged_resource =
-                    old_resource.merge(config.resource.take().unwrap_or_default());
-                config = config.with_resource(merged_resource);
-            }
+        if let Some(old_config) = self.config {
+            let merged_resource = old_config.resource.merge(config.resource.clone());
+            config = config.with_resource(merged_resource);
         }
 
         PipelineBuilder {
@@ -365,15 +363,14 @@ impl<C> PipelineBuilder<C> {
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
-    pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
-        let mut config = self.config.unwrap_or_default();
+    pub fn with_service_name<T: Into<StringValue>>(self, name: T) -> Self {
         let new_resource = sdk::Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
-        let merged_resource = config
-            .resource
-            .take()
-            .map(|r| r.merge(&new_resource))
-            .unwrap_or(new_resource);
-        let config = config.with_resource(merged_resource);
+        let config = if let Some(old_config) = self.config {
+            let merged_resource = old_config.resource.merge(&new_resource);
+            old_config.with_resource(merged_resource)
+        } else {
+            sdk::trace::Config::default().with_resource(new_resource)
+        };
 
         PipelineBuilder {
             config: Some(config),
@@ -389,7 +386,7 @@ where
     fn init_exporter(self) -> Exporter<C> {
         let mut exporter = Exporter::new(self.instrumentation_key, self.client);
         if let Some(endpoint) = self.endpoint {
-            exporter.endpoint = endpoint;
+            exporter.endpoint = Arc::new(endpoint);
         }
         if let Some(sample_rate) = self.sample_rate {
             exporter.sample_rate = sample_rate;
@@ -458,8 +455,8 @@ where
 /// Application Insights span exporter
 #[derive(Debug)]
 pub struct Exporter<C> {
-    client: C,
-    endpoint: http::Uri,
+    client: Arc<C>,
+    endpoint: Arc<http::Uri>,
     instrumentation_key: String,
     sample_rate: f64,
 }
@@ -468,10 +465,12 @@ impl<C> Exporter<C> {
     /// Create a new exporter.
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
-            client,
-            endpoint: "https://dc.services.visualstudio.com/v2/track"
-                .try_into()
-                .expect("hardcoded endpoint is valid uri"),
+            client: Arc::new(client),
+            endpoint: Arc::new(
+                "https://dc.services.visualstudio.com/v2/track"
+                    .try_into()
+                    .expect("hardcoded endpoint is valid uri"),
+            ),
             instrumentation_key,
             sample_rate: 100.0,
         }
@@ -485,7 +484,7 @@ impl<C> Exporter<C> {
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = format!("{}/v2/track", endpoint).try_into()?;
+        self.endpoint = Arc::new(format!("{}/v2/track", endpoint).try_into()?);
         Ok(self)
     }
 

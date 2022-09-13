@@ -1,5 +1,5 @@
 use crate::{
-    convert::{attrs_to_properties, duration_to_string, time_to_string},
+    convert::{attrs_to_properties, duration_to_string, status_to_result_code, time_to_string},
     models::{
         Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData,
         Properties, RemoteDependencyData, RequestData,
@@ -7,15 +7,15 @@ use crate::{
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
 };
-use async_trait::async_trait;
+use futures_util::future::BoxFuture;
 use opentelemetry::{
     sdk::export::trace::{ExportResult, SpanData, SpanExporter},
-    trace::{Event, SpanKind, StatusCode},
+    trace::{Event, SpanKind, Status},
     Key, Value,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
@@ -75,20 +75,23 @@ impl<C> Exporter<C> {
     }
 }
 
-#[async_trait]
 impl<C> SpanExporter for Exporter<C>
 where
-    C: HttpClient,
+    C: HttpClient + 'static,
 {
     /// Export spans to Application Insights
-    async fn export(&mut self, batch: Vec<SpanData>) -> ExportResult {
+    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+        let client = Arc::clone(&self.client);
+        let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes_for_span(span))
             .collect();
 
-        crate::uploader::send(&self.client, &self.endpoint, envelopes).await?;
-        Ok(())
+        Box::pin(async move {
+            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
+            Ok(())
+        })
     }
 }
 
@@ -104,11 +107,11 @@ impl From<&SpanData> for RequestData {
                     .duration_since(span.start_time)
                     .unwrap_or_default(),
             ),
-            response_code: (span.status_code as i32).to_string().into(),
-            success: span.status_code != StatusCode::Error,
+            response_code: status_to_result_code(&span.status).to_string().into(),
+            success: !matches!(span.status, Status::Error { .. }),
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.as_deref()),
+            properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
         if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
@@ -165,16 +168,16 @@ impl From<&SpanData> for RemoteDependencyData {
                     .duration_since(span.start_time)
                     .unwrap_or_default(),
             ),
-            result_code: Some((span.status_code as i32).to_string().into()),
-            success: match span.status_code {
-                StatusCode::Unset => None,
-                StatusCode::Ok => Some(true),
-                StatusCode::Error => Some(false),
+            result_code: Some(status_to_result_code(&span.status).to_string().into()),
+            success: match span.status {
+                Status::Unset => None,
+                Status::Ok => Some(true),
+                Status::Error { .. } => Some(false),
             },
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, span.resource.as_deref()),
+            properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
         if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
