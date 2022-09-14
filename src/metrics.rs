@@ -46,21 +46,7 @@ where
         reader: &dyn InstrumentationLibraryReader,
     ) -> MetricsResult<()> {
         let mut envelopes = Vec::new();
-        reader.try_for_each(&mut |library, reader| {
-            //let mut attributes = Vec::new();
-            //if !library.name.is_empty() {
-            //    attributes.push(KeyValue::new("instrumentation.name", library.name.clone()));
-            //}
-            //if let Some(version) = &library.version {
-            //    attributes.push(KeyValue::new("instrumentation.version", version.clone()));
-            //}
-            //if let Some(schema) = &library.schema_url {
-            //    attributes.push(KeyValue::new("instrumentation.schema_url", schema.clone()));
-            //}
-            //let inst_attributes = AttributeSet::from_attributes(attributes.into_iter());
-            //let encoded_inst_attributes =
-            //    inst_attributes.encoded(Some(self.attribute_encoder.as_ref()));
-
+        reader.try_for_each(&mut |_library, reader| {
             reader.try_for_each(self, &mut |record| {
                 let agg = record.aggregator().ok_or(MetricsError::NoDataCollected)?;
                 let time =
@@ -70,8 +56,8 @@ where
                         *record.end_time()
                     };
 
-                let tags = get_tags_for_metric(record);
-                let data = Data::Metric(record.try_into()?);
+                let tags = get_tags_for_metric(record, res);
+                let data = Data::Metric((record, res).try_into()?);
 
                 envelopes.push(Envelope {
                     name: "Microsoft.ApplicationInsights.Metric".into(),
@@ -91,10 +77,10 @@ where
     }
 }
 
-impl TryFrom<&Record<'_>> for MetricData {
+impl TryFrom<(&Record<'_>, &Resource)> for MetricData {
     type Error = MetricsError;
 
-    fn try_from(record: &Record<'_>) -> Result<Self, Self::Error> {
+    fn try_from((record, resource): (&Record<'_>, &Resource)) -> Result<Self, Self::Error> {
         let agg = record.aggregator().ok_or(MetricsError::NoDataCollected)?;
         let desc = record.descriptor();
         let kind = desc.number_kind();
@@ -139,13 +125,9 @@ impl TryFrom<&Record<'_>> for MetricData {
             });
         }
 
-        // TODO: should use
-        // - res (argument to MetricsExporter::export)
-        // - library attributes
-        // - record.attributes()
-        let properties: Properties = record
-            .attributes()
+        let properties: Properties = resource
             .iter()
+            .chain(record.attributes().iter())
             .map(|(k, v)| (k.as_str().into(), v.into()))
             .collect();
 

@@ -1,8 +1,9 @@
-use backtrace::Backtrace;
 use opentelemetry::{
     sdk,
-    trace::{get_active_span, SpanKind, Tracer, TracerProvider},
-    KeyValue,
+    trace::{
+        get_active_span, mark_span_as_active, SpanKind, TraceContextExt, Tracer, TracerProvider,
+    },
+    Context, KeyValue,
 };
 use std::env;
 
@@ -15,7 +16,7 @@ fn log() {
 fn exception() {
     get_active_span(|span| {
         let error: Box<dyn std::error::Error> = "An error".into();
-        span.record_exception_with_stacktrace(error.as_ref(), format!("{:?}", Backtrace::new()));
+        span.record_error(error.as_ref());
     })
 }
 
@@ -60,7 +61,9 @@ fn main() {
             KeyValue::new("http.status_code", "200"),
         ])
         .start(&client_tracer);
-    client_tracer.with_span(span, |cx| {
+    {
+        let cx = Context::current_with_span(span);
+        let _client_guard = cx.clone().attach();
         // The server receives the request
         let builder = server_tracer
             .span_builder("request")
@@ -73,9 +76,10 @@ fn main() {
                 KeyValue::new("http.status_code", "200"),
             ]);
         let span = server_tracer.build_with_context(builder, &cx);
-        server_tracer.with_span(span, |_cx| {
+        {
+            let _server_guard = mark_span_as_active(span);
             log();
             exception();
-        });
-    });
+        }
+    }
 }

@@ -1,6 +1,6 @@
 use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
 #[cfg(feature = "metrics")]
-use opentelemetry::sdk::export::metrics::Record;
+use opentelemetry::sdk::{export::metrics::Record, Resource};
 use opentelemetry::{
     sdk::export::trace::SpanData,
     trace::{SpanId, SpanKind},
@@ -44,12 +44,8 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
 }
 
 #[cfg(feature = "metrics")]
-pub(crate) fn get_tags_for_metric(record: &Record) -> Tags {
-    // TODO: should use
-    // - res (argument to MetricsExporter::export)
-    // - library attributes
-    // - record.attributes()
-    get_tags_from_attrs(record.attributes().iter())
+pub(crate) fn get_tags_for_metric(record: &Record, resource: &Resource) -> Tags {
+    get_tags_from_attrs(resource.iter().chain(record.attributes().iter()))
 }
 
 fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags
