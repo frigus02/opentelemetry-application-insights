@@ -17,10 +17,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
 
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
+    let temporality_selector = stateless_temporality_selector();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
+        .with_temporality_selector(temporality_selector.clone());
     let controller = controllers::basic(processors::factory(
         selectors::simple::histogram(vec![230., 260., 300.]),
-        stateless_temporality_selector(), // TODO: make configurable in exporter
+        temporality_selector,
     ))
     .with_exporter(exporter)
     .with_collect_period(Duration::from_secs(1))

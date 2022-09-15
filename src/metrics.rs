@@ -9,8 +9,7 @@ use opentelemetry::{
     sdk::{
         export::metrics::{
             aggregation::{
-                stateless_temporality_selector, AggregationKind, Count, LastValue, Sum,
-                Temporality, TemporalitySelector,
+                AggregationKind, Count, LastValue, Sum, Temporality, TemporalitySelector,
             },
             InstrumentationLibraryReader, MetricsExporter, Record,
         },
@@ -30,7 +29,7 @@ where
     C: std::fmt::Debug,
 {
     fn temporality_for(&self, descriptor: &Descriptor, kind: &AggregationKind) -> Temporality {
-        stateless_temporality_selector().temporality_for(descriptor, kind)
+        self.temporality_selector.temporality_for(descriptor, kind)
     }
 }
 

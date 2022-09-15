@@ -86,32 +86,36 @@ configured it should work as expected.
 This requires the **metrics** feature.
 
 ```no_run
-use opentelemetry::{global, sdk};
+use opentelemetry::{global, Context};
+use opentelemetry::sdk::metrics::{controllers, processors, selectors};
+use opentelemetry::sdk::export::metrics::aggregation::stateless_temporality_selector;
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     // Setup exporter
     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
-    let controller = sdk::metrics::controllers::push(
-        sdk::metrics::selectors::simple::Selector::Exact,
-        sdk::export::metrics::ExportKindSelector::Stateless,
-        exporter,
-        tokio::spawn,
-        opentelemetry::util::tokio_interval_stream,
-    )
-    .with_period(Duration::from_secs(1))
+    let temporality_selector = stateless_temporality_selector();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
+        .with_temporality_selector(temporality_selector.clone());
+    let controller = controllers::basic(processors::factory(
+        selectors::simple::inexpensive(),
+        temporality_selector,
+    ))
+    .with_exporter(exporter)
+    .with_collect_period(Duration::from_secs(1))
     .build();
-    global::set_meter_provider(controller.provider());
+    let cx = Context::new();
+    controller.start(&cx, opentelemetry::runtime::Tokio).unwrap();
+    global::set_meter_provider(controller.clone());
 
     // Record value
     let meter = global::meter("example");
-    let value_recorder = meter.f64_value_recorder("pi").init();
-    value_recorder.record(3.14, &[]);
+    let histogram = meter.f64_histogram("pi").init();
+    histogram.record(&cx, 3.14, &[]);
 
-    // Give exporter some time to export values before exiting
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Export one last time
+    controller.stop(&cx).unwrap();
 }
 ```
 "#
@@ -222,6 +226,10 @@ mod trace;
 mod uploader;
 
 pub use models::context_tag_keys::attrs;
+#[cfg(feature = "metrics")]
+use opentelemetry::sdk::export::metrics::aggregation::{
+    stateless_temporality_selector, TemporalitySelector,
+};
 use opentelemetry::{
     global,
     sdk::{self, export::ExportError, trace::TraceRuntime},
@@ -230,7 +238,7 @@ use opentelemetry::{
 };
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{convert::TryInto, error::Error as StdError, sync::Arc};
+use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
@@ -450,12 +458,27 @@ where
 }
 
 /// Application Insights span exporter
-#[derive(Debug)]
 pub struct Exporter<C> {
     client: Arc<C>,
     endpoint: Arc<http::Uri>,
     instrumentation_key: String,
     sample_rate: f64,
+    #[cfg(feature = "metrics")]
+    temporality_selector: Box<dyn TemporalitySelector + Send + Sync>,
+}
+
+impl<C: Debug> Debug for Exporter<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Exporter");
+        debug
+            .field("client", &self.client)
+            .field("endpoint", &self.endpoint)
+            .field("instrumentation_key", &self.instrumentation_key)
+            .field("sample_rate", &self.sample_rate);
+        #[cfg(feature = "metrics")]
+        debug.field("temporality_selector", &"_");
+        debug.finish()
+    }
 }
 
 impl<C> Exporter<C> {
@@ -470,6 +493,8 @@ impl<C> Exporter<C> {
             ),
             instrumentation_key,
             sample_rate: 100.0,
+            #[cfg(feature = "metrics")]
+            temporality_selector: Box::new(stateless_temporality_selector()),
         }
     }
 
@@ -492,6 +517,19 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
+    /// Set temporality selector.
+    ///
+    /// Default: stateless_temporality_selector
+    #[cfg(feature = "metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
+    pub fn with_temporality_selector(
+        mut self,
+        temporality_selector: impl TemporalitySelector + Send + Sync + 'static,
+    ) -> Self {
+        self.temporality_selector = Box::new(temporality_selector);
         self
     }
 }
