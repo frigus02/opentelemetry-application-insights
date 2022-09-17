@@ -1,6 +1,6 @@
 use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
 #[cfg(feature = "metrics")]
-use opentelemetry::sdk::export::metrics::Record;
+use opentelemetry::sdk::{export::metrics::Record, Resource};
 use opentelemetry::{
     sdk::export::trace::SpanData,
     trace::{SpanId, SpanKind},
@@ -10,11 +10,7 @@ use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
-    let mut tags = if let Some(resource) = span.resource.as_deref() {
-        get_tags_from_attrs(resource.iter().chain(span.attributes.iter()))
-    } else {
-        get_tags_from_attrs(span.attributes.iter())
-    };
+    let mut tags = get_tags_from_attrs(span.resource.iter().chain(span.attributes.iter()));
 
     // Set the operation id and operation parent id.
     tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
@@ -48,8 +44,8 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
 }
 
 #[cfg(feature = "metrics")]
-pub(crate) fn get_tags_for_metric(record: &Record) -> Tags {
-    get_tags_from_attrs(record.resource().iter().chain(record.attributes().iter()))
+pub(crate) fn get_tags_for_metric(record: &Record, resource: &Resource) -> Tags {
+    get_tags_from_attrs(resource.iter().chain(record.attributes().iter()))
 }
 
 fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags

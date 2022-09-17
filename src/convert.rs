@@ -1,6 +1,9 @@
 use crate::models::Properties;
 use chrono::{DateTime, SecondsFormat, Utc};
-use opentelemetry::sdk::{trace::EvictedHashMap, Resource};
+use opentelemetry::{
+    sdk::{trace::EvictedHashMap, Resource},
+    trace::Status,
+};
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn duration_to_string(duration: Duration) -> String {
@@ -22,21 +25,26 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
 
 pub(crate) fn attrs_to_properties(
     attributes: &EvictedHashMap,
-    resource: Option<&Resource>,
+    resource: &Resource,
 ) -> Option<Properties> {
-    let properties_from_attrs = attributes
+    let properties = attributes
         .iter()
-        .map(|(k, v)| (k.as_str().into(), v.into()));
-
-    let properties = if let Some(resource) = resource {
-        properties_from_attrs
-            .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
-            .collect()
-    } else {
-        properties_from_attrs.collect()
-    };
+        .map(|(k, v)| (k.as_str().into(), v.into()))
+        .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
+        .collect();
 
     Some(properties).filter(|x: &Properties| !x.is_empty())
+}
+
+pub(crate) fn status_to_result_code(status: &Status) -> i32 {
+    // Since responseCode is a required field for RequestData, we map the span status to come kind
+    // of result code representation. Numbers 1-3 were chosen because in opentelemetry@0.17.0
+    // converting the StatusCode enum to an integer yielded this result.
+    match status {
+        Status::Unset => 0,
+        Status::Ok => 1,
+        Status::Error { .. } => 2,
+    }
 }
 
 #[cfg(test)]

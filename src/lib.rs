@@ -86,32 +86,36 @@ configured it should work as expected.
 This requires the **metrics** feature.
 
 ```no_run
-use opentelemetry::{global, sdk};
+use opentelemetry::{global, Context};
+use opentelemetry::sdk::metrics::{controllers, processors, selectors};
+use opentelemetry::sdk::export::metrics::aggregation::stateless_temporality_selector;
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     // Setup exporter
     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ());
-    let controller = sdk::metrics::controllers::push(
-        sdk::metrics::selectors::simple::Selector::Exact,
-        sdk::export::metrics::ExportKindSelector::Stateless,
-        exporter,
-        tokio::spawn,
-        opentelemetry::util::tokio_interval_stream,
-    )
-    .with_period(Duration::from_secs(1))
+    let temporality_selector = stateless_temporality_selector();
+    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
+        .with_temporality_selector(temporality_selector.clone());
+    let controller = controllers::basic(processors::factory(
+        selectors::simple::inexpensive(),
+        temporality_selector,
+    ))
+    .with_exporter(exporter)
+    .with_collect_period(Duration::from_secs(1))
     .build();
-    global::set_meter_provider(controller.provider());
+    let cx = Context::new();
+    controller.start(&cx, opentelemetry::runtime::Tokio).unwrap();
+    global::set_meter_provider(controller.clone());
 
     // Record value
     let meter = global::meter("example");
-    let value_recorder = meter.f64_value_recorder("pi").init();
-    value_recorder.record(3.14, &[]);
+    let histogram = meter.f64_histogram("pi").init();
+    histogram.record(&cx, 3.14, &[]);
 
-    // Give exporter some time to export values before exiting
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Export one last time
+    controller.stop(&cx).unwrap();
 }
 ```
 "#
@@ -198,14 +202,11 @@ async fn main() {
 //! Metrics get reported to Application Insights as Metric Data. The [`Aggregator`] (chosen through
 //! the [`Selector`] passed to the controller) determines how the data is represented.
 //!
-//! | Aggregator     | Data representation                                       |
-//! | -------------- | --------------------------------------------------------- |
-//! | Array          | list of measurements                                      |
-//! | DDSketch       | aggregation with value, min, max and count                |
-//! | Histogram      | aggregation with sum and count (buckets are not exported) |
-//! | LastValue      | one measurement                                           |
-//! | MinMaxSumCount | aggregation with value, min, max and count                |
-//! | Sum            | aggregation with only a value                             |
+//! | Aggregator | Data representation                                       |
+//! | ---------- | --------------------------------------------------------- |
+//! | Histogram  | aggregation with sum and count (buckets are not exported) |
+//! | LastValue  | one measurement                                           |
+//! | Sum        | aggregation with only a value                             |
 //!
 //! [`Aggregator`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/export/metrics/trait.Aggregator.html
 //! [`Selector`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/metrics/selectors/simple/enum.Selector.html
@@ -225,14 +226,19 @@ mod trace;
 mod uploader;
 
 pub use models::context_tag_keys::attrs;
+#[cfg(feature = "metrics")]
+use opentelemetry::sdk::export::metrics::aggregation::{
+    stateless_temporality_selector, TemporalitySelector,
+};
 use opentelemetry::{
     global,
     sdk::{self, export::ExportError, trace::TraceRuntime},
     trace::TracerProvider,
+    StringValue,
 };
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, convert::TryInto, error::Error as StdError};
+use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
@@ -337,12 +343,9 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, mut config: sdk::trace::Config) -> Self {
-        if let Some(mut old_config) = self.config {
-            if let Some(old_resource) = old_config.resource.take() {
-                let merged_resource =
-                    old_resource.merge(config.resource.take().unwrap_or_default());
-                config = config.with_resource(merged_resource);
-            }
+        if let Some(old_config) = self.config {
+            let merged_resource = old_config.resource.merge(config.resource.clone());
+            config = config.with_resource(merged_resource);
         }
 
         PipelineBuilder {
@@ -365,15 +368,14 @@ impl<C> PipelineBuilder<C> {
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
-    pub fn with_service_name<T: Into<Cow<'static, str>>>(self, name: T) -> Self {
-        let mut config = self.config.unwrap_or_default();
+    pub fn with_service_name<T: Into<StringValue>>(self, name: T) -> Self {
         let new_resource = sdk::Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
-        let merged_resource = config
-            .resource
-            .take()
-            .map(|r| r.merge(&new_resource))
-            .unwrap_or(new_resource);
-        let config = config.with_resource(merged_resource);
+        let config = if let Some(old_config) = self.config {
+            let merged_resource = old_config.resource.merge(&new_resource);
+            old_config.with_resource(merged_resource)
+        } else {
+            sdk::trace::Config::default().with_resource(new_resource)
+        };
 
         PipelineBuilder {
             config: Some(config),
@@ -389,7 +391,7 @@ where
     fn init_exporter(self) -> Exporter<C> {
         let mut exporter = Exporter::new(self.instrumentation_key, self.client);
         if let Some(endpoint) = self.endpoint {
-            exporter.endpoint = endpoint;
+            exporter.endpoint = Arc::new(endpoint);
         }
         if let Some(sample_rate) = self.sample_rate {
             exporter.sample_rate = sample_rate;
@@ -456,24 +458,43 @@ where
 }
 
 /// Application Insights span exporter
-#[derive(Debug)]
 pub struct Exporter<C> {
-    client: C,
-    endpoint: http::Uri,
+    client: Arc<C>,
+    endpoint: Arc<http::Uri>,
     instrumentation_key: String,
     sample_rate: f64,
+    #[cfg(feature = "metrics")]
+    temporality_selector: Box<dyn TemporalitySelector + Send + Sync>,
+}
+
+impl<C: Debug> Debug for Exporter<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Exporter");
+        debug
+            .field("client", &self.client)
+            .field("endpoint", &self.endpoint)
+            .field("instrumentation_key", &self.instrumentation_key)
+            .field("sample_rate", &self.sample_rate);
+        #[cfg(feature = "metrics")]
+        debug.field("temporality_selector", &"_");
+        debug.finish()
+    }
 }
 
 impl<C> Exporter<C> {
     /// Create a new exporter.
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
-            client,
-            endpoint: "https://dc.services.visualstudio.com/v2/track"
-                .try_into()
-                .expect("hardcoded endpoint is valid uri"),
+            client: Arc::new(client),
+            endpoint: Arc::new(
+                "https://dc.services.visualstudio.com/v2/track"
+                    .try_into()
+                    .expect("hardcoded endpoint is valid uri"),
+            ),
             instrumentation_key,
             sample_rate: 100.0,
+            #[cfg(feature = "metrics")]
+            temporality_selector: Box::new(stateless_temporality_selector()),
         }
     }
 
@@ -485,7 +506,7 @@ impl<C> Exporter<C> {
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = format!("{}/v2/track", endpoint).try_into()?;
+        self.endpoint = Arc::new(format!("{}/v2/track", endpoint).try_into()?);
         Ok(self)
     }
 
@@ -496,6 +517,19 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
+    /// Set temporality selector.
+    ///
+    /// Default: stateless_temporality_selector
+    #[cfg(feature = "metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
+    pub fn with_temporality_selector(
+        mut self,
+        temporality_selector: impl TemporalitySelector + Send + Sync + 'static,
+    ) -> Self {
+        self.temporality_selector = Box::new(temporality_selector);
         self
     }
 }

@@ -9,8 +9,10 @@
 use format::requests_to_string;
 use opentelemetry::{
     sdk::{trace::Config, Resource},
-    trace::{get_active_span, SpanKind, Tracer, TracerProvider},
-    KeyValue,
+    trace::{
+        get_active_span, mark_span_as_active, SpanKind, TraceContextExt, Tracer, TracerProvider,
+    },
+    Context, KeyValue,
 };
 use opentelemetry_application_insights::new_pipeline;
 use opentelemetry_semantic_conventions as semcov;
@@ -55,7 +57,9 @@ fn traces_simple() {
                 semcov::trace::HTTP_STATUS_CODE.string("200"),
             ])
             .start(&client_tracer);
-        client_tracer.with_span(span, |cx| {
+        {
+            let cx = Context::current_with_span(span);
+            let _client_guard = cx.clone().attach();
             // The server receives the request
             let builder = server_tracer
                 .span_builder("request")
@@ -68,19 +72,20 @@ fn traces_simple() {
                     semcov::trace::HTTP_STATUS_CODE.string("200"),
                 ]);
             let span = server_tracer.build_with_context(builder, &cx);
-            server_tracer.with_span(span, |_cx| {
+            {
+                let _server_guard = mark_span_as_active(span);
                 get_active_span(|span| {
                     span.add_event("An event!", vec![KeyValue::new("happened", true)]);
                     let error: Box<dyn std::error::Error> = "An error".into();
-                    span.record_exception_with_stacktrace(error.as_ref(), "a backtrace");
+                    span.record_error(error.as_ref());
                 });
-            });
+            }
 
             // Force the server span to be sent before the client span. Without this on Jan's PC
             // the server span gets sent after the client span, but on GitHub Actions it's the
             // other way around.
             std::thread::sleep(Duration::from_secs(1));
-        });
+        }
     });
     let traces_simple = requests_to_string(requests);
     insta::assert_snapshot!(traces_simple);

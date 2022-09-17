@@ -1,8 +1,6 @@
 ---
 source: tests/http_requests.rs
-assertion_line: 86
 expression: traces_simple
-
 ---
 POST /v2/track HTTP/1.1
 host: dc.services.visualstudio.com
@@ -70,7 +68,6 @@ content-encoding: gzip
         "exceptions": [
           {
             "message": "An error",
-            "stack": "a backtrace",
             "typeName": "<no type>"
           }
         ],

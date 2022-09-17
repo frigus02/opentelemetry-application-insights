@@ -15,8 +15,10 @@ use tokio::time::sleep;
 async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
     let mut span = tracer.start("spawn_children");
-    span.set_attribute(Key::new("n").i64(n.into()));
-    span.set_attribute(Key::new("process_name").string(process_name.clone()));
+    span.set_attributes([
+        Key::new("n").i64(n.into()),
+        Key::new("process_name").string(process_name.clone()),
+    ]);
     let cx = Context::current_with_span(span);
     for _ in 0..n {
         spawn_child_process(&process_name)
