@@ -210,7 +210,7 @@ async fn main() {
 //!
 //! [`Aggregator`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/export/metrics/trait.Aggregator.html
 //! [`Selector`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/metrics/selectors/simple/enum.Selector.html
-#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.21.0")]
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.22.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]

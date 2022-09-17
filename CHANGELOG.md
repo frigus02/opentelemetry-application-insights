@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.22.0] - 2022-09-17
+
+- Upgrade to `v0.18.0` of `opentelemetry`.
+
 ## [0.21.0] - 2022-07-02
 
 - New feature `reqwest-client-vendored-tls`, which makes it easy to use `reqwest` with its `native-tls-vendored` feature.
@@ -187,7 +191,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.21.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...HEAD
+[0.22.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.18.0...0.19.0
