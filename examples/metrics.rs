@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
     let cx = Context::current();
     let mut rng = thread_rng();
-    for _ in 1..5 {
+    for _ in 1..10 {
         server_duration.record(
             &cx,
             rng.gen_range(200..300),

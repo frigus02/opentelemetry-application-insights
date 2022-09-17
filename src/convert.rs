@@ -37,6 +37,9 @@ pub(crate) fn attrs_to_properties(
 }
 
 pub(crate) fn status_to_result_code(status: &Status) -> i32 {
+    // Since responseCode is a required field for RequestData, we map the span status to come kind
+    // of result code representation. Numbers 1-3 were chosen because in opentelemetry@0.17.0
+    // converting the StatusCode enum to an integer yielded this result.
     match status {
         Status::Unset => 0,
         Status::Ok => 1,

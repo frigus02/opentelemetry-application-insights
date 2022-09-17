@@ -7,7 +7,6 @@ use crate::{
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
 };
-use futures_util::future::BoxFuture;
 use opentelemetry::{
     sdk::export::trace::{ExportResult, SpanData, SpanExporter},
     trace::{Event, SpanKind, Status},
@@ -15,7 +14,9 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
