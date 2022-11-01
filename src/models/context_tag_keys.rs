@@ -88,7 +88,8 @@ context_tag_keys! {
     /// Unique client device id. Computer name in most cases.
     DEVICE_ID("ai.device.id", 1024),
 
-    /// Device locale using <language>-<REGION> pattern, following RFC 5646. Example 'en-US'.
+    /// Device locale using &lt;language&gt;-&lt;REGION&gt; pattern, following RFC 5646. Example
+    /// 'en-US'.
     DEVICE_LOCALE("ai.device.locale", 64),
 
     /// Model of the device the end user of the application is using. Used for client scenarios. If
