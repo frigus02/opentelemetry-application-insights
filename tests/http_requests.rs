@@ -14,7 +14,7 @@ use opentelemetry::{
     },
     Context, KeyValue,
 };
-use opentelemetry_application_insights::new_pipeline;
+use opentelemetry_application_insights::{attrs as ai, new_pipeline};
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
 use std::time::Duration;
@@ -76,6 +76,13 @@ fn traces_simple() {
                 let _server_guard = mark_span_as_active(span);
                 get_active_span(|span| {
                     span.add_event("An event!", vec![KeyValue::new("happened", true)]);
+                    span.add_event(
+                        "ai.custom",
+                        vec![
+                            ai::CUSTOM_EVENT_NAME.string("A custom event!"),
+                            KeyValue::new("happened", true),
+                        ],
+                    );
                     let error: Box<dyn std::error::Error> = "An error".into();
                     span.record_error(error.as_ref());
                 });

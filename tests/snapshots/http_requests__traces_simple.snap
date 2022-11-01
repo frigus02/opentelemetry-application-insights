@@ -65,6 +65,26 @@ content-encoding: gzip
   {
     "data": {
       "baseData": {
+        "name": "A custom event!",
+        "properties": {
+          "happened": "true"
+        },
+        "ver": 2
+      },
+      "baseType": "EventData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Event",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.operation.id": "STRIPPED",
+      "ai.operation.parentId": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
         "exceptions": [
           {
             "message": "An error",
