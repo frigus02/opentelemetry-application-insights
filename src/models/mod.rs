@@ -3,6 +3,7 @@ mod data;
 #[cfg(feature = "metrics")]
 mod data_point;
 mod envelope;
+mod event_data;
 mod exception_data;
 mod exception_details;
 mod message_data;
@@ -16,6 +17,7 @@ pub(crate) use data::*;
 #[cfg(feature = "metrics")]
 pub(crate) use data_point::*;
 pub(crate) use envelope::*;
+pub(crate) use event_data::*;
 pub(crate) use exception_data::*;
 pub(crate) use exception_details::*;
 pub(crate) use message_data::*;

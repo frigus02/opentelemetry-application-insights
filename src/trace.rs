@@ -1,8 +1,9 @@
 use crate::{
     convert::{attrs_to_properties, duration_to_string, status_to_result_code, time_to_string},
     models::{
-        Data, Envelope, ExceptionData, ExceptionDetails, LimitedLenString1024, MessageData,
-        Properties, RemoteDependencyData, RequestData,
+        context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
+        ExceptionDetails, LimitedLenString1024, MessageData, Properties, RemoteDependencyData,
+        RequestData,
     },
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
@@ -53,6 +54,10 @@ impl<C> Exporter<C> {
 
         for event in span.events.iter() {
             let (data, name) = match event.name.as_ref() {
+                "ai.custom" => (
+                    Data::Event(event.into()),
+                    "Microsoft.ApplicationInsights.Event",
+                ),
                 "exception" => (
                     Data::Exception(event.into()),
                     "Microsoft.ApplicationInsights.Exception",
@@ -253,6 +258,30 @@ impl From<&Event> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
+            properties: Some(
+                attrs
+                    .iter()
+                    .map(|(k, v)| (k.as_str().into(), (*v).into()))
+                    .collect(),
+            )
+            .filter(|x: &Properties| !x.is_empty()),
+        }
+    }
+}
+
+impl From<&Event> for EventData {
+    fn from(event: &Event) -> EventData {
+        let mut attrs: HashMap<&Key, &Value> = event
+            .attributes
+            .iter()
+            .map(|kv| (&kv.key, &kv.value))
+            .collect();
+        EventData {
+            ver: 2,
+            name: attrs
+                .remove(&CUSTOM_EVENT_NAME)
+                .map(Into::into)
+                .unwrap_or_else(|| "<no name>".into()),
             properties: Some(
                 attrs
                     .iter()

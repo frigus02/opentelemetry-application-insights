@@ -1,12 +1,14 @@
 #[cfg(feature = "metrics")]
 use crate::models::MetricData;
-use crate::models::{ExceptionData, MessageData, RemoteDependencyData, RequestData};
+use crate::models::{EventData, ExceptionData, MessageData, RemoteDependencyData, RequestData};
 use serde::Serialize;
 
 /// Data struct to contain both B and C sections.
 #[derive(Debug, Serialize)]
 #[serde(tag = "baseType", content = "baseData")]
 pub(crate) enum Data {
+    #[serde(rename = "EventData")]
+    Event(EventData),
     #[serde(rename = "ExceptionData")]
     Exception(ExceptionData),
     #[serde(rename = "MessageData")]

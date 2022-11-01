@@ -5,11 +5,24 @@ use opentelemetry::{
     },
     Context, KeyValue,
 };
+use opentelemetry_application_insights::attrs as ai;
 use std::env;
 
 fn log() {
     get_active_span(|span| {
         span.add_event("An event!", vec![KeyValue::new("happened", true)]);
+    })
+}
+
+fn custom() {
+    get_active_span(|span| {
+        span.add_event(
+            "ai.custom",
+            vec![
+                ai::CUSTOM_EVENT_NAME.string("A custom event!"),
+                KeyValue::new("some.data", 5),
+            ],
+        );
     })
 }
 
@@ -79,6 +92,7 @@ fn main() {
         {
             let _server_guard = mark_span_as_active(span);
             log();
+            custom();
             exception();
         }
     }

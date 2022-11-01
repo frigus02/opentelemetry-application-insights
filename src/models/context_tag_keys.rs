@@ -65,6 +65,10 @@ macro_rules! context_tag_keys {
         pub mod attrs {
             $($(#[doc = $doc])+
             pub const $var: opentelemetry::Key = opentelemetry::Key::from_static_str($name);)*
+
+            /// Name for a custom event recorded with special name "ai.custom".
+            pub const CUSTOM_EVENT_NAME: opentelemetry::Key =
+                opentelemetry::Key::from_static_str("ai.customEvent.name");
         }
 
         $($(#[doc = $doc])+
