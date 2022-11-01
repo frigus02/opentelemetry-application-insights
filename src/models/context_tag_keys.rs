@@ -67,6 +67,12 @@ macro_rules! context_tag_keys {
             pub const $var: opentelemetry::Key = opentelemetry::Key::from_static_str($name);)*
 
             /// Name for a custom event recorded with special name "ai.custom".
+            ///
+            /// To allow proper grouping and useful metrics, restrict your application so that it
+            /// generates a small number of separate event names. For example, don't use a separate
+            /// name for each generated instance of an event.
+            ///
+            /// If not specified, the custom event name defaults to "<no name>".
             pub const CUSTOM_EVENT_NAME: opentelemetry::Key =
                 opentelemetry::Key::from_static_str("ai.customEvent.name");
         }
