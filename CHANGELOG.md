@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.23.0] - 2022-11-12
+
 - Support sending `customEvents` (see [#53](https://github.com/frigus02/opentelemetry-application-insights/issues/53)).
 
 ## [0.22.0] - 2022-09-17
@@ -193,7 +195,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...HEAD
+[0.23.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.19.0...0.20.0
