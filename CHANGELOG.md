@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Support sending `customEvents` (see [#53](https://github.com/frigus02/opentelemetry-application-insights/issues/53)).
+
 ## [0.22.0] - 2022-09-17
 
 - Upgrade to `v0.18.0` of `opentelemetry`.

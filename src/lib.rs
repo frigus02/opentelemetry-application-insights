@@ -135,8 +135,8 @@ async fn main() {
 //!
 //! | OpenTelemetry SpanKind           | Application Insights telemetry type |
 //! | -------------------------------- | ----------------------------------- |
-//! | `CLIENT`, `PRODUCER`, `INTERNAL` | Dependency                          |
-//! | `SERVER`, `CONSUMER`             | Request                             |
+//! | `CLIENT`, `PRODUCER`, `INTERNAL` | [Dependency]                        |
+//! | `SERVER`, `CONSUMER`             | [Request]                           |
 //!
 //! The Span's status determines the Success field of a Dependency or Request. Success is `false` if
 //! the status `Error`; otherwise `true`.
@@ -148,6 +148,8 @@ async fn main() {
 //!
 //! [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
 //! [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
+//! [Dependency]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-dependency-telemetry
+//! [Request]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-request-telemetry
 //!
 //! | OpenTelemetry attribute key                       | Application Insights field                               |
 //! | ------------------------------------------------- | -----------------------------------------------------    |
@@ -182,7 +184,7 @@ async fn main() {
 //!
 //! ## Events
 //!
-//! Events are converted into Exception telemetry if the event name equals `"exception"` (see
+//! Events are converted into [Exception] telemetry if the event name equals `"exception"` (see
 //! OpenTelemetry semantic conventions for [exceptions]) with the following mapping:
 //!
 //! | OpenTelemetry attribute key | Application Insights field |
@@ -191,11 +193,21 @@ async fn main() {
 //! | `exception.message`         | Exception message          |
 //! | `exception.stacktrace`      | Exception call stack       |
 //!
-//! All other events are converted into Trace telemetry.
+//! Events are converted into [Event] telemetry if the event name equals `"ai.custom"` with the
+//! following mapping:
+//!
+//! | OpenTelemetry attribute key | Application Insights field |
+//! | --------------------------- | -------------------------- |
+//! | `ai.customEvent.name`       | Event name                 |
+//!
+//! All other events are converted into [Trace] telemetry.
 //!
 //! All other attributes are directly converted to custom properties.
 //!
 //! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
+//! [Exception]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-exception-telemetry
+//! [Event]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-event-telemetry
+//! [Trace]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-trace-telemetry
 //!
 //! ## Metrics
 //!
