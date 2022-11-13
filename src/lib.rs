@@ -248,6 +248,7 @@ async fn main() {
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]
 
+mod connection_string;
 mod convert;
 #[cfg(feature = "metrics")]
 mod metrics;
@@ -258,6 +259,7 @@ mod tags;
 mod trace;
 mod uploader;
 
+use connection_string::ConnectionString;
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
 use opentelemetry::sdk::metrics::reader::{
@@ -275,6 +277,20 @@ pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
 use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
+// TODO: how should this work?
+// - new_pipeline(/* from env by default */).with_connection_string(..)
+//   - Return Result<> from build_simple/build_batch functions if connection string is missing.
+// - new_pipeline("connection_string")
+//   - how to distinguish this from new_pipeline("instrumentation_key")?
+// - new_pipeline("connection_string"::parse<ConnectionString>()?)
+//   - nice becaue parse error happens right where the connection string is specified
+// - new_pipeline(Config::ConnectionString("")), new_pipeline(Config::FromEnv)
+//   - nice because explicit
+//   - can return Result<> right here
+// - new_pipeline_from_env(), new_pipeline_from_connection_string("...")
+//   - nice because explicit
+//   - nice because backwards compatible
+
 /// Create a new Application Insights exporter pipeline builder
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
@@ -284,6 +300,56 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         instrumentation_key,
         sample_rate: None,
     }
+}
+
+/// Create a new Application Insights exporter pipeline builder
+///
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+/// let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(
+///         "InstrumentationKey=...;IngestionEndpoint=https://westus2-0.in.applicationinsights.azure.com"
+///     )?
+///     .with_client(reqwest::blocking::Client::new())
+///     .install_simple();
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_pipeline_from_connection_string(
+    connection_string: &str,
+) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
+    let connection_string: ConnectionString = connection_string.parse()?;
+    Ok(PipelineBuilder {
+        client: (),
+        config: None,
+        endpoint: Some(connection_string.ingestion_endpoint),
+        instrumentation_key: connection_string.instrumentation_key,
+        sample_rate: None,
+    })
+}
+
+/// Create a new Application Insights exporter pipeline builder
+///
+/// Reads connection string from `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable.
+///
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+/// let tracer = opentelemetry_application_insights::new_pipeline_from_env()?
+///     .with_client(reqwest::blocking::Client::new())
+///     .install_simple();
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_pipeline_from_env(
+) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
+    let connection_string: ConnectionString =
+        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?.parse()?;
+    Ok(PipelineBuilder {
+        client: (),
+        config: None,
+        endpoint: Some(connection_string.ingestion_endpoint),
+        instrumentation_key: connection_string.instrumentation_key,
+        sample_rate: None,
+    })
 }
 
 /// Application Insights exporter pipeline builder
@@ -328,11 +394,15 @@ impl<C> PipelineBuilder<C> {
     /// # Ok(())
     /// # }
     /// ```
+    #[deprecated(
+        since = "0.24.0",
+        note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
+    )]
     pub fn with_endpoint(
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = Some(format!("{}/v2/track", endpoint).try_into()?);
+        self.endpoint = Some(endpoint.try_into()?);
         Ok(self)
     }
 
@@ -426,7 +496,9 @@ where
     fn init_exporter(self) -> Exporter<C> {
         let mut exporter = Exporter::new(self.instrumentation_key, self.client);
         if let Some(endpoint) = self.endpoint {
-            exporter.endpoint = Arc::new(endpoint);
+            exporter = exporter
+                .with_endpoint(&endpoint.to_string())
+                .expect("endpoint is a valid uri");
         }
         if let Some(sample_rate) = self.sample_rate {
             exporter.sample_rate = sample_rate;
