@@ -42,6 +42,7 @@ mod tests {
             tags: None,
             data: Some(Data::Message(MessageData {
                 ver: 2,
+                severity_level: None,
                 message: "hello world".into(),
                 properties: None,
             })),
@@ -88,6 +89,7 @@ mod tests {
             tags: Some(tags),
             data: Some(Data::Message(MessageData {
                 ver: 2,
+                severity_level: None,
                 message: "m".repeat(33000).into(),
                 properties: None,
             })),

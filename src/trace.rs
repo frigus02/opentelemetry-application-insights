@@ -295,21 +295,37 @@ impl From<&Event> for EventData {
 
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
+        let mut props = event
+            .attributes
+            .iter()
+            .map(|kv| (kv.key.as_str().into(), (&kv.value).into()))
+            .collect::<Properties>();
+
+        let log_level = severity_level(props.remove(&"level".into()));
+
         MessageData {
             ver: 2,
+            severity_level: log_level,
             message: if event.name.is_empty() {
                 "<no message>".into()
             } else {
                 event.name.clone().into_owned().into()
             },
-            properties: Some(
-                event
-                    .attributes
-                    .iter()
-                    .map(|kv| (kv.key.as_str().into(), (&kv.value).into()))
-                    .collect(),
-            )
-            .filter(|x: &Properties| !x.is_empty()),
+            properties: Some(props).filter(|x: &Properties| !x.is_empty()),
         }
+    }
+}
+
+fn severity_level(value: Option<crate::models::LimitedLenString8192>) -> Option<i32> {
+    match value {
+        Some(v) => match v.as_ref() {
+            "VERBOSE" => Some(0),
+            "DEBUG" => Some(1),
+            "INFO" => Some(1),
+            "WARN" => Some(2),
+            "ERROR" => Some(3),
+            _ => None,
+        },
+        None => None,
     }
 }
