@@ -3,7 +3,7 @@ use crate::{
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
         ExceptionDetails, LimitedLenString1024, MessageData, Properties, RemoteDependencyData,
-        RequestData,
+        RequestData, SeverityLevel,
     },
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
@@ -301,11 +301,13 @@ impl From<&Event> for MessageData {
             .map(|kv| (kv.key.as_str().into(), (&kv.value).into()))
             .collect::<Properties>();
 
-        let log_level = severity_level(props.remove(&"level".into()));
+        // Here we read the 'level' which is a property that comes from the tracing crate.
+        // https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
+        let severity_level: SeverityLevel = props.remove(&"level".into()).into();
 
         MessageData {
             ver: 2,
-            severity_level: log_level,
+            severity_level: severity_level.to_application_insights(),
             message: if event.name.is_empty() {
                 "<no message>".into()
             } else {
@@ -313,19 +315,5 @@ impl From<&Event> for MessageData {
             },
             properties: Some(props).filter(|x: &Properties| !x.is_empty()),
         }
-    }
-}
-
-fn severity_level(value: Option<crate::models::LimitedLenString8192>) -> Option<i32> {
-    match value {
-        Some(v) => match v.as_ref() {
-            "VERBOSE" => Some(0),
-            "DEBUG" => Some(1),
-            "INFO" => Some(1),
-            "WARN" => Some(2),
-            "ERROR" => Some(3),
-            _ => None,
-        },
-        None => None,
     }
 }

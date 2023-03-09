@@ -13,6 +13,7 @@ pub(crate) struct MessageData {
     /// Trace message
     pub(crate) message: LimitedLenString32768,
 
+    //Trace severity level.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) severity_level: Option<i32>,
 
