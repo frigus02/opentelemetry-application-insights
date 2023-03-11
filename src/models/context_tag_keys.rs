@@ -72,7 +72,7 @@ macro_rules! context_tag_keys {
             /// generates a small number of separate event names. For example, don't use a separate
             /// name for each generated instance of an event.
             ///
-            /// If not specified, the custom event name defaults to "<no name>".
+            /// If not specified, the custom event name defaults to "&lt;no name&gt;".
             pub const CUSTOM_EVENT_NAME: opentelemetry::Key =
                 opentelemetry::Key::from_static_str("ai.customEvent.name");
         }

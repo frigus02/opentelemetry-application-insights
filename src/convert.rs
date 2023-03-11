@@ -1,8 +1,9 @@
-use crate::models::Properties;
+use crate::models::{Properties, SeverityLevel};
 use chrono::{DateTime, SecondsFormat, Utc};
 use opentelemetry::{
     sdk::{trace::EvictedHashMap, Resource},
     trace::Status,
+    Value,
 };
 use std::time::{Duration, SystemTime};
 
@@ -44,6 +45,19 @@ pub(crate) fn status_to_result_code(status: &Status) -> i32 {
         Status::Unset => 0,
         Status::Ok => 1,
         Status::Error { .. } => 2,
+    }
+}
+
+pub(crate) fn value_to_severity_level(value: &Value) -> Option<SeverityLevel> {
+    match value.as_str().as_ref() {
+        // Convert from `tracing` Level.
+        // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#526-533
+        "TRACE" => Some(SeverityLevel::Verbose),
+        "DEBUG" => Some(SeverityLevel::Information),
+        "INFO" => Some(SeverityLevel::Information),
+        "WARN" => Some(SeverityLevel::Warning),
+        "ERROR" => Some(SeverityLevel::Error),
+        _ => None,
     }
 }
 

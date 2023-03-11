@@ -49,6 +49,7 @@ content-encoding: gzip
         "properties": {
           "happened": "true"
         },
+        "severityLevel": 2,
         "ver": 2
       },
       "baseType": "MessageData"

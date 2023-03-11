@@ -1,4 +1,4 @@
-use crate::models::{LimitedLenString32768, Properties};
+use crate::models::{LimitedLenString32768, Properties, SeverityLevel};
 use serde::Serialize;
 
 /// Instances of Message represent printf-like trace statements that are text-searched. Log4Net,
@@ -12,6 +12,10 @@ pub(crate) struct MessageData {
 
     /// Trace message
     pub(crate) message: LimitedLenString32768,
+
+    /// Trace severity level.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) severity_level: Option<SeverityLevel>,
 
     /// Collection of custom properties.
     #[serde(skip_serializing_if = "Option::is_none")]

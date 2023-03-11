@@ -12,6 +12,7 @@ mod metric_data;
 mod remote_dependency_data;
 mod request_data;
 mod sanitize;
+mod severity_level;
 
 pub(crate) use data::*;
 #[cfg(feature = "metrics")]
@@ -26,6 +27,7 @@ pub(crate) use metric_data::*;
 pub(crate) use remote_dependency_data::*;
 pub(crate) use request_data::*;
 pub(crate) use sanitize::*;
+pub(crate) use severity_level::*;
 
 #[cfg(test)]
 mod tests {
@@ -42,6 +44,7 @@ mod tests {
             tags: None,
             data: Some(Data::Message(MessageData {
                 ver: 2,
+                severity_level: None,
                 message: "hello world".into(),
                 properties: None,
             })),
@@ -88,6 +91,7 @@ mod tests {
             tags: Some(tags),
             data: Some(Data::Message(MessageData {
                 ver: 2,
+                severity_level: None,
                 message: "m".repeat(33000).into(),
                 properties: None,
             })),

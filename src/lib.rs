@@ -200,7 +200,11 @@ async fn main() {
 //! | --------------------------- | -------------------------- |
 //! | `ai.customEvent.name`       | Event name                 |
 //!
-//! All other events are converted into [Trace] telemetry.
+//! All other events are converted into [Trace] telemetry with the follwing mapping:
+//!
+//! | OpenTelemetry attribute key  | Application Insights field |
+//! | ---------------------------- | -------------------------- |
+//! | `level` ([`tracing::Level`]) | Severity level             |
 //!
 //! All other attributes are directly converted to custom properties.
 //!
@@ -208,6 +212,7 @@ async fn main() {
 //! [Exception]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-exception-telemetry
 //! [Event]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-event-telemetry
 //! [Trace]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-trace-telemetry
+//! [`tracing::Level`]: https://docs.rs/tracing/0.1.37/tracing/struct.Level.html
 //!
 //! ## Metrics
 //!
