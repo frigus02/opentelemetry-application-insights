@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.24.0] - 2023-03-11
+
+- Map `level` attribute (set by [`tracing::Level`](https://docs.rs/tracing/0.1.37/tracing/struct.Level.html)) to Application Insights severity level (see [#57](https://github.com/frigus02/opentelemetry-application-insights/pull/57)).
+
 ## [0.23.0] - 2022-11-12
 
 - Support sending `customEvents` (see [#53](https://github.com/frigus02/opentelemetry-application-insights/issues/53)).
@@ -195,7 +199,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.24.0...HEAD
+[0.24.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.20.0...0.21.0
