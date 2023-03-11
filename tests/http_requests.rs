@@ -75,7 +75,15 @@ fn traces_simple() {
             {
                 let _server_guard = mark_span_as_active(span);
                 get_active_span(|span| {
-                    span.add_event("An event!", vec![KeyValue::new("happened", true)]);
+                    span.add_event(
+                        "An event!",
+                        vec![
+                            KeyValue::new("happened", true),
+                            // Emulate tracing level
+                            // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#531
+                            KeyValue::new("level", "WARN"),
+                        ],
+                    );
                     span.add_event(
                         "ai.custom",
                         vec![

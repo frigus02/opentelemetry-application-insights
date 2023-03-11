@@ -1,9 +1,12 @@
 use crate::{
-    convert::{attrs_to_properties, duration_to_string, status_to_result_code, time_to_string},
+    convert::{
+        attrs_to_properties, duration_to_string, status_to_result_code, time_to_string,
+        value_to_severity_level,
+    },
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
         ExceptionDetails, LimitedLenString1024, MessageData, Properties, RemoteDependencyData,
-        RequestData, SeverityLevel,
+        RequestData,
     },
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
@@ -235,6 +238,11 @@ impl From<&SpanData> for RemoteDependencyData {
     }
 }
 
+/// The `tracing` create includes the severity level in an attribute called "level".
+///
+/// https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
+const LEVEL: Key = Key::from_static_str("level");
+
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
         let mut attrs: HashMap<&Key, &Value> = event
@@ -295,25 +303,30 @@ impl From<&Event> for EventData {
 
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
-        let mut props = event
+        let mut attrs: HashMap<&Key, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (kv.key.as_str().into(), (&kv.value).into()))
-            .collect::<Properties>();
-
-        // Here we read the 'level' which is a property that comes from the tracing crate.
-        // https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
-        let severity_level: SeverityLevel = props.remove(&"level".into()).into();
-
+            .map(|kv| (&kv.key, &kv.value))
+            .collect();
+        let severity_level = attrs.get(&LEVEL).and_then(|x| value_to_severity_level(x));
+        if severity_level.is_some() {
+            attrs.remove(&LEVEL);
+        }
         MessageData {
             ver: 2,
-            severity_level: severity_level.to_application_insights(),
+            severity_level,
             message: if event.name.is_empty() {
                 "<no message>".into()
             } else {
                 event.name.clone().into_owned().into()
             },
-            properties: Some(props).filter(|x: &Properties| !x.is_empty()),
+            properties: Some(
+                attrs
+                    .iter()
+                    .map(|(k, v)| (k.as_str().into(), (*v).into()))
+                    .collect(),
+            )
+            .filter(|x: &Properties| !x.is_empty()),
         }
     }
 }
