@@ -5,7 +5,7 @@ use crate::{
     },
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
-        ExceptionDetails, LimitedLenString1024, MessageData, Properties, RemoteDependencyData,
+        ExceptionDetails, LimitedLenString, MessageData, Properties, RemoteDependencyData,
         RequestData,
     },
     tags::{get_tags_for_event, get_tags_for_span},
@@ -109,7 +109,7 @@ impl From<&SpanData> for RequestData {
         let mut data = RequestData {
             ver: 2,
             id: span.span_context.span_id().to_string().into(),
-            name: Some(LimitedLenString1024::from(span.name.clone()))
+            name: Some(LimitedLenString::<1024>::from(span.name.clone()))
                 .filter(|x| !x.as_ref().is_empty()),
             duration: duration_to_string(
                 span.end_time

@@ -1,4 +1,4 @@
-use crate::models::{LimitedLenString1024, LimitedLenString256};
+use crate::models::LimitedLenString;
 use serde::Serialize;
 
 /// Metric data single measurement.
@@ -7,10 +7,10 @@ use serde::Serialize;
 pub(crate) struct DataPoint {
     /// Namespace of the metric.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) ns: Option<LimitedLenString256>,
+    pub(crate) ns: Option<LimitedLenString<256>>,
 
     /// Name of the metric.
-    pub(crate) name: LimitedLenString1024,
+    pub(crate) name: LimitedLenString<1024>,
 
     /// Metric type. Single measurement or the aggregated value.
     #[serde(flatten, skip_serializing_if = "Option::is_none")]

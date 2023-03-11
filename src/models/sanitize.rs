@@ -1,53 +1,42 @@
-use std::collections::BTreeMap;
+use serde::Serialize;
+use std::{borrow::Cow, collections::BTreeMap};
 
-macro_rules! limited_len_string {
-    ($name:ident, $len:expr) => {
-        #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, serde::Serialize)]
-        pub(crate) struct $name(String);
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Serialize)]
+pub(crate) struct LimitedLenString<const N: usize>(String);
 
-        impl From<&str> for $name {
-            fn from(s: &str) -> Self {
-                Self(String::from(&s[0..std::cmp::min(s.len(), $len)]))
-            }
-        }
-
-        impl From<String> for $name {
-            fn from(mut s: String) -> Self {
-                s.truncate($len);
-                Self(s)
-            }
-        }
-
-        impl<'a> From<std::borrow::Cow<'a, str>> for $name {
-            fn from(s: std::borrow::Cow<'a, str>) -> Self {
-                Self(String::from(&s[0..std::cmp::min(s.len(), $len)]))
-            }
-        }
-
-        impl From<&opentelemetry::Value> for $name {
-            fn from(v: &opentelemetry::Value) -> Self {
-                v.as_str().into_owned().into()
-            }
-        }
-
-        impl AsRef<str> for $name {
-            #[inline]
-            fn as_ref(&self) -> &str {
-                self.0.as_ref()
-            }
-        }
-    };
+impl<const N: usize> From<&str> for LimitedLenString<N> {
+    fn from(s: &str) -> Self {
+        Self(String::from(&s[0..std::cmp::min(s.len(), N)]))
+    }
 }
 
-limited_len_string!(LimitedLenString32768, 32768);
-limited_len_string!(LimitedLenString8192, 8192);
-limited_len_string!(LimitedLenString2048, 2048);
-limited_len_string!(LimitedLenString1024, 1024);
-limited_len_string!(LimitedLenString512, 512);
-limited_len_string!(LimitedLenString256, 256);
-limited_len_string!(LimitedLenString150, 150);
-limited_len_string!(LimitedLenString128, 128);
-limited_len_string!(LimitedLenString64, 64);
-limited_len_string!(LimitedLenString40, 40);
+impl<const N: usize> From<String> for LimitedLenString<N> {
+    fn from(mut s: String) -> Self {
+        s.truncate(N);
+        Self(s)
+    }
+}
 
-pub(crate) type Properties = BTreeMap<LimitedLenString150, LimitedLenString8192>;
+impl<'a, const N: usize> From<Cow<'a, str>> for LimitedLenString<N> {
+    fn from(s: std::borrow::Cow<'a, str>) -> Self {
+        match s {
+            Cow::Borrowed(b) => b.into(),
+            Cow::Owned(o) => o.into(),
+        }
+    }
+}
+
+impl<const N: usize> From<&opentelemetry::Value> for LimitedLenString<N> {
+    fn from(v: &opentelemetry::Value) -> Self {
+        v.as_str().into()
+    }
+}
+
+impl<const N: usize> AsRef<str> for LimitedLenString<N> {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+pub(crate) type Properties = BTreeMap<LimitedLenString<150>, LimitedLenString<8192>>;
