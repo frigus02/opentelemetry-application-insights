@@ -1,4 +1,4 @@
-use crate::models::{LimitedLenString512, Properties};
+use crate::models::{LimitedLenString, Properties};
 use serde::Serialize;
 
 /// Instances of Event represent structured event records that can be grouped and searched by their
@@ -10,7 +10,7 @@ pub(crate) struct EventData {
     pub(crate) ver: i32,
 
     /// Event name. Keep it low cardinality to allow proper grouping and useful metrics.
-    pub(crate) name: LimitedLenString512,
+    pub(crate) name: LimitedLenString<512>,
 
     /// Collection of custom properties.
     #[serde(skip_serializing_if = "Option::is_none")]
