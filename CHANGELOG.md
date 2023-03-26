@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.25.0] - 2023-03-26
+
 - Upgrade to `v0.19.0` of `opentelemetry`.
 - Upgrade to `v0.11.0` of `opentelemetry-semantic-conventions`.
   - This removes `trace::HTTP_HOST` and `trace::NET_PEER_IP`. The keys `"http.host"` and `"net.peer.ip"` continue to work with this crate. Consider migrating to `"host.request.header.host"` and `"net.peer.name"` (`trace::NET_PEER_NAME`) / `"net.sock.peer.addr"` (`trace::NET_SOCK_PEER_ADDR`).
@@ -203,7 +205,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.24.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.25.0...HEAD
+[0.25.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.24.0...0.25.0
 [0.24.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.21.0...0.22.0
