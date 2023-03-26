@@ -6,6 +6,7 @@ use opentelemetry::{
     Context, KeyValue,
 };
 use opentelemetry_application_insights::attrs as ai;
+use opentelemetry_semantic_conventions as semcov;
 use std::env;
 
 fn log() {
@@ -44,8 +45,8 @@ fn main() {
             .with_client(reqwest::blocking::Client::new())
             .with_trace_config(
                 sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
-                    KeyValue::new("service.namespace", "example-attributes"),
-                    KeyValue::new("service.name", "client"),
+                    semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
+                    semcov::resource::SERVICE_NAME.string("client"),
                 ])),
             )
             .build_simple();
@@ -55,8 +56,8 @@ fn main() {
         .with_client(reqwest::blocking::Client::new())
         .with_trace_config(
             sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
-                KeyValue::new("service.namespace", "example-attributes"),
-                KeyValue::new("service.name", "server"),
+                semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
+                semcov::resource::SERVICE_NAME.string("server"),
             ])),
         )
         .build_simple();
@@ -67,11 +68,14 @@ fn main() {
         .span_builder("dependency")
         .with_kind(SpanKind::Client)
         .with_attributes(vec![
-            KeyValue::new("enduser.id", "marry"),
-            KeyValue::new("net.host.name", "localhost"),
-            KeyValue::new("net.peer.ip", "10.1.2.4"),
-            KeyValue::new("http.url", "http://10.1.2.4/hello/world?name=marry"),
-            KeyValue::new("http.status_code", "200"),
+            semcov::trace::HTTP_METHOD.string("GET"),
+            semcov::trace::HTTP_FLAVOR.string("1.1"),
+            semcov::trace::HTTP_URL.string("https://example.com:8080/hello/world?name=marry"),
+            semcov::trace::NET_PEER_NAME.string("example.com"),
+            semcov::trace::NET_PEER_PORT.i64(8080),
+            semcov::trace::NET_SOCK_PEER_ADDR.string("10.1.2.4"),
+            semcov::trace::HTTP_STATUS_CODE.i64(200),
+            semcov::trace::ENDUSER_ID.string("marry"),
         ])
         .start(&client_tracer);
     {
@@ -82,11 +86,18 @@ fn main() {
             .span_builder("request")
             .with_kind(SpanKind::Server)
             .with_attributes(vec![
-                KeyValue::new("enduser.id", "marry"),
-                KeyValue::new("net.host.name", "localhost"),
-                KeyValue::new("net.peer.ip", "10.1.2.3"),
-                KeyValue::new("http.target", "/hello/world?name=marry"),
-                KeyValue::new("http.status_code", "200"),
+                semcov::trace::HTTP_METHOD.string("GET"),
+                semcov::trace::HTTP_FLAVOR.string("1.1"),
+                semcov::trace::HTTP_TARGET.string("/hello/world?name=marry"),
+                semcov::trace::NET_HOST_NAME.string("example.com"),
+                semcov::trace::NET_HOST_PORT.i64(8080),
+                semcov::trace::HTTP_SCHEME.string("https"),
+                semcov::trace::HTTP_ROUTE.string("/hello/world"),
+                semcov::trace::HTTP_STATUS_CODE.i64(200),
+                semcov::trace::HTTP_CLIENT_IP.string("10.1.2.3"),
+                semcov::trace::NET_SOCK_PEER_ADDR.string("10.1.2.2"),
+                semcov::trace::HTTP_USER_AGENT.string("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
+                semcov::trace::ENDUSER_ID.string("marry"),
             ]);
         let span = server_tracer.build_with_context(builder, &cx);
         {

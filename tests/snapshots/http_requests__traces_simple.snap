@@ -13,20 +13,27 @@ content-encoding: gzip
       "baseData": {
         "duration": "STRIPPED",
         "id": "STRIPPED",
-        "name": "request",
+        "name": "GET /hello/world",
         "properties": {
           "enduser.id": "marry",
+          "http.client_ip": "10.1.2.3",
+          "http.flavor": "1.1",
+          "http.method": "GET",
+          "http.route": "/hello/world",
+          "http.scheme": "https",
           "http.status_code": "200",
           "http.target": "/hello/world?name=marry",
-          "net.host.name": "localhost",
-          "net.peer.ip": "10.1.2.3",
+          "http.user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0",
+          "net.host.name": "example.com",
+          "net.host.port": "8080",
+          "net.sock.peer.addr": "10.1.2.2",
           "service.name": "server",
           "service.namespace": "test"
         },
         "responseCode": "200",
         "source": "10.1.2.3",
         "success": true,
-        "url": "/hello/world?name=marry",
+        "url": "https://example.com:8080/hello/world?name=marry",
         "ver": 2
       },
       "baseType": "RequestData"
@@ -37,6 +44,7 @@ content-encoding: gzip
     "tags": {
       "ai.cloud.role": "test.server",
       "ai.operation.id": "STRIPPED",
+      "ai.operation.name": "GET /hello/world",
       "ai.operation.parentId": "STRIPPED",
       "ai.user.authUserId": "marry"
     },
@@ -117,21 +125,24 @@ content-encoding: gzip
   {
     "data": {
       "baseData": {
-        "data": "http://10.1.2.4/hello/world?name=marry",
+        "data": "https://example.com:8080/hello/world?name=marry",
         "duration": "STRIPPED",
         "id": "STRIPPED",
         "name": "dependency",
         "properties": {
           "enduser.id": "marry",
+          "http.flavor": "1.1",
+          "http.method": "GET",
           "http.status_code": "200",
-          "http.url": "http://10.1.2.4/hello/world?name=marry",
-          "net.host.name": "localhost",
-          "net.peer.ip": "10.1.2.4",
+          "http.url": "https://example.com:8080/hello/world?name=marry",
+          "net.peer.name": "example.com",
+          "net.peer.port": "8080",
+          "net.sock.peer.addr": "10.1.2.4",
           "service.name": "client",
           "service.namespace": "test"
         },
         "resultCode": "200",
-        "target": "10.1.2.4",
+        "target": "example.com:8080",
         "type": "HTTP",
         "ver": 2
       },

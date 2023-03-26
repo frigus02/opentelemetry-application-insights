@@ -12,15 +12,32 @@ use crate::{
     Exporter,
 };
 use opentelemetry::{
-    sdk::export::trace::{ExportResult, SpanData, SpanExporter},
+    sdk::{
+        export::trace::{ExportResult, SpanData, SpanExporter},
+        trace::EvictedHashMap,
+    },
     trace::{Event, SpanKind, Status},
     Key, Value,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// Deprecated semantic convention key for HTTP host
+///
+/// Removed in https://github.com/open-telemetry/opentelemetry-specification/pull/2469.
+const DEPRECATED_HTTP_HOST: Key = Key::from_static_str("http.host");
+
+/// Semantic convention key for HTTP 'Host' request header.
+const HTTP_REQUEST_HEADER_HOST: Key = Key::from_static_str("http.request.header.host");
+
+/// Deprecated semantic convention key for peer IP.
+///
+/// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/2614 with
+/// `net.sock.peer.addr`.
+const DEPRECATED_NET_PEER_IP: Key = Key::from_static_str("net.peer.ip");
 
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
@@ -104,6 +121,21 @@ where
     }
 }
 
+fn get_server_host(attrs: &EvictedHashMap) -> Option<Cow<str>> {
+    if let Some(host) = attrs.get(&HTTP_REQUEST_HEADER_HOST) {
+        Some(host.as_str())
+    } else if let Some(host) = attrs.get(&DEPRECATED_HTTP_HOST) {
+        Some(host.as_str())
+    } else if let (Some(host_name), Some(host_port)) = (
+        attrs.get(&semcov::trace::NET_HOST_NAME),
+        attrs.get(&semcov::trace::NET_HOST_PORT),
+    ) {
+        Some(format!("{}:{}", host_name.as_str(), host_port.as_str()).into())
+    } else {
+        None
+    }
+}
+
 impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
@@ -147,10 +179,9 @@ impl From<&SpanData> for RequestData {
 
             if let (Some(scheme), Some(host)) = (
                 span.attributes.get(&semcov::trace::HTTP_SCHEME),
-                span.attributes.get(&semcov::trace::HTTP_HOST),
+                get_server_host(&span.attributes),
             ) {
-                data.url =
-                    Some(format!("{}://{}{}", scheme.as_str(), host.as_str(), target).into());
+                data.url = Some(format!("{}://{}{}", scheme.as_str(), host, target).into());
             } else {
                 data.url = Some(target.into());
             }
@@ -158,7 +189,9 @@ impl From<&SpanData> for RequestData {
 
         if let Some(client_ip) = span.attributes.get(&semcov::trace::HTTP_CLIENT_IP) {
             data.source = Some(client_ip.into());
-        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
+        } else if let Some(peer_addr) = span.attributes.get(&semcov::trace::NET_SOCK_PEER_ADDR) {
+            data.source = Some(peer_addr.into());
+        } else if let Some(peer_ip) = span.attributes.get(&DEPRECATED_NET_PEER_IP) {
             data.source = Some(peer_ip.into());
         }
 
@@ -199,19 +232,25 @@ impl From<&SpanData> for RemoteDependencyData {
             data.data = Some(statement.into());
         }
 
-        if let Some(host) = span.attributes.get(&semcov::trace::HTTP_HOST) {
+        if let Some(host) = span.attributes.get(&HTTP_REQUEST_HEADER_HOST) {
             data.target = Some(host.into());
-        } else if let Some(peer_name) = span.attributes.get(&semcov::trace::NET_PEER_NAME) {
-            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
+        } else if let Some(host) = span.attributes.get(&DEPRECATED_HTTP_HOST) {
+            data.target = Some(host.into());
+        } else if let Some(peer_name) = span
+            .attributes
+            .get(&semcov::trace::NET_SOCK_PEER_NAME)
+            .or_else(|| span.attributes.get(&semcov::trace::NET_PEER_NAME))
+            .or_else(|| span.attributes.get(&semcov::trace::NET_SOCK_PEER_ADDR))
+            .or_else(|| span.attributes.get(&DEPRECATED_NET_PEER_IP))
+        {
+            if let Some(peer_port) = span
+                .attributes
+                .get(&semcov::trace::NET_SOCK_PEER_PORT)
+                .or_else(|| span.attributes.get(&semcov::trace::NET_PEER_PORT))
+            {
                 data.target = Some(format!("{}:{}", peer_name.as_str(), peer_port.as_str()).into());
             } else {
                 data.target = Some(peer_name.into());
-            }
-        } else if let Some(peer_ip) = span.attributes.get(&semcov::trace::NET_PEER_IP) {
-            if let Some(peer_port) = span.attributes.get(&semcov::trace::NET_PEER_PORT) {
-                data.target = Some(format!("{}:{}", peer_ip.as_str(), peer_port.as_str()).into());
-            } else {
-                data.target = Some(peer_ip.into());
             }
         } else if let Some(db_name) = span.attributes.get(&semcov::trace::DB_NAME) {
             data.target = Some(db_name.into());
