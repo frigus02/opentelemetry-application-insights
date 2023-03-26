@@ -151,32 +151,38 @@ async fn main() {
 //! [Dependency]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-dependency-telemetry
 //! [Request]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-request-telemetry
 //!
-//! | OpenTelemetry attribute key                       | Application Insights field                               |
-//! | ------------------------------------------------- | -----------------------------------------------------    |
-//! | `service.version`                                 | Context: Application version (`ai.application.ver`)      |
-//! | `enduser.id`                                      | Context: Authenticated user id (`ai.user.authUserId`)    |
-//! | `service.namespace` + `service.name`              | Context: Cloud role (`ai.cloud.role`)                    |
-//! | `service.instance.id`                             | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
-//! | `telemetry.sdk.name` + `telemetry.sdk.version`    | Context: Internal SDK version (`ai.internal.sdkVersion`) |
-//! | `SpanKind::Server` + `http.method` + `http.route` | Context: Operation Name (`ai.operation.name`)            |
-//! | `ai.*`                                            | Context: AppInsights Tag (`ai.*`)                        |
-//! | `http.url`                                        | Dependency Data                                          |
-//! | `db.statement`                                    | Dependency Data                                          |
-//! | `http.host`                                       | Dependency Target                                        |
-//! | `net.peer.name` + `net.peer.port`                 | Dependency Target                                        |
-//! | `net.peer.ip` + `net.peer.port`                   | Dependency Target                                        |
-//! | `db.name`                                         | Dependency Target                                        |
-//! | `http.status_code`                                | Dependency Result code                                   |
-//! | `db.system`                                       | Dependency Type                                          |
-//! | `messaging.system`                                | Dependency Type                                          |
-//! | `rpc.system`                                      | Dependency Type                                          |
-//! | `"HTTP"` if any `http.` attribute exists          | Dependency Type                                          |
-//! | `"DB"` if any `db.` attribute exists              | Dependency Type                                          |
-//! | `http.url`                                        | Request Url                                              |
-//! | `http.scheme` + `http.host` + `http.target`       | Request Url                                              |
-//! | `http.client_ip`                                  | Request Source                                           |
-//! | `net.peer.ip`                                     | Request Source                                           |
-//! | `http.status_code`                                | Request Response code                                    |
+//! | OpenTelemetry attribute key                                       | Application Insights field                               |
+//! | ----------------------------------------------------------------- | -----------------------------------------------------    |
+//! | `service.version`                                                 | Context: Application version (`ai.application.ver`)      |
+//! | `enduser.id`                                                      | Context: Authenticated user id (`ai.user.authUserId`)    |
+//! | `service.namespace` + `service.name`                              | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `service.instance.id`                                             | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
+//! | `telemetry.sdk.name` + `telemetry.sdk.version`                    | Context: Internal SDK version (`ai.internal.sdkVersion`) |
+//! | `SpanKind::Server` + `http.method` + `http.route`                 | Context: Operation Name (`ai.operation.name`)            |
+//! | `ai.*`                                                            | Context: AppInsights Tag (`ai.*`)                        |
+//! | `http.url`                                                        | Dependency Data                                          |
+//! | `db.statement`                                                    | Dependency Data                                          |
+//! | `http.request.header.host`                                        | Dependency Target                                        |
+//! | `http.host` (deprecated)                                          | Dependency Target                                        |
+//! | `net.sock.peer.name` + `net.sock.peer.port`                       | Dependency Target                                        |
+//! | `net.peer.name` + `net.peer.port`                                 | Dependency Target                                        |
+//! | `net.sock.peer.addr` + `net.sock.peer.port`                       | Dependency Target                                        |
+//! | `net.peer.ip` + `net.peer.port` (deprecated)                      | Dependency Target                                        |
+//! | `db.name`                                                         | Dependency Target                                        |
+//! | `http.status_code`                                                | Dependency Result code                                   |
+//! | `db.system`                                                       | Dependency Type                                          |
+//! | `messaging.system`                                                | Dependency Type                                          |
+//! | `rpc.system`                                                      | Dependency Type                                          |
+//! | `"HTTP"` if any `http.` attribute exists                          | Dependency Type                                          |
+//! | `"DB"` if any `db.` attribute exists                              | Dependency Type                                          |
+//! | `http.url`                                                        | Request Url                                              |
+//! | `http.scheme` + `http.request.header.host` + `http.target`        | Request Url                                              |
+//! | `http.scheme` + `http.host` + `http.target` (deprecated)          | Request Url                                              |
+//! | `http.scheme` + `net.host.name` + `net.host.port` + `http.target` | Request Url                                              |
+//! | `http.client_ip`                                                  | Request Source                                           |
+//! | `net.sock.peer.addr`                                              | Request Source                                           |
+//! | `net.peer.ip` (deprecated)                                        | Request Source                                           |
+//! | `http.status_code`                                                | Request Response code                                    |
 //!
 //! All other attributes are directly converted to custom properties.
 //!

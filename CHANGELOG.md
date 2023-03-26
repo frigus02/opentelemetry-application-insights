@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade to `v0.19.0` of `opentelemetry`.
+- Upgrade to `v0.11.0` of `opentelemetry-semantic-conventions`.
+  - This removes `trace::HTTP_HOST` and `trace::NET_PEER_IP`. The keys `"http.host"` and `"net.peer.ip"` continue to work with this crate. Consider migrating to `"host.request.header.host"` and `"net.peer.name"` (`trace::NET_PEER_NAME`) / `"net.sock.peer.addr"` (`trace::NET_SOCK_PEER_ADDR`).
+
 ## [0.24.0] - 2023-03-11
 
 - Map `level` attribute (set by [`tracing::Level`](https://docs.rs/tracing/0.1.37/tracing/struct.Level.html)) to Application Insights severity level (see [#57](https://github.com/frigus02/opentelemetry-application-insights/pull/57)).
