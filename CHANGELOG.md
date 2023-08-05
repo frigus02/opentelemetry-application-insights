@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.26.0] - 2023-08-05
+
+- Upgrade to `v0.20.0` of `opentelemetry`.
+- Upgrade to `v0.12.0` of `opentelemetry-semantic-conventions`.
+  - This removes and deprecates some attributes. All removes/deprecated attributes continue to work. Consider migrating to the new attributes in the future. See "Deprecated attributes" in opentelemetry-application-insights documentation for suitable replacements.
+
 ## [0.25.0] - 2023-03-26
 
 - Upgrade to `v0.19.0` of `opentelemetry`.
@@ -205,7 +211,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.25.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.26.0...HEAD
+[0.26.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.25.0...0.26.0
 [0.25.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.24.0...0.25.0
 [0.24.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.22.0...0.23.0
