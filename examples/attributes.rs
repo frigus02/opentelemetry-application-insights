@@ -68,13 +68,14 @@ fn main() {
         .span_builder("dependency")
         .with_kind(SpanKind::Client)
         .with_attributes(vec![
-            semcov::trace::HTTP_METHOD.string("GET"),
-            semcov::trace::HTTP_FLAVOR.string("1.1"),
-            semcov::trace::HTTP_URL.string("https://example.com:8080/hello/world?name=marry"),
-            semcov::trace::NET_PEER_NAME.string("example.com"),
-            semcov::trace::NET_PEER_PORT.i64(8080),
-            semcov::trace::NET_SOCK_PEER_ADDR.string("10.1.2.4"),
-            semcov::trace::HTTP_STATUS_CODE.i64(200),
+            semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
+            semcov::trace::NETWORK_PROTOCOL_NAME.string("http"),
+            semcov::trace::NETWORK_PROTOCOL_VERSION.string("1.1"),
+            semcov::trace::URL_FULL.string("https://example.com:8080/hello/world?name=marry"),
+            semcov::trace::SERVER_ADDRESS.string("example.com"),
+            semcov::trace::SERVER_PORT.i64(8080),
+            semcov::trace::SERVER_SOCKET_ADDRESS.string("10.1.2.4"),
+            semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
             semcov::trace::ENDUSER_ID.string("marry"),
         ])
         .start(&client_tracer);
@@ -86,17 +87,19 @@ fn main() {
             .span_builder("request")
             .with_kind(SpanKind::Server)
             .with_attributes(vec![
-                semcov::trace::HTTP_METHOD.string("GET"),
-                semcov::trace::HTTP_FLAVOR.string("1.1"),
-                semcov::trace::HTTP_TARGET.string("/hello/world?name=marry"),
-                semcov::trace::NET_HOST_NAME.string("example.com"),
-                semcov::trace::NET_HOST_PORT.i64(8080),
-                semcov::trace::HTTP_SCHEME.string("https"),
+                semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
+                semcov::trace::NETWORK_PROTOCOL_NAME.string("http"),
+                semcov::trace::NETWORK_PROTOCOL_VERSION.string("1.1"),
+                semcov::trace::URL_PATH.string("/hello/world"),
+                semcov::trace::URL_QUERY.string("name=marry"),
+                semcov::trace::SERVER_ADDRESS.string("example.com"),
+                semcov::trace::SERVER_PORT.i64(8080),
+                semcov::trace::URL_SCHEME.string("https"),
                 semcov::trace::HTTP_ROUTE.string("/hello/world"),
-                semcov::trace::HTTP_STATUS_CODE.i64(200),
-                semcov::trace::HTTP_CLIENT_IP.string("10.1.2.3"),
-                semcov::trace::NET_SOCK_PEER_ADDR.string("10.1.2.2"),
-                semcov::trace::HTTP_USER_AGENT.string("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
+                semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
+                semcov::trace::CLIENT_ADDRESS.string("10.1.2.3"),
+                semcov::trace::CLIENT_SOCKET_ADDRESS.string("10.1.2.2"),
+                semcov::trace::USER_AGENT_ORIGINAL.string("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
                 semcov::trace::ENDUSER_ID.string("marry"),
             ]);
         let span = server_tracer.build_with_context(builder, &cx);

@@ -86,36 +86,29 @@ configured it should work as expected.
 This requires the **metrics** feature.
 
 ```no_run
-use opentelemetry::{global, Context};
-use opentelemetry::sdk::metrics::{controllers, processors, selectors};
-use opentelemetry::sdk::export::metrics::aggregation::stateless_temporality_selector;
+use opentelemetry::global;
+use opentelemetry::sdk::metrics::{MeterProvider, PeriodicReader};
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     // Setup exporter
     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let temporality_selector = stateless_temporality_selector();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
-        .with_temporality_selector(temporality_selector.clone());
-    let controller = controllers::basic(processors::factory(
-        selectors::simple::inexpensive(),
-        temporality_selector,
-    ))
-    .with_exporter(exporter)
-    .with_collect_period(Duration::from_secs(1))
-    .build();
-    let cx = Context::new();
-    controller.start(&cx, opentelemetry::runtime::Tokio).unwrap();
-    global::set_meter_provider(controller.clone());
+    let exporter = opentelemetry_application_insights::Exporter::new(
+        instrumentation_key,
+        reqwest::Client::new(),
+    );
+    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio).build();
+    let meter_provider = MeterProvider::builder().with_reader(reader).build();
+    global::set_meter_provider(meter_provider);
 
     // Record value
     let meter = global::meter("example");
     let histogram = meter.f64_histogram("pi").init();
-    histogram.record(&cx, 3.14, &[]);
+    histogram.record(3.14, &[]);
 
-    // Export one last time
-    controller.stop(&cx).unwrap();
+    // Simulate work, during which metrics will periodically be reported.
+    tokio::time::sleep(Duration::from_secs(300)).await;
 }
 ```
 "#
