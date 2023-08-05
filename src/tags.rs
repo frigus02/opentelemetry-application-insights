@@ -23,7 +23,16 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
     // Ensure the name of the operation is `METHOD /the/route/path`.
     if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
-        if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
+        if let Some(method) = span
+            .attributes
+            .get(&semcov::trace::HTTP_REQUEST_METHOD)
+            .or_else(|| {
+                span.attributes.get(
+                    #[allow(deprecated)]
+                    &semcov::trace::HTTP_METHOD,
+                )
+            })
+        {
             if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
                 tags.insert(
                     tags::OPERATION_NAME,

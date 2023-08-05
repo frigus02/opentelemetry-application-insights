@@ -127,14 +127,41 @@ where
     }
 }
 
+fn get_url_path_and_query(attrs: &EvictedHashMap) -> Option<Cow<str>> {
+    if let Some(path) = attrs.get(&semcov::trace::URL_PATH) {
+        if let Some(query) = attrs.get(&semcov::trace::URL_QUERY) {
+            Some(format!("{}?{}", path, query).into())
+        } else {
+            Some(path.as_str())
+        }
+    } else {
+        attrs
+            .get(
+                #[allow(deprecated)]
+                &semcov::trace::HTTP_TARGET,
+            )
+            .map(|target| target.as_str())
+    }
+}
+
 fn get_server_host(attrs: &EvictedHashMap) -> Option<Cow<str>> {
     if let Some(host) = attrs.get(&HTTP_REQUEST_HEADER_HOST) {
         Some(host.as_str())
     } else if let Some(host) = attrs.get(&DEPRECATED_HTTP_HOST) {
         Some(host.as_str())
     } else if let (Some(host_name), Some(host_port)) = (
-        attrs.get(&semcov::trace::NET_HOST_NAME),
-        attrs.get(&semcov::trace::NET_HOST_PORT),
+        attrs.get(&semcov::trace::SERVER_ADDRESS).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                &semcov::trace::NET_HOST_NAME,
+            )
+        }),
+        attrs.get(&semcov::trace::SERVER_PORT).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                &semcov::trace::NET_HOST_PORT,
+            )
+        }),
     ) {
         Some(format!("{}:{}", host_name.as_str(), host_port.as_str()).into())
     } else {
@@ -161,7 +188,14 @@ impl From<&SpanData> for RequestData {
             properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
-        if let Some(method) = span.attributes.get(&semcov::trace::HTTP_METHOD) {
+        if let Some(method) = span
+            .attributes
+            .get(&semcov::trace::HTTP_REQUEST_METHOD)
+            .or_else(|| {
+                #[allow(deprecated)]
+                span.attributes.get(&semcov::trace::HTTP_METHOD)
+            })
+        {
             data.name = Some(
                 if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
                     format!("{} {}", method.as_str(), route.as_str()).into()
@@ -171,20 +205,38 @@ impl From<&SpanData> for RequestData {
             );
         }
 
-        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+        if let Some(status_code) = span
+            .attributes
+            .get(&semcov::trace::HTTP_RESPONSE_STATUS_CODE)
+        {
+            data.response_code = status_code.into();
+        } else if let Some(status_code) = span.attributes.get(
+            #[allow(deprecated)]
+            &semcov::trace::HTTP_STATUS_CODE,
+        ) {
             data.response_code = status_code.into();
         }
 
-        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+        if let Some(url) = span.attributes.get(&semcov::trace::URL_FULL) {
             data.url = Some(url.into());
-        } else if let Some(target) = span.attributes.get(&semcov::trace::HTTP_TARGET) {
-            let mut target = target.as_str().into_owned();
+        } else if let Some(url) = span.attributes.get(
+            #[allow(deprecated)]
+            &semcov::trace::HTTP_URL,
+        ) {
+            data.url = Some(url.into());
+        } else if let Some(target) = get_url_path_and_query(&span.attributes) {
+            let mut target = target.into_owned();
             if !target.starts_with('/') {
                 target.insert(0, '/');
             }
 
             if let (Some(scheme), Some(host)) = (
-                span.attributes.get(&semcov::trace::HTTP_SCHEME),
+                span.attributes.get(&semcov::trace::URL_SCHEME).or_else(|| {
+                    span.attributes.get(
+                        #[allow(deprecated)]
+                        &semcov::trace::HTTP_SCHEME,
+                    )
+                }),
                 get_server_host(&span.attributes),
             ) {
                 data.url = Some(format!("{}://{}{}", scheme.as_str(), host, target).into());
@@ -193,11 +245,16 @@ impl From<&SpanData> for RequestData {
             }
         }
 
-        if let Some(client_ip) = span.attributes.get(&semcov::trace::CLIENT_ADDRESS) {
-            data.source = Some(client_ip.into());
+        if let Some(client_address) = span.attributes.get(&semcov::trace::CLIENT_ADDRESS) {
+            data.source = Some(client_address.into());
         } else if let Some(client_ip) = span.attributes.get(&DEPRECATED_HTTP_CLIENT_IP) {
             data.source = Some(client_ip.into());
-        } else if let Some(peer_addr) = span.attributes.get(&semcov::trace::NET_SOCK_PEER_ADDR) {
+        } else if let Some(peer_addr) = span.attributes.get(&semcov::trace::CLIENT_SOCKET_ADDRESS) {
+            data.source = Some(peer_addr.into());
+        } else if let Some(peer_addr) = span.attributes.get(
+            #[allow(deprecated)]
+            &semcov::trace::NET_SOCK_PEER_ADDR,
+        ) {
             data.source = Some(peer_addr.into());
         } else if let Some(peer_ip) = span.attributes.get(&DEPRECATED_NET_PEER_IP) {
             data.source = Some(peer_ip.into());
@@ -230,11 +287,24 @@ impl From<&SpanData> for RemoteDependencyData {
             properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
-        if let Some(status_code) = span.attributes.get(&semcov::trace::HTTP_STATUS_CODE) {
+        if let Some(status_code) = span
+            .attributes
+            .get(&semcov::trace::HTTP_RESPONSE_STATUS_CODE)
+        {
+            data.result_code = Some(status_code.into());
+        } else if let Some(status_code) = span.attributes.get(
+            #[allow(deprecated)]
+            &semcov::trace::HTTP_STATUS_CODE,
+        ) {
             data.result_code = Some(status_code.into());
         }
 
-        if let Some(url) = span.attributes.get(&semcov::trace::HTTP_URL) {
+        if let Some(url) = span.attributes.get(&semcov::trace::URL_FULL) {
+            data.data = Some(url.into());
+        } else if let Some(url) = span.attributes.get(
+            #[allow(deprecated)]
+            &semcov::trace::HTTP_URL,
+        ) {
             data.data = Some(url.into());
         } else if let Some(statement) = span.attributes.get(&semcov::trace::DB_STATEMENT) {
             data.data = Some(statement.into());
@@ -246,15 +316,44 @@ impl From<&SpanData> for RemoteDependencyData {
             data.target = Some(host.into());
         } else if let Some(peer_name) = span
             .attributes
-            .get(&semcov::trace::NET_SOCK_PEER_NAME)
-            .or_else(|| span.attributes.get(&semcov::trace::NET_PEER_NAME))
-            .or_else(|| span.attributes.get(&semcov::trace::NET_SOCK_PEER_ADDR))
+            .get(&semcov::trace::SERVER_ADDRESS)
+            .or_else(|| span.attributes.get(&semcov::trace::SERVER_SOCKET_ADDRESS))
+            .or_else(|| {
+                span.attributes.get(
+                    #[allow(deprecated)]
+                    &semcov::trace::NET_SOCK_PEER_NAME,
+                )
+            })
+            .or_else(|| {
+                span.attributes.get(
+                    #[allow(deprecated)]
+                    &semcov::trace::NET_PEER_NAME,
+                )
+            })
+            .or_else(|| {
+                span.attributes.get(
+                    #[allow(deprecated)]
+                    &semcov::trace::NET_SOCK_PEER_ADDR,
+                )
+            })
             .or_else(|| span.attributes.get(&DEPRECATED_NET_PEER_IP))
         {
             if let Some(peer_port) = span
                 .attributes
-                .get(&semcov::trace::NET_SOCK_PEER_PORT)
-                .or_else(|| span.attributes.get(&semcov::trace::NET_PEER_PORT))
+                .get(&semcov::trace::SERVER_PORT)
+                .or_else(|| span.attributes.get(&semcov::trace::SERVER_SOCKET_PORT))
+                .or_else(|| {
+                    span.attributes.get(
+                        #[allow(deprecated)]
+                        &semcov::trace::NET_SOCK_PEER_PORT,
+                    )
+                })
+                .or_else(|| {
+                    span.attributes.get(
+                        #[allow(deprecated)]
+                        &semcov::trace::NET_PEER_PORT,
+                    )
+                })
             {
                 data.target = Some(format!("{}:{}", peer_name.as_str(), peer_port.as_str()).into());
             } else {
