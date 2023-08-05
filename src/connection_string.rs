@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap, convert::TryInto, str::FromStr};
 
-const DEFAULT_BREEZE_ENDPOINT: &str = "https://dc.services.visualstudio.com";
+pub(crate) const DEFAULT_BREEZE_ENDPOINT: &str = "https://dc.services.visualstudio.com";
 const FIELDS_SEPARATOR: char = ';';
 const FIELD_KEY_VALUE_SEPARATOR: char = '=';
 
@@ -25,6 +25,10 @@ pub(crate) enum ParseError {
 impl FromStr for ConnectionString {
     type Err = ParseError;
 
+    /// Parse the given connection string.
+    ///
+    /// Based on
+    /// https://github.com/Azure/azure-sdk-for-js/blob/a4b3762fd7503f90c7bc3bacf9e45ecc4012d3fa/sdk/monitor/monitor-opentelemetry-exporter/src/utils/connectionStringParser.ts
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result: HashMap<String, String> = s
             .split(FIELDS_SEPARATOR)
@@ -48,9 +52,7 @@ impl FromStr for ConnectionString {
                     .unwrap_or_else(|| "".into());
                 sanitize_url(format!("https://{}dc.{}", location_prefix, endpoint_suffix))?
             } else {
-                DEFAULT_BREEZE_ENDPOINT
-                    .try_into()
-                    .expect("default endpoint in a valid uri")
+                http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT)
             };
 
         if let Some(authorization) = result.remove("authorization") {

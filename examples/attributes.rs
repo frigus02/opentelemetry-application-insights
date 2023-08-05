@@ -7,7 +7,6 @@ use opentelemetry::{
 };
 use opentelemetry_application_insights::attrs as ai;
 use opentelemetry_semantic_conventions as semcov;
-use std::env;
 
 fn log() {
     get_active_span(|span| {
@@ -37,22 +36,20 @@ fn exception() {
 fn main() {
     env_logger::init();
 
-    let instrumentation_key =
-        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-
-    let client_provider =
-        opentelemetry_application_insights::new_pipeline(instrumentation_key.clone())
-            .with_client(reqwest::blocking::Client::new())
-            .with_trace_config(
-                sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
-                    semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
-                    semcov::resource::SERVICE_NAME.string("client"),
-                ])),
-            )
-            .build_simple();
+    let client_provider = opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+        .with_client(reqwest::blocking::Client::new())
+        .with_trace_config(
+            sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
+                semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
+                semcov::resource::SERVICE_NAME.string("client"),
+            ])),
+        )
+        .build_simple();
     let client_tracer = client_provider.tracer("example-attributes");
 
-    let server_provider = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+    let server_provider = opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::blocking::Client::new())
         .with_trace_config(
             sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![

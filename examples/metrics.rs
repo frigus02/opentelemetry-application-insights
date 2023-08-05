@@ -5,19 +5,18 @@ use opentelemetry::{
     KeyValue,
 };
 use rand::{thread_rng, Rng};
-use std::{env, error::Error, time::Duration};
+use std::{error::Error, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let instrumentation_key =
-        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-
-    let exporter = opentelemetry_application_insights::Exporter::new(
-        instrumentation_key,
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
         reqwest::Client::new(),
-    );
+    )
+    .expect("valid connection string");
     let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio)
         .with_interval(Duration::from_secs(1))
         .build();
