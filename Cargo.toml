@@ -29,36 +29,35 @@ reqwest-client = ["opentelemetry-http/reqwest", "reqwest/native-tls"]
 reqwest-client-vendored-tls = ["opentelemetry-http/reqwest", "reqwest/native-tls-vendored"]
 reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
 surf-client = ["opentelemetry-http/surf"]
-metrics = ["opentelemetry/metrics", "ureq"]
+metrics = ["opentelemetry/metrics"]
 
 [dependencies]
+async-trait = "0.1"
 bytes = "1"
 chrono = "0.4"
 flate2 = "1"
 http = "0.2"
 once_cell = "1"
-opentelemetry = "0.19"
-opentelemetry-http = "0.8"
-opentelemetry-semantic-conventions = "0.11"
+opentelemetry = "0.20"
+opentelemetry-http = "0.9"
+opentelemetry-semantic-conventions = "0.12"
 reqwest = { version = "0.11", default-features = false, features = ["blocking"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
 thiserror = "1"
-ureq = { version = "2", optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes"] }
-async-trait = "0.1.57"
 doc-comment = "0.3.3"
-env_logger = "0.9.0"
+env_logger = "0.10.0"
 insta = "1.13.0"
-opentelemetry = { version = "0.19", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
+opentelemetry = { version = "0.20", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
 opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
 rand = "0.8.5"
 regex = "1.5.5"
 surf = "2.3.2"
-test-case = "2.0.0"
+test-case = "3.0.0"
 tokio = { version = "1.17.0", features = ["rt", "macros", "process", "time"] }
 version-sync = { version = "0.9.4", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
 

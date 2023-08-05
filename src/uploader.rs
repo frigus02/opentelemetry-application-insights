@@ -3,8 +3,6 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
 use serde::Deserialize;
-#[cfg(feature = "metrics")]
-use std::io::Read;
 use std::io::Write;
 
 const STATUS_OK: u16 = 200;
@@ -48,39 +46,6 @@ pub(crate) async fn send(
         .await
         .map_err(Error::UploadConnection)?;
     handle_response(response)
-}
-
-/// Sends a telemetry items to the server.
-#[cfg(feature = "metrics")]
-pub(crate) fn send_sync(endpoint: &Uri, items: Vec<Envelope>) -> Result<(), Error> {
-    let payload = serialize_request_body(items)?;
-
-    // TODO Implement retries
-    let response = match ureq::post(&endpoint.to_string())
-        .set(http::header::CONTENT_TYPE.as_str(), "application/json")
-        .set(http::header::CONTENT_ENCODING.as_str(), "gzip")
-        .send_bytes(&payload)
-    {
-        Ok(response) => response,
-        Err(ureq::Error::Status(_, response)) => response,
-        Err(ureq::Error::Transport(err)) => return Err(Error::UploadConnection(err.into())),
-    };
-    let status = response.status();
-    let len = response
-        .header(http::header::CONTENT_LENGTH.as_str())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_default();
-    let mut bytes = Vec::with_capacity(len);
-    response
-        .into_reader()
-        .read_to_end(&mut bytes)
-        .map_err(|err| Error::UploadConnection(err.into()))?;
-    handle_response(
-        Response::builder()
-            .status(status)
-            .body(Bytes::from(bytes))
-            .map_err(|err| Error::UploadConnection(err.into()))?,
-    )
 }
 
 fn serialize_request_body(items: Vec<Envelope>) -> Result<Vec<u8>, Error> {

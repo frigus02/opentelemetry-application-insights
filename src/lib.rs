@@ -86,36 +86,29 @@ configured it should work as expected.
 This requires the **metrics** feature.
 
 ```no_run
-use opentelemetry::{global, Context};
-use opentelemetry::sdk::metrics::{controllers, processors, selectors};
-use opentelemetry::sdk::export::metrics::aggregation::stateless_temporality_selector;
+use opentelemetry::global;
+use opentelemetry::sdk::metrics::{MeterProvider, PeriodicReader};
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
     // Setup exporter
     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let temporality_selector = stateless_temporality_selector();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
-        .with_temporality_selector(temporality_selector.clone());
-    let controller = controllers::basic(processors::factory(
-        selectors::simple::inexpensive(),
-        temporality_selector,
-    ))
-    .with_exporter(exporter)
-    .with_collect_period(Duration::from_secs(1))
-    .build();
-    let cx = Context::new();
-    controller.start(&cx, opentelemetry::runtime::Tokio).unwrap();
-    global::set_meter_provider(controller.clone());
+    let exporter = opentelemetry_application_insights::Exporter::new(
+        instrumentation_key,
+        reqwest::Client::new(),
+    );
+    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio).build();
+    let meter_provider = MeterProvider::builder().with_reader(reader).build();
+    global::set_meter_provider(meter_provider);
 
     // Record value
     let meter = global::meter("example");
     let histogram = meter.f64_histogram("pi").init();
-    histogram.record(&cx, 3.14, &[]);
+    histogram.record(3.14, &[]);
 
-    // Export one last time
-    controller.stop(&cx).unwrap();
+    // Simulate work, during which metrics will periodically be reported.
+    tokio::time::sleep(Duration::from_secs(300)).await;
 }
 ```
 "#
@@ -151,42 +144,60 @@ async fn main() {
 //! [Dependency]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-dependency-telemetry
 //! [Request]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-request-telemetry
 //!
-//! | OpenTelemetry attribute key                                       | Application Insights field                               |
-//! | ----------------------------------------------------------------- | -----------------------------------------------------    |
-//! | `service.version`                                                 | Context: Application version (`ai.application.ver`)      |
-//! | `enduser.id`                                                      | Context: Authenticated user id (`ai.user.authUserId`)    |
-//! | `service.namespace` + `service.name`                              | Context: Cloud role (`ai.cloud.role`)                    |
-//! | `service.instance.id`                                             | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
-//! | `telemetry.sdk.name` + `telemetry.sdk.version`                    | Context: Internal SDK version (`ai.internal.sdkVersion`) |
-//! | `SpanKind::Server` + `http.method` + `http.route`                 | Context: Operation Name (`ai.operation.name`)            |
-//! | `ai.*`                                                            | Context: AppInsights Tag (`ai.*`)                        |
-//! | `http.url`                                                        | Dependency Data                                          |
-//! | `db.statement`                                                    | Dependency Data                                          |
-//! | `http.request.header.host`                                        | Dependency Target                                        |
-//! | `http.host` (deprecated)                                          | Dependency Target                                        |
-//! | `net.sock.peer.name` + `net.sock.peer.port`                       | Dependency Target                                        |
-//! | `net.peer.name` + `net.peer.port`                                 | Dependency Target                                        |
-//! | `net.sock.peer.addr` + `net.sock.peer.port`                       | Dependency Target                                        |
-//! | `net.peer.ip` + `net.peer.port` (deprecated)                      | Dependency Target                                        |
-//! | `db.name`                                                         | Dependency Target                                        |
-//! | `http.status_code`                                                | Dependency Result code                                   |
-//! | `db.system`                                                       | Dependency Type                                          |
-//! | `messaging.system`                                                | Dependency Type                                          |
-//! | `rpc.system`                                                      | Dependency Type                                          |
-//! | `"HTTP"` if any `http.` attribute exists                          | Dependency Type                                          |
-//! | `"DB"` if any `db.` attribute exists                              | Dependency Type                                          |
-//! | `http.url`                                                        | Request Url                                              |
-//! | `http.scheme` + `http.request.header.host` + `http.target`        | Request Url                                              |
-//! | `http.scheme` + `http.host` + `http.target` (deprecated)          | Request Url                                              |
-//! | `http.scheme` + `net.host.name` + `net.host.port` + `http.target` | Request Url                                              |
-//! | `http.client_ip`                                                  | Request Source                                           |
-//! | `net.sock.peer.addr`                                              | Request Source                                           |
-//! | `net.peer.ip` (deprecated)                                        | Request Source                                           |
-//! | `http.status_code`                                                | Request Response code                                    |
+//! | OpenTelemetry attribute key                                                | Application Insights field                               |
+//! | -------------------------------------------------------------------------- | -----------------------------------------------------    |
+//! | `service.version`                                                          | Context: Application version (`ai.application.ver`)      |
+//! | `enduser.id`                                                               | Context: Authenticated user id (`ai.user.authUserId`)    |
+//! | `service.namespace` + `service.name`                                       | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `service.instance.id`                                                      | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
+//! | `telemetry.sdk.name` + `telemetry.sdk.version`                             | Context: Internal SDK version (`ai.internal.sdkVersion`) |
+//! | `SpanKind::Server` + `http.request.method` + `http.route`                  | Context: Operation Name (`ai.operation.name`)            |
+//! | `ai.*`                                                                     | Context: AppInsights Tag (`ai.*`)                        |
+//! | `url.full`                                                                 | Dependency Data                                          |
+//! | `db.statement`                                                             | Dependency Data                                          |
+//! | `http.request.header.host`                                                 | Dependency Target                                        |
+//! | `server.address` + `server.port`                                           | Dependency Target                                        |
+//! | `server.socket.address` + `server.socket.port`                             | Dependency Target                                        |
+//! | `db.name`                                                                  | Dependency Target                                        |
+//! | `http.response.status_code`                                                | Dependency Result code                                   |
+//! | `db.system`                                                                | Dependency Type                                          |
+//! | `messaging.system`                                                         | Dependency Type                                          |
+//! | `rpc.system`                                                               | Dependency Type                                          |
+//! | `"HTTP"` if any `http.` attribute exists                                   | Dependency Type                                          |
+//! | `"DB"` if any `db.` attribute exists                                       | Dependency Type                                          |
+//! | `url.full`                                                                 | Request Url                                              |
+//! | `url.scheme` + `http.request.header.host` + `url.path` + `url.query`       | Request Url                                              |
+//! | `url.scheme` + `server.address` + `server.port` + `url.path` + `url.query` | Request Url                                              |
+//! | `client.address`                                                           | Request Source                                           |
+//! | `client.socket.address`                                                    | Request Source                                           |
+//! | `http.response.status_code`                                                | Request Response code                                    |
 //!
 //! All other attributes are directly converted to custom properties.
 //!
-//! For Requests the attributes `http.method` and `http.route` override the Name.
+//! For Requests the attributes `http.request.method` and `http.route` override the Name.
+//!
+//! ### Deprecated attributes
+//!
+//! The following deprecated attributes also work:
+//!
+//! | Attribute                   | Deprecated attribute                    |
+//! | --------------------------- | --------------------------------------- |
+//! | `http.request.method`       | `http.method`                           |
+//! | `http.request.header.host`  | `http.host`                             |
+//! | `http.response.status_code` | `http.status_code`                      |
+//! | `url.full`                  | `http.url`                              |
+//! | `url.scheme`                | `http.scheme`                           |
+//! | `url.path` + `url.query`    | `http.target`                           |
+//! | `client.address`            | `http.client_ip`                        |
+//! | `client.socket.address`     | `net.sock.peer.addr`                    |
+//! | `client.socket.address`     | `net.peer.ip`                           |
+//! | `server.address`            | `net.peer.name`      (for client spans) |
+//! | `server.port`               | `net.peer.port`      (for client spans) |
+//! | `server.socket.address`     | `net.sock.peer.addr` (for client spans) |
+//! | `server.socket.address`     | `net.peer.ip`        (for client spans) |
+//! | `server.socket.port`        | `net.sock.peer.port` (for client spans) |
+//! | `server.address`            | `net.host.name`      (for server spans) |
+//! | `server.port`               | `net.host.port`      (for server spans) |
 //!
 //! ## Events
 //!
@@ -222,17 +233,16 @@ async fn main() {
 //!
 //! ## Metrics
 //!
-//! Metrics get reported to Application Insights as Metric Data. The [`Aggregator`] (chosen through
-//! the [`Selector`] passed to the controller) determines how the data is represented.
+//! Metrics get reported to Application Insights as Metric Data. The [`Aggregation`] determines how
+//! the data is represented.
 //!
-//! | Aggregator | Data representation                                       |
-//! | ---------- | --------------------------------------------------------- |
-//! | Histogram  | aggregation with sum and count (buckets are not exported) |
-//! | LastValue  | one measurement                                           |
-//! | Sum        | aggregation with only a value                             |
+//! | Aggregator | Data representation                                                  |
+//! | ---------- | -------------------------------------------------------------------- |
+//! | Histogram  | aggregation with sum, count, min, and max (buckets are not exported) |
+//! | Gauge      | one measurement                                                      |
+//! | Sum        | aggregation with only a value                                        |
 //!
-//! [`Aggregator`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/export/metrics/trait.Aggregator.html
-//! [`Selector`]: https://docs.rs/opentelemetry/0.17.0/opentelemetry/sdk/metrics/selectors/simple/enum.Selector.html
+//! [`Aggregation`]: https://docs.rs/opentelemetry/0.20.0/opentelemetry/sdk/metrics/data/trait.Aggregation.html
 #![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.25.0")]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -250,12 +260,14 @@ mod uploader;
 
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
-use opentelemetry::sdk::export::metrics::aggregation::{
-    stateless_temporality_selector, TemporalitySelector,
+use opentelemetry::sdk::metrics::reader::{
+    AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
+    TemporalitySelector,
 };
 use opentelemetry::{
     global,
-    sdk::{self, export::ExportError, trace::TraceRuntime},
+    runtime::RuntimeChannel,
+    sdk::{self, export::ExportError, trace::BatchMessage},
     trace::TracerProvider,
     StringValue,
 };
@@ -437,7 +449,10 @@ where
 
     /// Build a configured `TracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: TraceRuntime>(mut self, runtime: R) -> sdk::trace::TracerProvider {
+    pub fn build_batch<R: RuntimeChannel<BatchMessage>>(
+        mut self,
+        runtime: R,
+    ) -> sdk::trace::TracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
         let mut builder =
@@ -458,6 +473,7 @@ where
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            Some(semcov::SCHEMA_URL),
             None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
@@ -468,11 +484,12 @@ where
     ///
     /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
     /// that.
-    pub fn install_batch<R: TraceRuntime>(self, runtime: R) -> sdk::trace::Tracer {
+    pub fn install_batch<R: RuntimeChannel<BatchMessage>>(self, runtime: R) -> sdk::trace::Tracer {
         let trace_provider = self.build_batch(runtime);
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            Some(semcov::SCHEMA_URL),
             None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
@@ -487,7 +504,9 @@ pub struct Exporter<C> {
     instrumentation_key: String,
     sample_rate: f64,
     #[cfg(feature = "metrics")]
-    temporality_selector: Box<dyn TemporalitySelector + Send + Sync>,
+    temporality_selector: Box<dyn TemporalitySelector>,
+    #[cfg(feature = "metrics")]
+    aggregation_selector: Box<dyn AggregationSelector>,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -498,8 +517,6 @@ impl<C: Debug> Debug for Exporter<C> {
             .field("endpoint", &self.endpoint)
             .field("instrumentation_key", &self.instrumentation_key)
             .field("sample_rate", &self.sample_rate);
-        #[cfg(feature = "metrics")]
-        debug.field("temporality_selector", &"_");
         debug.finish()
     }
 }
@@ -517,7 +534,9 @@ impl<C> Exporter<C> {
             instrumentation_key,
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
-            temporality_selector: Box::new(stateless_temporality_selector()),
+            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
+            #[cfg(feature = "metrics")]
+            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         }
     }
 
@@ -544,15 +563,24 @@ impl<C> Exporter<C> {
     }
 
     /// Set temporality selector.
-    ///
-    /// Default: stateless_temporality_selector
     #[cfg(feature = "metrics")]
     #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
     pub fn with_temporality_selector(
         mut self,
-        temporality_selector: impl TemporalitySelector + Send + Sync + 'static,
+        temporality_selector: impl TemporalitySelector + 'static,
     ) -> Self {
         self.temporality_selector = Box::new(temporality_selector);
+        self
+    }
+
+    /// Set aggregation selector.
+    #[cfg(feature = "metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
+    pub fn with_aggregation_selector(
+        mut self,
+        aggregation_selector: impl AggregationSelector + 'static,
+    ) -> Self {
+        self.aggregation_selector = Box::new(aggregation_selector);
         self
     }
 }

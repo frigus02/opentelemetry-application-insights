@@ -1,11 +1,8 @@
 use opentelemetry::{
     global,
     metrics::Unit,
-    sdk::{
-        export::metrics::aggregation::stateless_temporality_selector,
-        metrics::{controllers, processors, selectors},
-    },
-    Context, KeyValue,
+    sdk::metrics::{MeterProvider, PeriodicReader},
+    KeyValue,
 };
 use rand::{thread_rng, Rng};
 use std::{env, error::Error, time::Duration};
@@ -17,48 +14,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let instrumentation_key =
         env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
 
-    let temporality_selector = stateless_temporality_selector();
-    let exporter = opentelemetry_application_insights::Exporter::new(instrumentation_key, ())
-        .with_temporality_selector(temporality_selector.clone());
-    let controller = controllers::basic(processors::factory(
-        selectors::simple::histogram(vec![230., 260., 300.]),
-        temporality_selector,
-    ))
-    .with_exporter(exporter)
-    .with_collect_period(Duration::from_secs(1))
-    .build();
-
-    let cx = Context::new();
-    controller.start(&cx, opentelemetry::runtime::Tokio)?;
-    global::set_meter_provider(controller.clone());
+    let exporter = opentelemetry_application_insights::Exporter::new(
+        instrumentation_key,
+        reqwest::Client::new(),
+    );
+    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio)
+        .with_interval(Duration::from_secs(1))
+        .build();
+    let meter_provider = MeterProvider::builder().with_reader(reader).build();
+    global::set_meter_provider(meter_provider);
 
     let meter = global::meter("custom.instrumentation");
 
     // Observable
-    let cpu_utilization_gauge = meter
+    let _cpu_utilization_gauge = meter
         .f64_observable_gauge("system.cpu.utilization")
         .with_unit(Unit::new("1"))
+        .with_callback(|instrument| {
+            let mut rng = thread_rng();
+            instrument.observe(
+                rng.gen_range(0.1..0.2),
+                &[KeyValue::new("state", "idle"), KeyValue::new("cpu", 0)],
+            )
+        })
         .init();
-    meter.register_callback(move |cx| {
-        let mut rng = thread_rng();
-        cpu_utilization_gauge.observe(
-            cx,
-            rng.gen_range(0.1..0.2),
-            &[KeyValue::new("state", "idle"), KeyValue::new("cpu", 0)],
-        )
-    })?;
 
     // Recorder
     let server_duration = meter
         .u64_histogram("http.server.duration")
         .with_unit(Unit::new("milliseconds"))
         .init();
-    let cx = Context::current();
     let mut rng = thread_rng();
     for _ in 1..10 {
         server_duration.record(
-            &cx,
-            rng.gen_range(200..300),
+            rng.gen_range(50..300),
             &[
                 KeyValue::new("http.method", "GET"),
                 KeyValue::new("http.host", "10.1.2.4"),
@@ -69,8 +58,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-
-    controller.stop(&cx)?;
 
     Ok(())
 }
