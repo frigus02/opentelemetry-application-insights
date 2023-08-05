@@ -1,10 +1,13 @@
 use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
-#[cfg(feature = "metrics")]
-use opentelemetry::sdk::{export::metrics::Record, Resource};
 use opentelemetry::{
     sdk::export::trace::SpanData,
     trace::{SpanId, SpanKind},
     Key, Value,
+};
+#[cfg(feature = "metrics")]
+use opentelemetry::{
+    sdk::{AttributeSet, Resource},
+    InstrumentationLibrary,
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -44,8 +47,20 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
 }
 
 #[cfg(feature = "metrics")]
-pub(crate) fn get_tags_for_metric(record: &Record, resource: &Resource) -> Tags {
-    get_tags_from_attrs(resource.iter().chain(record.attributes().iter()))
+pub(crate) fn get_tags_for_metric(
+    resource: &Resource,
+    scope: &InstrumentationLibrary,
+    attrs: &AttributeSet,
+) -> Tags {
+    get_tags_from_attrs(
+        resource.iter().chain(
+            scope
+                .attributes
+                .iter()
+                .map(|kv| (&kv.key, &kv.value))
+                .chain(attrs.iter()),
+        ),
+    )
 }
 
 fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags

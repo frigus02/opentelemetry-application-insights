@@ -39,6 +39,12 @@ const HTTP_REQUEST_HEADER_HOST: Key = Key::from_static_str("http.request.header.
 /// `net.sock.peer.addr`.
 const DEPRECATED_NET_PEER_IP: Key = Key::from_static_str("net.peer.ip");
 
+/// Deprecated semantic convention key for HTTP client IP.
+///
+/// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3402 with
+/// `client.address`.
+const DEPRECATED_HTTP_CLIENT_IP: Key = Key::from_static_str("http.client_ip");
+
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.events.len());
@@ -187,7 +193,9 @@ impl From<&SpanData> for RequestData {
             }
         }
 
-        if let Some(client_ip) = span.attributes.get(&semcov::trace::HTTP_CLIENT_IP) {
+        if let Some(client_ip) = span.attributes.get(&semcov::trace::CLIENT_ADDRESS) {
+            data.source = Some(client_ip.into());
+        } else if let Some(client_ip) = span.attributes.get(&DEPRECATED_HTTP_CLIENT_IP) {
             data.source = Some(client_ip.into());
         } else if let Some(peer_addr) = span.attributes.get(&semcov::trace::NET_SOCK_PEER_ADDR) {
             data.source = Some(peer_addr.into());

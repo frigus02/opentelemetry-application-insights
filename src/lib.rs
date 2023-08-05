@@ -179,7 +179,8 @@ async fn main() {
 //! | `http.scheme` + `http.request.header.host` + `http.target`        | Request Url                                              |
 //! | `http.scheme` + `http.host` + `http.target` (deprecated)          | Request Url                                              |
 //! | `http.scheme` + `net.host.name` + `net.host.port` + `http.target` | Request Url                                              |
-//! | `http.client_ip`                                                  | Request Source                                           |
+//! | `client.address`                                                  | Request Source                                           |
+//! | `http.client_ip` (deprecated)                                     | Request Source                                           |
 //! | `net.sock.peer.addr`                                              | Request Source                                           |
 //! | `net.peer.ip` (deprecated)                                        | Request Source                                           |
 //! | `http.status_code`                                                | Request Response code                                    |
@@ -250,12 +251,14 @@ mod uploader;
 
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
-use opentelemetry::sdk::export::metrics::aggregation::{
-    stateless_temporality_selector, TemporalitySelector,
+use opentelemetry::sdk::metrics::reader::{
+    AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
+    TemporalitySelector,
 };
 use opentelemetry::{
     global,
-    sdk::{self, export::ExportError, trace::TraceRuntime},
+    runtime::RuntimeChannel,
+    sdk::{self, export::ExportError, trace::BatchMessage},
     trace::TracerProvider,
     StringValue,
 };
@@ -437,7 +440,10 @@ where
 
     /// Build a configured `TracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: TraceRuntime>(mut self, runtime: R) -> sdk::trace::TracerProvider {
+    pub fn build_batch<R: RuntimeChannel<BatchMessage>>(
+        mut self,
+        runtime: R,
+    ) -> sdk::trace::TracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
         let mut builder =
@@ -458,6 +464,7 @@ where
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            Some(semcov::SCHEMA_URL),
             None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
@@ -468,11 +475,12 @@ where
     ///
     /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
     /// that.
-    pub fn install_batch<R: TraceRuntime>(self, runtime: R) -> sdk::trace::Tracer {
+    pub fn install_batch<R: RuntimeChannel<BatchMessage>>(self, runtime: R) -> sdk::trace::Tracer {
         let trace_provider = self.build_batch(runtime);
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
             Some(env!("CARGO_PKG_VERSION")),
+            Some(semcov::SCHEMA_URL),
             None,
         );
         let _previous_provider = global::set_tracer_provider(trace_provider);
@@ -487,7 +495,9 @@ pub struct Exporter<C> {
     instrumentation_key: String,
     sample_rate: f64,
     #[cfg(feature = "metrics")]
-    temporality_selector: Box<dyn TemporalitySelector + Send + Sync>,
+    temporality_selector: Box<dyn TemporalitySelector>,
+    #[cfg(feature = "metrics")]
+    aggregation_selector: Box<dyn AggregationSelector>,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -498,8 +508,6 @@ impl<C: Debug> Debug for Exporter<C> {
             .field("endpoint", &self.endpoint)
             .field("instrumentation_key", &self.instrumentation_key)
             .field("sample_rate", &self.sample_rate);
-        #[cfg(feature = "metrics")]
-        debug.field("temporality_selector", &"_");
         debug.finish()
     }
 }
@@ -517,7 +525,9 @@ impl<C> Exporter<C> {
             instrumentation_key,
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
-            temporality_selector: Box::new(stateless_temporality_selector()),
+            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
+            #[cfg(feature = "metrics")]
+            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         }
     }
 
@@ -544,15 +554,24 @@ impl<C> Exporter<C> {
     }
 
     /// Set temporality selector.
-    ///
-    /// Default: stateless_temporality_selector
     #[cfg(feature = "metrics")]
     #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
     pub fn with_temporality_selector(
         mut self,
-        temporality_selector: impl TemporalitySelector + Send + Sync + 'static,
+        temporality_selector: impl TemporalitySelector + 'static,
     ) -> Self {
         self.temporality_selector = Box::new(temporality_selector);
+        self
+    }
+
+    /// Set aggregation selector.
+    #[cfg(feature = "metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
+    pub fn with_aggregation_selector(
+        mut self,
+        aggregation_selector: impl AggregationSelector + 'static,
+    ) -> Self {
+        self.aggregation_selector = Box::new(aggregation_selector);
         self
     }
 }
