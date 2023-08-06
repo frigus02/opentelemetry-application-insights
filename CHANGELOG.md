@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.27.0] - 2023-08-06
+
 - Support configuration via connection string (see [#54](https://github.com/frigus02/opentelemetry-application-insights/issues/54)).
   - Configuration via instrumentation key is now deprecated.
 
@@ -214,7 +216,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.26.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.27.0...HEAD
+[0.27.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.26.0...0.27.0
 [0.26.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.25.0...0.26.0
 [0.25.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.24.0...0.25.0
 [0.24.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.23.0...0.24.0
