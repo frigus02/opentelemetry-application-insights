@@ -490,9 +490,7 @@ where
         Exporter {
             client: Arc::new(self.client),
             endpoint: Arc::new(
-                format!("{}v2/track", self.endpoint)
-                    .try_into()
-                    .expect("appending /v2/track should always work"),
+                append_v2_track(self.endpoint).expect("appending /v2/track should always work"),
             ),
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
@@ -596,8 +594,7 @@ impl<C> Exporter<C> {
         Self {
             client: Arc::new(client),
             endpoint: Arc::new(
-                format!("{}/v2/track", DEFAULT_BREEZE_ENDPOINT)
-                    .try_into()
+                append_v2_track(DEFAULT_BREEZE_ENDPOINT)
                     .expect("appending /v2/track should always work"),
             ),
             instrumentation_key,
@@ -618,8 +615,7 @@ impl<C> Exporter<C> {
         Ok(Self {
             client: Arc::new(client),
             endpoint: Arc::new(
-                format!("{}v2/track", connection_string.ingestion_endpoint)
-                    .try_into()
+                append_v2_track(connection_string.ingestion_endpoint)
                     .expect("appending /v2/track should always work"),
             ),
             instrumentation_key: connection_string.instrumentation_key,
@@ -640,7 +636,7 @@ impl<C> Exporter<C> {
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = Arc::new(format!("{}/v2/track", endpoint).try_into()?);
+        self.endpoint = Arc::new(append_v2_track(endpoint)?);
         Ok(self)
     }
 
@@ -675,6 +671,15 @@ impl<C> Exporter<C> {
         self.aggregation_selector = Box::new(aggregation_selector);
         self
     }
+}
+
+fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUri> {
+    let mut curr = uri.to_string();
+    if !curr.ends_with('/') {
+        curr.push('/');
+    }
+    curr.push_str("v2/track");
+    curr.try_into()
 }
 
 /// Errors that occurred during span export.
