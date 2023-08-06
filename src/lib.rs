@@ -42,9 +42,8 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
-//!         .expect("valid connection string")
+//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
 //!         .with_client(reqwest::Client::new())
 //!         .install_batch(opentelemetry::runtime::Tokio);
 //!
@@ -589,7 +588,7 @@ impl<C: Debug> Debug for Exporter<C> {
 
 impl<C> Exporter<C> {
     /// Create a new exporter.
-    #[deprecated(since = "0.27.0", note = "use new_from_connection_string()")]
+    #[deprecated(since = "0.27.0", note = "use new_from_connection_string() instead")]
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
             client: Arc::new(client),
@@ -631,7 +630,7 @@ impl<C> Exporter<C> {
     /// exporter will call `/v2/track` on the specified endpoint.
     ///
     /// Default: <https://dc.services.visualstudio.com>
-    #[deprecated(since = "0.27.0", note = "use new_from_connection_string()")]
+    #[deprecated(since = "0.27.0", note = "use new_from_connection_string() instead")]
     pub fn with_endpoint(
         mut self,
         endpoint: &str,

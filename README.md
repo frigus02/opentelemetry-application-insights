@@ -16,8 +16,9 @@ Configure a OpenTelemetry pipeline using the Application Insights exporter and s
 use opentelemetry::trace::Tracer as _;
 
 fn main() {
-    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
+        .expect("valid connection string")
         .with_client(reqwest::blocking::Client::new())
         .install_simple();
 
