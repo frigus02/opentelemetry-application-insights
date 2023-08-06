@@ -5,12 +5,12 @@ authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-opentelemetry = { version = "0.18.0", features = ["rt-tokio"] }
-opentelemetry-application-insights = { version = "0.23.0", features = ["reqwest-client"] }
+opentelemetry = { version = "0.20.0", features = ["rt-tokio"] }
+opentelemetry-application-insights = { version = "0.27.0", features = ["reqwest-client"] }
 reqwest = "0.11"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "process", "time"] }
 tracing = "0.1.37"
-tracing-attributes = "0.1.23"
+tracing-attributes = "0.1.26"
 tracing-futures = "0.2.5"
-tracing-opentelemetry = "0.18.0"
-tracing-subscriber = "0.3.16"
+tracing-opentelemetry = "0.20.0"
+tracing-subscriber = "0.3.17"
