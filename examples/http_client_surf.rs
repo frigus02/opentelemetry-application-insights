@@ -1,14 +1,11 @@
 use opentelemetry::trace::Tracer as _;
-use std::env;
 
 #[async_std::main]
 async fn main() {
     env_logger::init();
 
-    let instrumentation_key =
-        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-
-    let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(surf::Client::new())
         .install_batch(opentelemetry::runtime::AsyncStd);
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Support configuration via connection string (see [#54](https://github.com/frigus02/opentelemetry-application-insights/issues/54)).
+  - Configuration via instrumentation key is now deprecated.
+
 ## [0.26.0] - 2023-08-05
 
 - Upgrade to `v0.20.0` of `opentelemetry`.

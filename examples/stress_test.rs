@@ -63,9 +63,6 @@ async fn mock_serve_http_request(n: u64) {
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let instrumentation_key =
-        env::var("INSTRUMENTATION_KEY").expect("env var INSTRUMENTATION_KEY should exist");
-
     // Please note with large NUM_ROOT_SPANS settings the batch span processor might start falling behind
     // You can mitigate this by configuring the batch span processor using the standard SDK environment variables
     // for instance:
@@ -80,7 +77,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let timer = Instant::now();
 
-    opentelemetry_application_insights::new_pipeline(instrumentation_key)
+    opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_service_name("stress-test")
         .with_client(reqwest::Client::new())
         .install_batch(opentelemetry::runtime::Tokio);

@@ -14,20 +14,21 @@ use opentelemetry::{
     },
     Context, KeyValue,
 };
-use opentelemetry_application_insights::{attrs as ai, new_pipeline};
+use opentelemetry_application_insights::{attrs as ai, new_pipeline_from_connection_string};
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
 use std::time::Duration;
 use tick::{AsyncStdTick, NoTick, TokioTick};
 
 // Fake instrumentation key (this is a random uuid)
-const INSTRUMENTATION_KEY: &str = "0fdcec70-0ce5-4085-89d9-9ae8ead9af66";
+const CONNECTION_STRING: &str = "InstrumentationKey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66";
 
 #[test]
 fn traces_simple() {
     let requests = record(NoTick, |client| {
         // Fake instrumentation key (this is a random uuid)
-        let client_provider = new_pipeline(INSTRUMENTATION_KEY.into())
+        let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
             .with_client(client.clone())
             .with_trace_config(Config::default().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("test"),
@@ -36,7 +37,8 @@ fn traces_simple() {
             .build_simple();
         let client_tracer = client_provider.tracer("test");
 
-        let server_provider = new_pipeline(INSTRUMENTATION_KEY.into())
+        let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
             .with_client(client)
             .with_trace_config(Config::default().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("test"),
@@ -122,7 +124,8 @@ fn traces_simple() {
 #[async_std::test]
 async fn traces_batch_async_std() {
     let requests = record(AsyncStdTick, |client| {
-        let tracer_provider = new_pipeline(INSTRUMENTATION_KEY.into())
+        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
             .with_client(client)
             .build_batch(opentelemetry::runtime::AsyncStd);
         let tracer = tracer_provider.tracer("test");
@@ -136,7 +139,8 @@ async fn traces_batch_async_std() {
 #[tokio::test]
 async fn traces_batch_tokio() {
     let requests = record(TokioTick, |client| {
-        let tracer_provider = new_pipeline(INSTRUMENTATION_KEY.into())
+        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
             .with_client(client)
             .build_batch(opentelemetry::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");

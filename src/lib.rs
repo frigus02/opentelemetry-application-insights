@@ -14,8 +14,9 @@
 //! use opentelemetry::trace::Tracer as _;
 //!
 //! fn main() {
-//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-//!     let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+//!     let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
+//!         .expect("valid connection string")
 //!         .with_client(reqwest::blocking::Client::new())
 //!         .install_simple();
 //!
@@ -41,8 +42,8 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-//!     let tracer = opentelemetry_application_insights::new_pipeline(instrumentation_key)
+//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
 //!         .with_client(reqwest::Client::new())
 //!         .install_batch(opentelemetry::runtime::Tokio);
 //!
@@ -93,11 +94,12 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() {
     // Setup exporter
-    let instrumentation_key = std::env::var("INSTRUMENTATION_KEY").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new(
-        instrumentation_key,
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
         reqwest::Client::new(),
-    );
+    )
+    .expect("valid connection string");
     let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio).build();
     let meter_provider = MeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
@@ -248,6 +250,7 @@ async fn main() {
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]
 
+mod connection_string;
 mod convert;
 #[cfg(feature = "metrics")]
 mod metrics;
@@ -258,6 +261,7 @@ mod tags;
 mod trace;
 mod uploader;
 
+use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
 use opentelemetry::sdk::metrics::reader::{
@@ -276,14 +280,68 @@ use opentelemetry_semantic_conventions as semcov;
 use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
+#[deprecated(
+    since = "0.27.0",
+    note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
+)]
 pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
     PipelineBuilder {
         client: (),
         config: None,
-        endpoint: None,
+        endpoint: http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT),
         instrumentation_key,
         sample_rate: None,
     }
+}
+
+/// Create a new Application Insights exporter pipeline builder
+///
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+/// let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(
+///         "InstrumentationKey=...;IngestionEndpoint=https://westus2-0.in.applicationinsights.azure.com"
+///     )?
+///     .with_client(reqwest::blocking::Client::new())
+///     .install_simple();
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_pipeline_from_connection_string(
+    connection_string: impl AsRef<str>,
+) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
+    let connection_string: ConnectionString = connection_string.as_ref().parse()?;
+    Ok(PipelineBuilder {
+        client: (),
+        config: None,
+        endpoint: connection_string.ingestion_endpoint,
+        instrumentation_key: connection_string.instrumentation_key,
+        sample_rate: None,
+    })
+}
+
+/// Create a new Application Insights exporter pipeline builder
+///
+/// Reads connection string from `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable.
+///
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+/// let tracer = opentelemetry_application_insights::new_pipeline_from_env()?
+///     .with_client(reqwest::blocking::Client::new())
+///     .install_simple();
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_pipeline_from_env(
+) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
+    let connection_string: ConnectionString =
+        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?.parse()?;
+    Ok(PipelineBuilder {
+        client: (),
+        config: None,
+        endpoint: connection_string.ingestion_endpoint,
+        instrumentation_key: connection_string.instrumentation_key,
+        sample_rate: None,
+    })
 }
 
 /// Application Insights exporter pipeline builder
@@ -291,7 +349,7 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
 pub struct PipelineBuilder<C> {
     client: C,
     config: Option<sdk::trace::Config>,
-    endpoint: Option<http::Uri>,
+    endpoint: http::Uri,
     instrumentation_key: String,
     sample_rate: Option<f64>,
 }
@@ -328,11 +386,15 @@ impl<C> PipelineBuilder<C> {
     /// # Ok(())
     /// # }
     /// ```
+    #[deprecated(
+        since = "0.27.0",
+        note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
+    )]
     pub fn with_endpoint(
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = Some(format!("{}/v2/track", endpoint).try_into()?);
+        self.endpoint = endpoint.try_into()?;
         Ok(self)
     }
 
@@ -424,15 +486,18 @@ where
     C: HttpClient + 'static,
 {
     fn init_exporter(self) -> Exporter<C> {
-        let mut exporter = Exporter::new(self.instrumentation_key, self.client);
-        if let Some(endpoint) = self.endpoint {
-            exporter.endpoint = Arc::new(endpoint);
+        Exporter {
+            client: Arc::new(self.client),
+            endpoint: Arc::new(
+                append_v2_track(self.endpoint).expect("appending /v2/track should always work"),
+            ),
+            instrumentation_key: self.instrumentation_key,
+            sample_rate: self.sample_rate.unwrap_or(100.0),
+            #[cfg(feature = "metrics")]
+            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
+            #[cfg(feature = "metrics")]
+            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         }
-        if let Some(sample_rate) = self.sample_rate {
-            exporter.sample_rate = sample_rate;
-        }
-
-        exporter
     }
 
     /// Build a configured `TracerProvider` with a simple span processor.
@@ -523,13 +588,13 @@ impl<C: Debug> Debug for Exporter<C> {
 
 impl<C> Exporter<C> {
     /// Create a new exporter.
+    #[deprecated(since = "0.27.0", note = "use new_from_connection_string() instead")]
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
             client: Arc::new(client),
             endpoint: Arc::new(
-                "https://dc.services.visualstudio.com/v2/track"
-                    .try_into()
-                    .expect("hardcoded endpoint is valid uri"),
+                append_v2_track(DEFAULT_BREEZE_ENDPOINT)
+                    .expect("appending /v2/track should always work"),
             ),
             instrumentation_key,
             sample_rate: 100.0,
@@ -540,15 +605,37 @@ impl<C> Exporter<C> {
         }
     }
 
+    /// Create a new exporter.
+    pub fn new_from_connection_string(
+        connection_string: impl AsRef<str>,
+        client: C,
+    ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
+        let connection_string: ConnectionString = connection_string.as_ref().parse()?;
+        Ok(Self {
+            client: Arc::new(client),
+            endpoint: Arc::new(
+                append_v2_track(connection_string.ingestion_endpoint)
+                    .expect("appending /v2/track should always work"),
+            ),
+            instrumentation_key: connection_string.instrumentation_key,
+            sample_rate: 100.0,
+            #[cfg(feature = "metrics")]
+            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
+            #[cfg(feature = "metrics")]
+            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+        })
+    }
+
     /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
     /// exporter will call `/v2/track` on the specified endpoint.
     ///
     /// Default: <https://dc.services.visualstudio.com>
+    #[deprecated(since = "0.27.0", note = "use new_from_connection_string() instead")]
     pub fn with_endpoint(
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = Arc::new(format!("{}/v2/track", endpoint).try_into()?);
+        self.endpoint = Arc::new(append_v2_track(endpoint)?);
         Ok(self)
     }
 
@@ -583,6 +670,15 @@ impl<C> Exporter<C> {
         self.aggregation_selector = Box::new(aggregation_selector);
         self
     }
+}
+
+fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUri> {
+    let mut curr = uri.to_string();
+    if !curr.ends_with('/') {
+        curr.push('/');
+    }
+    curr.push_str("v2/track");
+    curr.try_into()
 }
 
 /// Errors that occurred during span export.
