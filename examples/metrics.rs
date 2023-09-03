@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
+        connection_string.clone(),
         reqwest::Client::new(),
     )
     .expect("valid connection string");
@@ -22,6 +22,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
     let meter_provider = MeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
+
+    // LIVE METRICS START
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::Client::new(),
+    )
+    .expect("valid connection string");
+    let _quick_pulse = opentelemetry_application_insights::QuickPulseManager::new(
+        exporter,
+        opentelemetry::runtime::Tokio,
+    );
+    // LIVE METRICS END
 
     let meter = global::meter("custom.instrumentation");
 
@@ -44,7 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_unit(Unit::new("milliseconds"))
         .init();
     let mut rng = thread_rng();
-    for _ in 1..10 {
+    loop {
         server_duration.record(
             rng.gen_range(50..300),
             &[
@@ -55,8 +67,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 KeyValue::new("http.status_code", "200"),
             ],
         );
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
     }
-
-    Ok(())
 }

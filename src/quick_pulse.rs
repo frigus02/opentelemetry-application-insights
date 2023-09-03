@@ -54,6 +54,8 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 weight: 0,
             };
             while let Some(Message::Tick) = messages.next().await {
+                println!("[QPS] Tick");
+
                 // TODO: collect metrics
                 sys.refresh_cpu();
                 let mut cpu_usage = 0.;
@@ -66,6 +68,8 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 if next_action_time > now {
                     continue;
                 }
+
+                println!("[QPS] Action is_collecting={}", is_collecting);
 
                 let now_ms = now
                     .duration_since(SystemTime::UNIX_EPOCH)
@@ -102,6 +106,10 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 .await
                 .map_err(|_| ());
                 let last_send_succeeded = if let Ok(res) = res {
+                    println!(
+                        "[QPS] Success should_post={} redirected_host={:?} polling_interval_hint={:?}",
+                        res.should_post, res.redirected_host, res.polling_interval_hint
+                    );
                     last_success_time = now;
                     is_collecting = res.should_post;
                     if res.redirected_host.is_some() {
@@ -112,6 +120,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                     }
                     true
                 } else {
+                    println!("[QPS] Failure");
                     false
                 };
 
@@ -133,6 +142,8 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                         current_timeout = FALLBACK_INTERVAL;
                     }
                 }
+
+                println!("[QPS] Next in {:?}", current_timeout);
 
                 next_action_time = now + current_timeout;
             }
