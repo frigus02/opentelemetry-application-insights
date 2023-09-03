@@ -255,13 +255,15 @@ mod convert;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
+#[cfg(feature = "live-metrics")]
+mod quick_pulse;
 #[cfg(doctest)]
 mod readme_test;
 mod tags;
 mod trace;
 mod uploader;
 
-use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
+use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT, DEFAULT_LIVE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
 use opentelemetry::sdk::metrics::reader::{
@@ -277,6 +279,8 @@ use opentelemetry::{
 };
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
+#[cfg(feature = "live-metrics")]
+pub use quick_pulse::QuickPulseManager;
 use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -289,6 +293,8 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         client: (),
         config: None,
         endpoint: http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT),
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: http::Uri::from_static(DEFAULT_LIVE_ENDPOINT),
         instrumentation_key,
         sample_rate: None,
     }
@@ -314,6 +320,8 @@ pub fn new_pipeline_from_connection_string(
         client: (),
         config: None,
         endpoint: connection_string.ingestion_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: connection_string.live_endpoint,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
     })
@@ -339,6 +347,8 @@ pub fn new_pipeline_from_env(
         client: (),
         config: None,
         endpoint: connection_string.ingestion_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: connection_string.live_endpoint,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
     })
@@ -350,6 +360,8 @@ pub struct PipelineBuilder<C> {
     client: C,
     config: Option<sdk::trace::Config>,
     endpoint: http::Uri,
+    #[cfg(feature = "live-metrics")]
+    live_metrics_endpoint: http::Uri,
     instrumentation_key: String,
     sample_rate: Option<f64>,
 }
@@ -363,6 +375,8 @@ impl<C> PipelineBuilder<C> {
             client,
             config: self.config,
             endpoint: self.endpoint,
+            #[cfg(feature = "live-metrics")]
+            live_metrics_endpoint: self.live_metrics_endpoint,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
         }
@@ -491,6 +505,8 @@ where
             endpoint: Arc::new(
                 append_v2_track(self.endpoint).expect("appending /v2/track should always work"),
             ),
+            #[cfg(feature = "live-metrics")]
+            live_metrics_endpoint: Arc::new(self.live_metrics_endpoint),
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
@@ -566,6 +582,8 @@ where
 pub struct Exporter<C> {
     client: Arc<C>,
     endpoint: Arc<http::Uri>,
+    #[cfg(feature = "live-metrics")]
+    live_metrics_endpoint: Arc<http::Uri>,
     instrumentation_key: String,
     sample_rate: f64,
     #[cfg(feature = "metrics")]
@@ -596,6 +614,8 @@ impl<C> Exporter<C> {
                 append_v2_track(DEFAULT_BREEZE_ENDPOINT)
                     .expect("appending /v2/track should always work"),
             ),
+            #[cfg(feature = "live-metrics")]
+            live_metrics_endpoint: Arc::new(http::Uri::from_static(DEFAULT_LIVE_ENDPOINT)),
             instrumentation_key,
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
@@ -617,6 +637,8 @@ impl<C> Exporter<C> {
                 append_v2_track(connection_string.ingestion_endpoint)
                     .expect("appending /v2/track should always work"),
             ),
+            #[cfg(feature = "live-metrics")]
+            live_metrics_endpoint: Arc::new(connection_string.live_endpoint),
             instrumentation_key: connection_string.instrumentation_key,
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
