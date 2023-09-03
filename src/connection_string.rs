@@ -1,12 +1,14 @@
 use std::{borrow::Cow, collections::HashMap, convert::TryInto, str::FromStr};
 
 pub(crate) const DEFAULT_BREEZE_ENDPOINT: &str = "https://dc.services.visualstudio.com";
+pub(crate) const DEFAULT_LIVE_ENDPOINT: &str = "https://rt.services.visualstudio.com";
 const FIELDS_SEPARATOR: char = ';';
 const FIELD_KEY_VALUE_SEPARATOR: char = '=';
 
 #[derive(Debug)]
 pub(crate) struct ConnectionString {
     pub(crate) ingestion_endpoint: http::Uri,
+    pub(crate) live_endpoint: http::Uri,
     pub(crate) instrumentation_key: String,
 }
 
@@ -42,18 +44,30 @@ impl FromStr for ConnectionString {
             })
             .collect::<Result<_, _>>()?;
 
-        let ingestion_endpoint: http::Uri =
+        let prefix_suffix = result.remove("endpointsuffix").map(|endpoint_suffix| {
+            let location_prefix = result
+                .remove("location")
+                .map(|x| format!("{}.", x))
+                .unwrap_or_else(|| "".into());
+            (location_prefix, endpoint_suffix)
+        });
+
+        let ingestion_endpoint =
             if let Some(ingestion_endpoint) = result.remove("ingestionendpoint") {
                 sanitize_url(ingestion_endpoint)?
-            } else if let Some(endpoint_suffix) = result.remove("endpointsuffix") {
-                let location_prefix = result
-                    .remove("location")
-                    .map(|x| format!("{}.", x))
-                    .unwrap_or_else(|| "".into());
+            } else if let Some((location_prefix, endpoint_suffix)) = prefix_suffix.as_ref() {
                 sanitize_url(format!("https://{}dc.{}", location_prefix, endpoint_suffix))?
             } else {
                 http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT)
             };
+
+        let live_endpoint = if let Some(live_endpoint) = result.remove("liveendpoint") {
+            sanitize_url(live_endpoint)?
+        } else if let Some((location_prefix, endpoint_suffix)) = prefix_suffix.as_ref() {
+            sanitize_url(format!("https://{}live.{}", location_prefix, endpoint_suffix))?
+        } else {
+            http::Uri::from_static(DEFAULT_LIVE_ENDPOINT)
+        };
 
         if let Some(authorization) = result.remove("authorization") {
             if !authorization.eq_ignore_ascii_case("ikey") {
@@ -66,6 +80,7 @@ impl FromStr for ConnectionString {
 
         Ok(ConnectionString {
             ingestion_endpoint,
+            live_endpoint,
             instrumentation_key,
         })
     }
@@ -90,42 +105,54 @@ mod tests {
     use test_case::test_case;
 
     #[test_case(
-        "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint=ingest",
+        "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint=ingest;LiveEndpoint=live",
         "ingest",
+        "live",
         "instr_key" ; "default")]
     #[test_case(
-        "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint= http://ingest/   ",
+        "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint= http://ingest/  ;LiveEndpoint= http://live/  ",
         "https://ingest",
+        "https://live",
         "instr_key" ; "sanitize url")]
     #[test_case(
-        "Foo=1;InstrumentationKey=instr_key;Bar=2;IngestionEndpoint=ingest;Baz=3",
+        "Foo=1;InstrumentationKey=instr_key;Bar=2;IngestionEndpoint=ingest;LiveEndpoint=live;Baz=3",
         "ingest",
+        "live",
         "instr_key" ; "ignore unknown fields")]
     #[test_case(
         "InstrumentationKey=instr_key",
         DEFAULT_BREEZE_ENDPOINT,
+        DEFAULT_LIVE_ENDPOINT,
         "instr_key" ; "default endpoint")]
     #[test_case(
         "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com",
         "https://dc.ai.contoso.com",
+        "https://live.ai.contoso.com",
         "instr_key" ; "endpoint suffix")]
     #[test_case(
         "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com;Location=westus2",
         "https://westus2.dc.ai.contoso.com",
+        "https://westus2.live.ai.contoso.com",
         "instr_key" ; "endpoint suffix & location")]
     #[test_case(
-        "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com;IngestionEndpoint=ingest",
+        "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com;IngestionEndpoint=ingest;LiveEndpoint=live",
         "ingest",
+        "live",
         "instr_key" ; "endpoint suffix & override")]
     fn parse_succeeds(
         connection_string: &'static str,
         expected_ingestion_endpoint: &'static str,
+        expected_live_endpoint: &'static str,
         expected_instrumentation_key: &'static str,
     ) {
         let result: ConnectionString = connection_string.parse().unwrap();
         assert_eq!(
             http::Uri::try_from(expected_ingestion_endpoint).unwrap(),
             result.ingestion_endpoint
+        );
+        assert_eq!(
+            http::Uri::try_from(expected_live_endpoint).unwrap(),
+            result.live_endpoint
         );
         assert_eq!(
             expected_instrumentation_key.to_string(),
