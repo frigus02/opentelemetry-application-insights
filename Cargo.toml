@@ -30,7 +30,7 @@ reqwest-client-vendored-tls = ["opentelemetry-http/reqwest", "reqwest/native-tls
 reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
 surf-client = ["opentelemetry-http/surf"]
 metrics = ["opentelemetry/metrics"]
-live-metrics = ["futures-util"]
+live-metrics = ["futures-util", "sysinfo"]
 
 [dependencies]
 async-trait = "0.1"
@@ -48,6 +48,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
 thiserror = "1"
+sysinfo = { version = "0.29", optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes"] }

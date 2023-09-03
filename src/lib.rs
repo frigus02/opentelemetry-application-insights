@@ -263,7 +263,9 @@ mod tags;
 mod trace;
 mod uploader;
 
-use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT, DEFAULT_LIVE_ENDPOINT};
+#[cfg(feature = "live-metrics")]
+use connection_string::DEFAULT_LIVE_ENDPOINT;
+use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
 use opentelemetry::sdk::metrics::reader::{

@@ -1,6 +1,7 @@
 use std::{borrow::Cow, collections::HashMap, convert::TryInto, str::FromStr};
 
 pub(crate) const DEFAULT_BREEZE_ENDPOINT: &str = "https://dc.services.visualstudio.com";
+#[cfg(feature = "live-metrics")]
 pub(crate) const DEFAULT_LIVE_ENDPOINT: &str = "https://rt.services.visualstudio.com";
 const FIELDS_SEPARATOR: char = ';';
 const FIELD_KEY_VALUE_SEPARATOR: char = '=';
@@ -8,6 +9,7 @@ const FIELD_KEY_VALUE_SEPARATOR: char = '=';
 #[derive(Debug)]
 pub(crate) struct ConnectionString {
     pub(crate) ingestion_endpoint: http::Uri,
+    #[cfg(feature = "live-metrics")]
     pub(crate) live_endpoint: http::Uri,
     pub(crate) instrumentation_key: String,
 }
@@ -61,10 +63,14 @@ impl FromStr for ConnectionString {
                 http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT)
             };
 
+        #[cfg(feature = "live-metrics")]
         let live_endpoint = if let Some(live_endpoint) = result.remove("liveendpoint") {
             sanitize_url(live_endpoint)?
         } else if let Some((location_prefix, endpoint_suffix)) = prefix_suffix.as_ref() {
-            sanitize_url(format!("https://{}live.{}", location_prefix, endpoint_suffix))?
+            sanitize_url(format!(
+                "https://{}live.{}",
+                location_prefix, endpoint_suffix
+            ))?
         } else {
             http::Uri::from_static(DEFAULT_LIVE_ENDPOINT)
         };
@@ -80,6 +86,7 @@ impl FromStr for ConnectionString {
 
         Ok(ConnectionString {
             ingestion_endpoint,
+            #[cfg(feature = "live-metrics")]
             live_endpoint,
             instrumentation_key,
         })
@@ -107,42 +114,42 @@ mod tests {
     #[test_case(
         "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint=ingest;LiveEndpoint=live",
         "ingest",
-        "live",
+        #[cfg(feature = "live-metrics")] "live",
         "instr_key" ; "default")]
     #[test_case(
         "Authorization=ikey;InstrumentationKey=instr_key;IngestionEndpoint= http://ingest/  ;LiveEndpoint= http://live/  ",
         "https://ingest",
-        "https://live",
+        #[cfg(feature = "live-metrics")] "https://live",
         "instr_key" ; "sanitize url")]
     #[test_case(
         "Foo=1;InstrumentationKey=instr_key;Bar=2;IngestionEndpoint=ingest;LiveEndpoint=live;Baz=3",
         "ingest",
-        "live",
+        #[cfg(feature = "live-metrics")] "live",
         "instr_key" ; "ignore unknown fields")]
     #[test_case(
         "InstrumentationKey=instr_key",
         DEFAULT_BREEZE_ENDPOINT,
-        DEFAULT_LIVE_ENDPOINT,
+        #[cfg(feature = "live-metrics")] DEFAULT_LIVE_ENDPOINT,
         "instr_key" ; "default endpoint")]
     #[test_case(
         "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com",
         "https://dc.ai.contoso.com",
-        "https://live.ai.contoso.com",
+        #[cfg(feature = "live-metrics")] "https://live.ai.contoso.com",
         "instr_key" ; "endpoint suffix")]
     #[test_case(
         "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com;Location=westus2",
         "https://westus2.dc.ai.contoso.com",
-        "https://westus2.live.ai.contoso.com",
+        #[cfg(feature = "live-metrics")] "https://westus2.live.ai.contoso.com",
         "instr_key" ; "endpoint suffix & location")]
     #[test_case(
         "InstrumentationKey=instr_key;EndpointSuffix=ai.contoso.com;IngestionEndpoint=ingest;LiveEndpoint=live",
         "ingest",
-        "live",
+        #[cfg(feature = "live-metrics")] "live",
         "instr_key" ; "endpoint suffix & override")]
     fn parse_succeeds(
         connection_string: &'static str,
         expected_ingestion_endpoint: &'static str,
-        expected_live_endpoint: &'static str,
+        #[cfg(feature = "live-metrics")] expected_live_endpoint: &'static str,
         expected_instrumentation_key: &'static str,
     ) {
         let result: ConnectionString = connection_string.parse().unwrap();
@@ -150,6 +157,7 @@ mod tests {
             http::Uri::try_from(expected_ingestion_endpoint).unwrap(),
             result.ingestion_endpoint
         );
+        #[cfg(feature = "live-metrics")]
         assert_eq!(
             http::Uri::try_from(expected_live_endpoint).unwrap(),
             result.live_endpoint

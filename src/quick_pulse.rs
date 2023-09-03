@@ -1,12 +1,16 @@
 use crate::{
-    models::QuickPulseEnvelope,
+    models::{QuickPulseEnvelope, QuickPulseMetric},
     uploader::{self, PostOrPing},
     Exporter,
 };
 use futures_util::{stream, StreamExt as _};
-use opentelemetry::runtime::{RuntimeChannel, TrySend};
+use opentelemetry::{
+    runtime::{RuntimeChannel, TrySend},
+    sdk::trace::{IdGenerator as _, RandomIdGenerator},
+};
 use opentelemetry_http::HttpClient;
 use std::{time::Duration, time::SystemTime};
+use sysinfo::{CpuExt as _, System, SystemExt as _};
 
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
@@ -42,26 +46,45 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
             let mut last_success_time = SystemTime::UNIX_EPOCH;
             let mut redirected_host: Option<http::Uri> = None;
             let mut polling_interval_hint: Option<Duration> = None;
+            let stream_id = format!("{:032x}", RandomIdGenerator::default().new_trace_id());
+            let mut sys = System::new();
+            let mut cpu_metric = QuickPulseMetric {
+                name: "\\Processor(_Total)\\% Processor Time".into(),
+                value: 0.0,
+                weight: 0,
+            };
             while let Some(Message::Tick) = messages.next().await {
+                // TODO: collect metrics
+                sys.refresh_cpu();
+                let mut cpu_usage = 0.;
+                for cpu in sys.cpus() {
+                    cpu_usage += cpu.cpu_usage();
+                }
+                add_metric(&mut cpu_metric, cpu_usage);
+
                 let now = SystemTime::now();
                 if next_action_time < now {
                     continue;
                 }
 
-                // TODO: collect metrics
-                // TODO: clear buffer
+                let now_ms = now
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0);
                 let envelope = QuickPulseEnvelope {
                     documents: Vec::new(),
-                    instance: "".into(),
-                    role_name: "".into(),
                     instrumentation_key: exporter.instrumentation_key.clone(),
+                    metrics: vec![cpu_metric.clone()],
                     invariant_version: 1,
-                    machine_name: "".into(),
-                    metrics: Vec::new(),
-                    stream_id: "".into(),
-                    timestamp: "".into(),
-                    version: "".into(),
+                    timestamp: format!("/Date({})/", now_ms),
+                    version: None,
+                    stream_id: stream_id.clone(),
+                    machine_name: "Unknown".into(),
+                    instance: "Unknown".into(),
+                    role_name: None,
                 };
+
+                reset_metric(&mut cpu_metric);
 
                 let res = uploader::send_quick_pulse(
                     exporter.client.as_ref(),
@@ -127,4 +150,19 @@ impl<R: RuntimeChannel<()>> Drop for QuickPulseManager<R> {
             ));
         }
     }
+}
+
+fn add_metric(metric: &mut QuickPulseMetric, value: f32) {
+    if metric.weight == 0 {
+        metric.value = value;
+        metric.weight = 1;
+    } else {
+        metric.value = (metric.value * (metric.weight as f32) + value) / (metric.weight + 1) as f32;
+        metric.weight += 1;
+    }
+}
+
+fn reset_metric(metric: &mut QuickPulseMetric) {
+    metric.value = 0.0;
+    metric.weight = 0;
 }

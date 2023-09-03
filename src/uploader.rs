@@ -183,9 +183,11 @@ pub(crate) async fn send_quick_pulse(
         request_builder = request_builder
             .header("m-ms-qps-stream-id", envelope.stream_id)
             .header("m-ms-qps-machine-name", envelope.machine_name)
-            .header("m-ms-qps-role-name", envelope.role_name)
             .header("m-ms-qps-instance-name", envelope.instance)
             .header("m-ms-qps-invariant-version", envelope.invariant_version);
+        if let Some(role_name) = envelope.role_name {
+            request_builder = request_builder.header("m-ms-qps-role-name", role_name);
+        }
     }
     let request = request_builder
         .body(payload)

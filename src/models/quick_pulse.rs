@@ -12,6 +12,8 @@ pub(crate) struct QuickPulseDocument {
     pub(crate) properties: Vec<QuickPulseDocumentProperty>,
 }
 
+// TODO: map trace models to this
+// https://github.com/microsoft/ApplicationInsights-node.js/blob/84d57aa1565ca8c3dff1e14aa8f63f00b8f87d34/Library/QuickPulseEnvelopeFactory.ts#L55
 #[derive(Debug, Serialize)]
 #[serde(tag = "document_type", rename_all = "PascalCase")]
 pub(crate) enum QuickPulseDocumentType {
@@ -27,7 +29,6 @@ pub(crate) enum QuickPulseDocumentType {
         message: String,
         severity_level: String,
     },
-    Metric,
     Request {
         name: String,
         success: Option<bool>,
@@ -45,8 +46,6 @@ pub(crate) enum QuickPulseDocumentType {
         dependency_type_name: String,
         operation_name: String,
     },
-    Availability,
-    PageView,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,25 +55,29 @@ pub(crate) struct QuickPulseDocumentProperty {
     pub(crate) value: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseMetric {
     pub(crate) name: String,
-    pub(crate) value: i32,
-    pub(crate) weight: i32,
+    pub(crate) value: f32,
+    pub(crate) weight: u32,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseEnvelope {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) documents: Vec<QuickPulseDocument>,
     pub(crate) instance: String,
-    pub(crate) role_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) role_name: Option<String>,
     pub(crate) instrumentation_key: String,
     pub(crate) invariant_version: i32,
     pub(crate) machine_name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) metrics: Vec<QuickPulseMetric>,
     pub(crate) stream_id: String,
     pub(crate) timestamp: String,
-    pub(crate) version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) version: Option<String>,
 }
