@@ -9,6 +9,8 @@ mod exception_details;
 mod message_data;
 #[cfg(feature = "metrics")]
 mod metric_data;
+#[cfg(feature = "live-metrics")]
+mod quick_pulse;
 mod remote_dependency_data;
 mod request_data;
 mod sanitize;
@@ -24,6 +26,8 @@ pub(crate) use exception_details::*;
 pub(crate) use message_data::*;
 #[cfg(feature = "metrics")]
 pub(crate) use metric_data::*;
+#[cfg(feature = "live-metrics")]
+pub(crate) use quick_pulse::*;
 pub(crate) use remote_dependency_data::*;
 pub(crate) use request_data::*;
 pub(crate) use sanitize::*;

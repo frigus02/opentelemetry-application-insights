@@ -1,7 +1,12 @@
+use crate::{
+    models::QuickPulseEnvelope,
+    uploader::{self, PostOrPing},
+    Exporter,
+};
 use futures_util::{stream, StreamExt as _};
-use std::{time::Duration, time::SystemTime};
-
 use opentelemetry::runtime::{RuntimeChannel, TrySend};
+use opentelemetry_http::HttpClient;
+use std::{time::Duration, time::SystemTime};
 
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
@@ -21,15 +26,9 @@ enum Message {
     End,
 }
 
-struct Response {
-    should_post: bool,
-    redirected_host: Option<http::Uri>,
-    polling_interval_hint: Option<Duration>,
-}
-
 impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
     /// Start live metrics
-    pub fn new(runtime: R) -> QuickPulseManager<R> {
+    pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
         let (message_sender, message_receiver) = runtime.batch_message_channel(0);
         let ticker = runtime.interval(TICK_INTERVAL).map(|_| Message::Tick);
 
@@ -51,12 +50,34 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
 
                 // TODO: collect metrics
                 // TODO: clear buffer
-
-                let res = if is_collecting {
-                    post(&redirected_host).await
-                } else {
-                    ping(&redirected_host).await
+                let envelope = QuickPulseEnvelope {
+                    documents: Vec::new(),
+                    instance: "".into(),
+                    role_name: "".into(),
+                    instrumentation_key: exporter.instrumentation_key.clone(),
+                    invariant_version: 1,
+                    machine_name: "".into(),
+                    metrics: Vec::new(),
+                    stream_id: "".into(),
+                    timestamp: "".into(),
+                    version: "".into(),
                 };
+
+                let res = uploader::send_quick_pulse(
+                    exporter.client.as_ref(),
+                    redirected_host
+                        .as_ref()
+                        .unwrap_or(&exporter.live_metrics_endpoint),
+                    &exporter.instrumentation_key,
+                    if is_collecting {
+                        PostOrPing::Post
+                    } else {
+                        PostOrPing::Ping
+                    },
+                    envelope,
+                )
+                .await
+                .map_err(|_| ());
                 let last_send_succeeded = if let Ok(res) = res {
                     last_success_time = now;
                     is_collecting = res.should_post;
@@ -106,12 +127,4 @@ impl<R: RuntimeChannel<()>> Drop for QuickPulseManager<R> {
             ));
         }
     }
-}
-
-async fn post(_host: &Option<http::Uri>) -> Result<Response, ()> {
-    Err(())
-}
-
-async fn ping(_host: &Option<http::Uri>) -> Result<Response, ()> {
-    Err(())
 }
