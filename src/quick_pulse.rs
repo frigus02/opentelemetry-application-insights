@@ -33,7 +33,7 @@ enum Message {
 impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
     /// Start live metrics
     pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
-        let (message_sender, message_receiver) = runtime.batch_message_channel(0);
+        let (message_sender, message_receiver) = runtime.batch_message_channel(1);
         let ticker = runtime.interval(TICK_INTERVAL).map(|_| Message::Tick);
 
         let mut messages = Box::pin(stream::select(
@@ -63,7 +63,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 add_metric(&mut cpu_metric, cpu_usage);
 
                 let now = SystemTime::now();
-                if next_action_time < now {
+                if next_action_time > now {
                     continue;
                 }
 
