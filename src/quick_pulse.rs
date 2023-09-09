@@ -3,18 +3,21 @@ use crate::{
     uploader_quick_pulse::{self, PostOrPing},
     Exporter,
 };
-use futures_util::{
-    future::{self, Either},
-    pin_mut, StreamExt as _,
-};
+use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{
     runtime::{RuntimeChannel, TrySend},
-    sdk::trace::{IdGenerator as _, RandomIdGenerator},
+    sdk::{
+        export::trace::SpanData,
+        trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
+    },
+    trace::TraceError,
+    Context,
 };
 use opentelemetry_http::HttpClient;
-use std::{time::Duration, time::SystemTime};
+use std::{fmt::Debug, time::Duration, time::SystemTime};
 use sysinfo::{CpuExt as _, System, SystemExt as _};
 
+const CHANNEL_CAPACITY: usize = 100;
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
 const FALLBACK_INTERVAL: Duration = Duration::from_secs(60);
@@ -23,14 +26,21 @@ const POST_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Live metrics
 #[derive(Debug)]
-pub struct QuickPulseManager<R: RuntimeChannel<()>> {
+pub struct QuickPulseManager<R: RuntimeChannel<Message> + Debug> {
     message_sender: R::Sender,
 }
 
-impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
+#[derive(Debug)]
+pub enum Message {
+    ProcessSpan(SpanData),
+    Stop,
+    Send,
+}
+
+impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
     /// Start live metrics
     pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
-        let (message_sender, message_receiver) = runtime.batch_message_channel(1);
+        let (message_sender, message_receiver) = runtime.batch_message_channel(CHANNEL_CAPACITY);
         let delay_runtime = runtime.clone();
         runtime.spawn(Box::pin(async move {
             let mut is_collecting = false;
@@ -44,13 +54,25 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 value: 0.0,
                 weight: 0,
             };
-            let mut current_timeout = PING_INTERVAL;
 
-            let stop = Box::pin(message_receiver).into_future();
-            pin_mut!(stop);
+            let message_receiver = message_receiver.fuse();
+            pin_mut!(message_receiver);
+            let mut delay = delay_runtime.delay(PING_INTERVAL).fuse();
+
             loop {
-                if let Either::Left(_) = future::select(&mut stop, delay_runtime.delay(current_timeout)).await {
-                    break;
+                let msg = select_biased! {
+                    msg = message_receiver.next() => msg.unwrap_or(Message::Stop),
+                    _ = delay => Message::Send,
+                };
+                match msg {
+                    Message::ProcessSpan(_span) => {
+                        // collect metrics
+                        // https://github.com/microsoft/ApplicationInsights-node.js/blob/aaafbfd8ffbc454d4a5c30cda4492891410b9f66/TelemetryProcessors/PerformanceMetricsTelemetryProcessor.ts#L6
+                    },
+                    Message::Stop => break,
+                    Message::Send => {
+                        // upload
+                    }
                 }
 
                 println!("[QPS] Tick");
@@ -119,7 +141,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                     false
                 };
 
-                current_timeout = if is_collecting {
+                let mut current_timeout = if is_collecting {
                     POST_INTERVAL
                 } else {
                     polling_interval_hint.unwrap_or(PING_INTERVAL)
@@ -139,6 +161,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 }
 
                 println!("[QPS] Next in {:?}", current_timeout);
+                delay = delay_runtime.delay(current_timeout).fuse();
             }
         }));
 
@@ -146,12 +169,31 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
     }
 }
 
-impl<R: RuntimeChannel<()>> Drop for QuickPulseManager<R> {
+impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> {
+    fn on_start(&self, _span: &mut Span, _cx: &Context) {}
+
+    fn on_end(&self, span: SpanData) {
+        if let Err(err) = self.message_sender.try_send(Message::ProcessSpan(span)) {
+            opentelemetry::global::handle_error(TraceError::Other(err.into()));
+        }
+    }
+
+    fn force_flush(&self) -> Result<(), TraceError> {
+        Ok(())
+    }
+
+    fn shutdown(&mut self) -> Result<(), TraceError> {
+        self.message_sender
+            .try_send(Message::Stop)
+            .map_err(|err| TraceError::Other(err.into()))?;
+        Ok(())
+    }
+}
+
+impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
     fn drop(&mut self) {
-        if let Err(err) = self.message_sender.try_send(()) {
-            opentelemetry::global::handle_error(opentelemetry::metrics::MetricsError::Other(
-                err.to_string(),
-            ));
+        if let Err(err) = self.shutdown() {
+            opentelemetry::global::handle_error(err);
         }
     }
 }
