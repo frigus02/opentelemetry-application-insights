@@ -262,6 +262,8 @@ mod readme_test;
 mod tags;
 mod trace;
 mod uploader;
+#[cfg(feature = "live-metrics")]
+mod uploader_quick_pulse;
 
 #[cfg(feature = "live-metrics")]
 use connection_string::DEFAULT_LIVE_ENDPOINT;

@@ -1,6 +1,6 @@
 use crate::{
     models::{QuickPulseEnvelope, QuickPulseMetric},
-    uploader::{self, PostOrPing},
+    uploader_quick_pulse::{self, PostOrPing},
     Exporter,
 };
 use futures_util::{stream, StreamExt as _};
@@ -77,7 +77,6 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                     .unwrap_or(0);
                 let envelope = QuickPulseEnvelope {
                     documents: Vec::new(),
-                    instrumentation_key: exporter.instrumentation_key.clone(),
                     metrics: vec![cpu_metric.clone()],
                     invariant_version: 1,
                     timestamp: format!("/Date({})/", now_ms),
@@ -90,7 +89,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
 
                 reset_metric(&mut cpu_metric);
 
-                let res = uploader::send_quick_pulse(
+                let res = uploader_quick_pulse::send(
                     exporter.client.as_ref(),
                     redirected_host
                         .as_ref()
