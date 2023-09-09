@@ -1,38 +1,49 @@
 use opentelemetry::{
     global,
     metrics::Unit,
-    sdk::metrics::{MeterProvider, PeriodicReader},
+    sdk::{
+        metrics::{MeterProvider, PeriodicReader},
+        trace::TracerProvider,
+    },
+    trace::{SpanKind, Status, Tracer as _, TracerProvider as _},
     KeyValue,
 };
+use opentelemetry_semantic_conventions as semcov;
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
+
+fn exporter(
+    connection_string: &str,
+) -> opentelemetry_application_insights::Exporter<reqwest::Client> {
+    opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::Client::new(),
+    )
+    .expect("valid connection string")
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string.clone(),
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio)
-        .with_interval(Duration::from_secs(1))
-        .build();
+    let reader =
+        PeriodicReader::builder(exporter(&connection_string), opentelemetry::runtime::Tokio)
+            .with_interval(Duration::from_secs(1))
+            .build();
     let meter_provider = MeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
 
     // LIVE METRICS START
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
-    let _quick_pulse = opentelemetry_application_insights::QuickPulseManager::new(
-        exporter,
+    let quick_pulse = opentelemetry_application_insights::QuickPulseManager::new(
+        exporter(&connection_string),
         opentelemetry::runtime::Tokio,
     );
+    let tracer_provider = TracerProvider::builder()
+        .with_batch_exporter(exporter(&connection_string), opentelemetry::runtime::Tokio)
+        .with_span_processor(quick_pulse)
+        .build();
+    let tracer = tracer_provider.tracer("example-metrics");
     // LIVE METRICS END
 
     let meter = global::meter("custom.instrumentation");
@@ -67,6 +78,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 KeyValue::new("http.status_code", "200"),
             ],
         );
-        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        let _span = tracer
+            .span_builder("request")
+            .with_kind(SpanKind::Server)
+            .with_status(if rng.gen_ratio(2, 3) {
+                Status::Ok
+            } else {
+                Status::error("")
+            })
+            .with_attributes(vec![
+                semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
+                semcov::trace::URL_SCHEME.string("https"),
+                semcov::trace::URL_PATH.string("/hello/world"),
+                semcov::trace::URL_QUERY.string("name=marry"),
+                semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
+            ])
+            .start(&tracer);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
 }

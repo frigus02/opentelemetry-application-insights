@@ -1,5 +1,5 @@
 use crate::{
-    models::{QuickPulseEnvelope, QuickPulseMetric},
+    models::{QuickPulseEnvelope, QuickPulseMetric, RequestData},
     uploader_quick_pulse::{self, PostOrPing},
     Exporter,
 };
@@ -10,7 +10,7 @@ use opentelemetry::{
         export::trace::SpanData,
         trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
     },
-    trace::TraceError,
+    trace::{SpanKind, TraceError},
     Context,
 };
 use opentelemetry_http::HttpClient;
@@ -44,7 +44,7 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
         let delay_runtime = runtime.clone();
         runtime.spawn(Box::pin(async move {
             let mut is_collecting = false;
-            let mut last_success_time = SystemTime::UNIX_EPOCH;
+            let mut last_success_time = SystemTime::now();
             let mut redirected_host: Option<http::Uri> = None;
             let mut polling_interval_hint: Option<Duration> = None;
             let stream_id = format!("{:032x}", RandomIdGenerator::default().new_trace_id());
@@ -54,6 +54,24 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                 value: 0.0,
                 weight: 0,
             };
+            let mut request_rate_metric = QuickPulseMetric {
+                name: "\\ApplicationInsights\\Requests/Sec".into(),
+                value: 0.0,
+                weight: 0,
+            };
+            let mut request_failure_rate_metric = QuickPulseMetric {
+                name: "\\ApplicationInsights\\Requests Failed/Sec".into(),
+                value: 0.0,
+                weight: 0,
+            };
+            let mut request_duration_metric = QuickPulseMetric {
+                name: "\\ApplicationInsights\\Request Duration".into(),
+                value: 0.0,
+                weight: 0,
+            };
+            let mut request_count = 0;
+            let mut request_failed_count = 0;
+            let mut request_duration = Duration::default();
 
             let message_receiver = message_receiver.fuse();
             pin_mut!(message_receiver);
@@ -65,9 +83,18 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                     _ = delay => Message::Send,
                 };
                 match msg {
-                    Message::ProcessSpan(_span) => {
+                    Message::ProcessSpan(span) => {
                         // collect metrics
                         // https://github.com/microsoft/ApplicationInsights-node.js/blob/aaafbfd8ffbc454d4a5c30cda4492891410b9f66/TelemetryProcessors/PerformanceMetricsTelemetryProcessor.ts#L6
+                        if matches!(span.span_kind, SpanKind::Server | SpanKind::Consumer) {
+                            let data: RequestData = (&span).into();
+                            request_count += 1;
+                            if !data.success {
+                                request_failed_count += 1;
+                            }
+                            request_duration += span.end_time.duration_since(span.start_time).unwrap_or_default();
+                            continue;
+                        }
                     },
                     Message::Stop => break,
                     Message::Send => {
@@ -87,6 +114,18 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
 
                 let now = SystemTime::now();
 
+                let elapsed = now.duration_since(last_success_time).unwrap_or_default();
+                if elapsed.as_secs() > 0 {
+                    add_metric(&mut request_rate_metric, request_count as f32 / elapsed.as_secs() as f32);
+                    add_metric(&mut request_failure_rate_metric, request_failed_count as f32 / elapsed.as_secs() as f32);
+                    if request_count > 0 {
+                        add_metric(&mut request_duration_metric, request_duration.as_millis() as f32 / request_count as f32);
+                    }
+                    request_count = 0;
+                    request_failed_count = 0;
+                    request_duration = Duration::default();
+                }
+
                 println!("[QPS] Action is_collecting={}", is_collecting);
 
                 let now_ms = now
@@ -95,7 +134,12 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                     .unwrap_or(0);
                 let envelope = QuickPulseEnvelope {
                     documents: Vec::new(),
-                    metrics: vec![cpu_metric.clone()],
+                    metrics: vec![
+                        cpu_metric.clone(),
+                        request_rate_metric.clone(),
+                        request_failure_rate_metric.clone(),
+                        request_duration_metric.clone(),
+                    ],
                     invariant_version: 1,
                     timestamp: format!("/Date({})/", now_ms),
                     version: None,
@@ -106,6 +150,9 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                 };
 
                 reset_metric(&mut cpu_metric);
+                reset_metric(&mut request_rate_metric);
+                reset_metric(&mut request_failure_rate_metric);
+                reset_metric(&mut request_duration_metric);
 
                 let res = uploader_quick_pulse::send(
                     exporter.client.as_ref(),
