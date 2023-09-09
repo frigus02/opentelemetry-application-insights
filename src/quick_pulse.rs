@@ -3,7 +3,10 @@ use crate::{
     uploader_quick_pulse::{self, PostOrPing},
     Exporter,
 };
-use futures_util::{stream, StreamExt as _};
+use futures_util::{
+    future::{self, Either},
+    pin_mut, StreamExt as _,
+};
 use opentelemetry::{
     runtime::{RuntimeChannel, TrySend},
     sdk::trace::{IdGenerator as _, RandomIdGenerator},
@@ -17,7 +20,6 @@ const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
 const FALLBACK_INTERVAL: Duration = Duration::from_secs(60);
 const PING_INTERVAL: Duration = Duration::from_secs(5);
 const POST_INTERVAL: Duration = Duration::from_secs(1);
-const TICK_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Live metrics
 #[derive(Debug)]
@@ -25,23 +27,12 @@ pub struct QuickPulseManager<R: RuntimeChannel<()>> {
     message_sender: R::Sender,
 }
 
-enum Message {
-    Tick,
-    End,
-}
-
 impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
     /// Start live metrics
     pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
         let (message_sender, message_receiver) = runtime.batch_message_channel(1);
-        let ticker = runtime.interval(TICK_INTERVAL).map(|_| Message::Tick);
-
-        let mut messages = Box::pin(stream::select(
-            message_receiver.map(|_| Message::End),
-            ticker,
-        ));
+        let delay_runtime = runtime.clone();
         runtime.spawn(Box::pin(async move {
-            let mut next_action_time = SystemTime::UNIX_EPOCH;
             let mut is_collecting = false;
             let mut last_success_time = SystemTime::UNIX_EPOCH;
             let mut redirected_host: Option<http::Uri> = None;
@@ -53,7 +44,15 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 value: 0.0,
                 weight: 0,
             };
-            while let Some(Message::Tick) = messages.next().await {
+            let mut current_timeout = PING_INTERVAL;
+
+            let stop = Box::pin(message_receiver).into_future();
+            pin_mut!(stop);
+            loop {
+                if let Either::Left(_) = future::select(&mut stop, delay_runtime.delay(current_timeout)).await {
+                    break;
+                }
+
                 println!("[QPS] Tick");
 
                 // TODO: collect metrics
@@ -65,9 +64,6 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 add_metric(&mut cpu_metric, cpu_usage);
 
                 let now = SystemTime::now();
-                if next_action_time > now {
-                    continue;
-                }
 
                 println!("[QPS] Action is_collecting={}", is_collecting);
 
@@ -123,7 +119,7 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                     false
                 };
 
-                let mut current_timeout = if is_collecting {
+                current_timeout = if is_collecting {
                     POST_INTERVAL
                 } else {
                     polling_interval_hint.unwrap_or(PING_INTERVAL)
@@ -143,8 +139,6 @@ impl<R: RuntimeChannel<()>> QuickPulseManager<R> {
                 }
 
                 println!("[QPS] Next in {:?}", current_timeout);
-
-                next_action_time = now + current_timeout;
             }
         }));
 
