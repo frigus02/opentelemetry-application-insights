@@ -15,7 +15,7 @@ use opentelemetry::{
     Context,
 };
 use opentelemetry_http::HttpClient;
-use std::{fmt::Debug, time::Duration, time::SystemTime};
+use std::{fmt::Debug, sync::Arc, time::Duration, time::SystemTime};
 use sysinfo::{CpuExt as _, System, SystemExt as _};
 
 const CHANNEL_CAPACITY: usize = 100;
@@ -38,6 +38,191 @@ const METRIC_EXCEPTION_RATE: &str = "\\ApplicationInsights\\Exceptions/Sec";
 #[derive(Debug)]
 pub struct QuickPulseManager<R: RuntimeChannel<Message> + Debug> {
     message_sender: R::Sender,
+}
+
+#[derive(Debug)]
+pub enum Message {
+    ProcessSpan(SpanData),
+    Send,
+    Stop,
+}
+
+impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
+    /// Start live metrics
+    pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
+        let (message_sender, message_receiver) = runtime.batch_message_channel(CHANNEL_CAPACITY);
+        let delay_runtime = runtime.clone();
+        runtime.spawn(Box::pin(async move {
+            let mut is_collecting = false;
+            let mut metrics_colllector = MetricsCollector::new();
+            let mut sender = QuickPulseSender::new(
+                exporter.client,
+                exporter.live_metrics_endpoint,
+                exporter.instrumentation_key,
+            );
+
+            let message_receiver = message_receiver.fuse();
+            pin_mut!(message_receiver);
+            let mut send_delay = delay_runtime.delay(PING_INTERVAL).fuse();
+
+            loop {
+                let msg = select_biased! {
+                    msg = message_receiver.next() => msg.unwrap_or(Message::Stop),
+                    _ = send_delay => Message::Send,
+                };
+                match msg {
+                    Message::ProcessSpan(span) => {
+                        if is_collecting {
+                            metrics_colllector.count_span(span);
+                        }
+                    }
+                    Message::Send => {
+                        let metrics = if is_collecting {
+                            metrics_colllector.collect()
+                        } else {
+                            Vec::new()
+                        };
+                        let (next_is_collecting, next_timeout) =
+                            sender.send(is_collecting, metrics).await;
+                        if !is_collecting && next_is_collecting {
+                            // Reset last collection time to get accurate metrics on next collection.
+                            metrics_colllector.reset();
+                        }
+                        is_collecting = next_is_collecting;
+                        send_delay = delay_runtime.delay(next_timeout).fuse();
+                    }
+                    Message::Stop => break,
+                }
+            }
+        }));
+
+        QuickPulseManager { message_sender }
+    }
+}
+
+impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> {
+    fn on_start(&self, _span: &mut Span, _cx: &Context) {}
+
+    fn on_end(&self, span: SpanData) {
+        if let Err(err) = self.message_sender.try_send(Message::ProcessSpan(span)) {
+            opentelemetry::global::handle_error(TraceError::Other(err.into()));
+        }
+    }
+
+    fn force_flush(&self) -> Result<(), TraceError> {
+        Ok(())
+    }
+
+    fn shutdown(&mut self) -> Result<(), TraceError> {
+        self.message_sender
+            .try_send(Message::Stop)
+            .map_err(|err| TraceError::Other(err.into()))?;
+        Ok(())
+    }
+}
+
+impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
+    fn drop(&mut self) {
+        if let Err(err) = self.shutdown() {
+            opentelemetry::global::handle_error(err);
+        }
+    }
+}
+
+struct QuickPulseSender<C: HttpClient + 'static> {
+    client: Arc<C>,
+    host: Arc<http::Uri>,
+    instrumentation_key: String,
+    last_success_time: SystemTime,
+    polling_interval_hint: Option<Duration>,
+    stream_id: String,
+}
+
+impl<C: HttpClient + 'static> QuickPulseSender<C> {
+    fn new(client: Arc<C>, host: Arc<http::Uri>, instrumentation_key: String) -> Self {
+        Self {
+            client,
+            host,
+            instrumentation_key,
+            last_success_time: SystemTime::now(),
+            polling_interval_hint: None,
+            stream_id: format!("{:032x}", RandomIdGenerator::default().new_trace_id()),
+        }
+    }
+
+    async fn send(
+        &mut self,
+        is_collecting: bool,
+        metrics: Vec<QuickPulseMetric>,
+    ) -> (bool, Duration) {
+        let now = SystemTime::now();
+        let now_ms = now
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let envelope = QuickPulseEnvelope {
+            documents: Vec::new(),
+            metrics,
+            invariant_version: 1,
+            timestamp: format!("/Date({})/", now_ms),
+            version: None,
+            stream_id: self.stream_id.clone(),
+            machine_name: "Unknown".into(),
+            instance: "Unknown".into(),
+            role_name: None,
+        };
+
+        let res = uploader_quick_pulse::send(
+            self.client.as_ref(),
+            self.host.as_ref(),
+            &self.instrumentation_key,
+            if is_collecting {
+                PostOrPing::Post
+            } else {
+                PostOrPing::Ping
+            },
+            envelope,
+        )
+        .await;
+        let (last_send_succeeded, mut next_is_collecting) = if let Ok(res) = res {
+            println!(
+                "[QPS] Success should_post={} redirected_host={:?} polling_interval_hint={:?}",
+                res.should_post, res.redirected_host, res.polling_interval_hint
+            );
+            self.last_success_time = now;
+            if let Some(redirected_host) = res.redirected_host {
+                self.host = Arc::new(redirected_host);
+            }
+            if res.polling_interval_hint.is_some() {
+                self.polling_interval_hint = res.polling_interval_hint;
+            }
+            (true, res.should_post)
+        } else {
+            println!("[QPS] Failure");
+            (false, is_collecting)
+        };
+
+        let mut next_timeout = if next_is_collecting {
+            POST_INTERVAL
+        } else {
+            self.polling_interval_hint.unwrap_or(PING_INTERVAL)
+        };
+        if !last_send_succeeded {
+            let time_since_last_success = now
+                .duration_since(self.last_success_time)
+                .unwrap_or(Duration::MAX);
+            if next_is_collecting && time_since_last_success >= MAX_POST_WAIT_TIME {
+                // Haven't posted successfully in 20 seconds, so wait 60 seconds and ping
+                next_is_collecting = false;
+                next_timeout = FALLBACK_INTERVAL;
+            } else if !next_is_collecting && time_since_last_success >= MAX_PING_WAIT_TIME {
+                // Haven't pinged successfully in 60 seconds, so wait another 60 seconds
+                next_timeout = FALLBACK_INTERVAL;
+            }
+        }
+
+        (next_is_collecting, next_timeout)
+    }
 }
 
 struct MetricsCollector {
@@ -178,169 +363,5 @@ impl MetricsCollector {
             value: self.exception_count as f32 / elapsed_seconds as f32,
             weight: 1,
         });
-    }
-}
-
-#[derive(Debug)]
-pub enum Message {
-    ProcessSpan(SpanData),
-    Stop,
-    Send,
-}
-
-impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
-    /// Start live metrics
-    pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
-        let (message_sender, message_receiver) = runtime.batch_message_channel(CHANNEL_CAPACITY);
-        let delay_runtime = runtime.clone();
-        runtime.spawn(Box::pin(async move {
-            let mut is_collecting = false;
-            let mut last_success_time = SystemTime::now();
-            let mut redirected_host: Option<http::Uri> = None;
-            let mut polling_interval_hint: Option<Duration> = None;
-            let stream_id = format!("{:032x}", RandomIdGenerator::default().new_trace_id());
-            let mut metrics_colllector = MetricsCollector::new();
-
-            let message_receiver = message_receiver.fuse();
-            pin_mut!(message_receiver);
-            let mut delay = delay_runtime.delay(PING_INTERVAL).fuse();
-
-            loop {
-                let msg = select_biased! {
-                    msg = message_receiver.next() => msg.unwrap_or(Message::Stop),
-                    _ = delay => Message::Send,
-                };
-                match msg {
-                    Message::ProcessSpan(span) => {
-                        if is_collecting {
-                            metrics_colllector.count_span(span);
-                        }
-                        continue;
-                    },
-                    Message::Stop => break,
-                    Message::Send => {
-                        // upload
-                    }
-                }
-
-                println!("[QPS] Tick");
-
-                let metrics = if is_collecting {
-                    metrics_colllector.collect()
-                } else {
-                    Vec::new()
-                };
-
-                println!("[QPS] Action is_collecting={}", is_collecting);
-
-                let now = SystemTime::now();
-                let now_ms = now
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .map(|d| d.as_millis())
-                    .unwrap_or(0);
-                let envelope = QuickPulseEnvelope {
-                    documents: Vec::new(),
-                    metrics,
-                    invariant_version: 1,
-                    timestamp: format!("/Date({})/", now_ms),
-                    version: None,
-                    stream_id: stream_id.clone(),
-                    machine_name: "Unknown".into(),
-                    instance: "Unknown".into(),
-                    role_name: None,
-                };
-
-                let res = uploader_quick_pulse::send(
-                    exporter.client.as_ref(),
-                    redirected_host
-                        .as_ref()
-                        .unwrap_or(&exporter.live_metrics_endpoint),
-                    &exporter.instrumentation_key,
-                    if is_collecting {
-                        PostOrPing::Post
-                    } else {
-                        PostOrPing::Ping
-                    },
-                    envelope,
-                )
-                .await
-                .map_err(|_| ());
-                let last_send_succeeded = if let Ok(res) = res {
-                    println!(
-                        "[QPS] Success should_post={} redirected_host={:?} polling_interval_hint={:?}",
-                        res.should_post, res.redirected_host, res.polling_interval_hint
-                    );
-                    last_success_time = now;
-                    is_collecting = res.should_post;
-                    if is_collecting {
-                        // Reset last collection time to get accurate metrics on next collection.
-                        metrics_colllector.reset();
-                    }
-                    if res.redirected_host.is_some() {
-                        redirected_host = res.redirected_host;
-                    }
-                    if res.polling_interval_hint.is_some() {
-                        polling_interval_hint = res.polling_interval_hint;
-                    }
-                    true
-                } else {
-                    println!("[QPS] Failure");
-                    false
-                };
-
-                let mut current_timeout = if is_collecting {
-                    POST_INTERVAL
-                } else {
-                    polling_interval_hint.unwrap_or(PING_INTERVAL)
-                };
-                if !last_send_succeeded {
-                    let time_since_last_success = now
-                        .duration_since(last_success_time)
-                        .unwrap_or(Duration::MAX);
-                    if is_collecting && time_since_last_success >= MAX_POST_WAIT_TIME {
-                        // Haven't posted successfully in 20 seconds, so wait 60 seconds and ping
-                        is_collecting = false;
-                        current_timeout = FALLBACK_INTERVAL;
-                    } else if !is_collecting && time_since_last_success >= MAX_PING_WAIT_TIME {
-                        // Haven't pinged successfully in 60 seconds, so wait another 60 seconds
-                        current_timeout = FALLBACK_INTERVAL;
-                    }
-                }
-
-                println!("[QPS] Next in {:?}", current_timeout);
-                delay = delay_runtime.delay(current_timeout).fuse();
-            }
-        }));
-
-        QuickPulseManager { message_sender }
-    }
-}
-
-impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> {
-    fn on_start(&self, _span: &mut Span, _cx: &Context) {}
-
-    fn on_end(&self, span: SpanData) {
-        if let Err(err) = self.message_sender.try_send(Message::ProcessSpan(span)) {
-            opentelemetry::global::handle_error(TraceError::Other(err.into()));
-        }
-    }
-
-    fn force_flush(&self) -> Result<(), TraceError> {
-        Ok(())
-    }
-
-    fn shutdown(&mut self) -> Result<(), TraceError> {
-        self.message_sender
-            .try_send(Message::Stop)
-            .map_err(|err| TraceError::Other(err.into()))?;
-        Ok(())
-    }
-}
-
-impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
-    fn drop(&mut self) {
-        if let Err(err) = self.shutdown() {
-            opentelemetry::global::handle_error(err);
-        }
     }
 }
