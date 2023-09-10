@@ -21,7 +21,7 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Duration};
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -44,6 +44,9 @@ const DEPRECATED_NET_PEER_IP: Key = Key::from_static_str("net.peer.ip");
 /// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3402 with
 /// `client.address`.
 const DEPRECATED_HTTP_CLIENT_IP: Key = Key::from_static_str("http.client_ip");
+
+pub(crate) const EVENT_NAME_CUSTOM: &str = "ai.custom";
+pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
 
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
@@ -80,11 +83,11 @@ impl<C> Exporter<C> {
 
         for event in span.events.iter() {
             let (data, name) = match event.name.as_ref() {
-                "ai.custom" => (
+                x if x == EVENT_NAME_CUSTOM => (
                     Data::Event(event.into()),
                     "Microsoft.ApplicationInsights.Event",
                 ),
-                "exception" => (
+                x if x == EVENT_NAME_EXCEPTION => (
                     Data::Exception(event.into()),
                     "Microsoft.ApplicationInsights.Exception",
                 ),
@@ -169,6 +172,12 @@ fn get_server_host(attrs: &EvictedHashMap) -> Option<Cow<str>> {
     }
 }
 
+pub(crate) fn get_duration(span: &SpanData) -> Duration {
+    span.end_time
+        .duration_since(span.start_time)
+        .unwrap_or_default()
+}
+
 impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
@@ -176,11 +185,7 @@ impl From<&SpanData> for RequestData {
             id: span.span_context.span_id().to_string().into(),
             name: Some(LimitedLenString::<1024>::from(span.name.clone()))
                 .filter(|x| !x.as_ref().is_empty()),
-            duration: duration_to_string(
-                span.end_time
-                    .duration_since(span.start_time)
-                    .unwrap_or_default(),
-            ),
+            duration: duration_to_string(get_duration(span)),
             response_code: status_to_result_code(&span.status).to_string().into(),
             success: !matches!(span.status, Status::Error { .. }),
             source: None,
@@ -270,11 +275,7 @@ impl From<&SpanData> for RemoteDependencyData {
             ver: 2,
             id: Some(span.span_context.span_id().to_string().into()),
             name: span.name.clone().into(),
-            duration: duration_to_string(
-                span.end_time
-                    .duration_since(span.start_time)
-                    .unwrap_or_default(),
-            ),
+            duration: duration_to_string(get_duration(span)),
             result_code: Some(status_to_result_code(&span.status).to_string().into()),
             success: match span.status {
                 Status::Unset => None,

@@ -1,5 +1,6 @@
 use crate::{
-    models::{QuickPulseEnvelope, QuickPulseMetric, RequestData},
+    models::{QuickPulseEnvelope, QuickPulseMetric, RemoteDependencyData, RequestData},
+    trace::{get_duration, EVENT_NAME_EXCEPTION},
     uploader_quick_pulse::{self, PostOrPing},
     Exporter,
 };
@@ -24,10 +25,160 @@ const FALLBACK_INTERVAL: Duration = Duration::from_secs(60);
 const PING_INTERVAL: Duration = Duration::from_secs(5);
 const POST_INTERVAL: Duration = Duration::from_secs(1);
 
+const METRIC_PROCESSOR_TIME: &str = "\\Processor(_Total)\\% Processor Time";
+const METRIC_REQUEST_RATE: &str = "\\ApplicationInsights\\Requests/Sec";
+const METRIC_REQUEST_FAILURE_RATE: &str = "\\ApplicationInsights\\Requests Failed/Sec";
+const METRIC_REQUEST_DURATION: &str = "\\ApplicationInsights\\Request Duration";
+const METRIC_DEPENDENCY_RATE: &str = "\\ApplicationInsights\\Dependency Calls/Sec";
+const METRIC_DEPENDENCY_FAILURE_RATE: &str = "\\ApplicationInsights\\Dependency Calls Failed/Sec";
+const METRIC_DEPENDENCY_DURATION: &str = "\\ApplicationInsights\\Dependency Call Duration";
+const METRIC_EXCEPTION_RATE: &str = "\\ApplicationInsights\\Exceptions/Sec";
+
 /// Live metrics
 #[derive(Debug)]
 pub struct QuickPulseManager<R: RuntimeChannel<Message> + Debug> {
     message_sender: R::Sender,
+}
+
+struct MetricsCollector {
+    system: System,
+    request_count: u32,
+    request_failed_count: u32,
+    request_duration: Duration,
+    dependency_count: u32,
+    dependency_failed_count: u32,
+    dependency_duration: Duration,
+    exception_count: u32,
+    last_collection_time: SystemTime,
+}
+
+impl MetricsCollector {
+    fn new() -> Self {
+        Self {
+            system: System::new(),
+            request_count: 0,
+            request_failed_count: 0,
+            request_duration: Duration::default(),
+            dependency_count: 0,
+            dependency_failed_count: 0,
+            dependency_duration: Duration::default(),
+            exception_count: 0,
+            last_collection_time: SystemTime::now(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.request_count = 0;
+        self.request_failed_count = 0;
+        self.request_duration = Duration::default();
+        self.dependency_count = 0;
+        self.dependency_failed_count = 0;
+        self.dependency_duration = Duration::default();
+        self.exception_count = 0;
+        self.last_collection_time = SystemTime::now();
+    }
+
+    fn count_span(&mut self, span: SpanData) {
+        // https://github.com/microsoft/ApplicationInsights-node.js/blob/aaafbfd8ffbc454d4a5c30cda4492891410b9f66/TelemetryProcessors/PerformanceMetricsTelemetryProcessor.ts#L6
+        match span.span_kind {
+            SpanKind::Server | SpanKind::Consumer => {
+                let data: RequestData = (&span).into();
+                self.request_count += 1;
+                if !data.success {
+                    self.request_failed_count += 1;
+                }
+                self.request_duration += get_duration(&span);
+            }
+            SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
+                let data: RemoteDependencyData = (&span).into();
+                self.dependency_count += 1;
+                if let Some(false) = data.success {
+                    self.dependency_failed_count += 1;
+                }
+                self.dependency_duration += get_duration(&span);
+            }
+        }
+
+        for event in span.events.iter() {
+            if event.name.as_ref() == EVENT_NAME_EXCEPTION {
+                //let data: ExceptionData = event.into();
+                self.exception_count += 1;
+            }
+        }
+    }
+
+    fn collect(&mut self) -> Vec<QuickPulseMetric> {
+        let mut result = Vec::new();
+        self.collect_cpu_usage(&mut result);
+        self.collect_requests_dependencies_exceptions(&mut result);
+        self.reset();
+        result
+    }
+
+    fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        self.system.refresh_cpu();
+        let mut cpu_usage = 0.;
+        for cpu in self.system.cpus() {
+            cpu_usage += cpu.cpu_usage();
+        }
+        metrics.push(QuickPulseMetric {
+            name: METRIC_PROCESSOR_TIME,
+            value: cpu_usage,
+            weight: 1,
+        });
+    }
+
+    fn collect_requests_dependencies_exceptions(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        let elapsed_seconds = SystemTime::now()
+            .duration_since(self.last_collection_time)
+            .unwrap_or_default()
+            .as_secs();
+        if elapsed_seconds == 0 {
+            return;
+        }
+
+        metrics.push(QuickPulseMetric {
+            name: METRIC_REQUEST_RATE,
+            value: self.request_count as f32 / elapsed_seconds as f32,
+            weight: 1,
+        });
+        metrics.push(QuickPulseMetric {
+            name: METRIC_REQUEST_FAILURE_RATE,
+            value: self.request_failed_count as f32 / elapsed_seconds as f32,
+            weight: 1,
+        });
+        if self.request_count > 0 {
+            metrics.push(QuickPulseMetric {
+                name: METRIC_REQUEST_DURATION,
+                value: self.request_duration.as_millis() as f32 / self.request_count as f32,
+                weight: 1,
+            });
+        }
+
+        metrics.push(QuickPulseMetric {
+            name: METRIC_DEPENDENCY_RATE,
+            value: self.dependency_count as f32 / elapsed_seconds as f32,
+            weight: 1,
+        });
+        metrics.push(QuickPulseMetric {
+            name: METRIC_DEPENDENCY_FAILURE_RATE,
+            value: self.dependency_failed_count as f32 / elapsed_seconds as f32,
+            weight: 1,
+        });
+        if self.dependency_count > 0 {
+            metrics.push(QuickPulseMetric {
+                name: METRIC_DEPENDENCY_DURATION,
+                value: self.dependency_duration.as_millis() as f32 / self.dependency_count as f32,
+                weight: 1,
+            });
+        }
+
+        metrics.push(QuickPulseMetric {
+            name: METRIC_EXCEPTION_RATE,
+            value: self.exception_count as f32 / elapsed_seconds as f32,
+            weight: 1,
+        });
+    }
 }
 
 #[derive(Debug)]
@@ -48,30 +199,7 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
             let mut redirected_host: Option<http::Uri> = None;
             let mut polling_interval_hint: Option<Duration> = None;
             let stream_id = format!("{:032x}", RandomIdGenerator::default().new_trace_id());
-            let mut sys = System::new();
-            let mut cpu_metric = QuickPulseMetric {
-                name: "\\Processor(_Total)\\% Processor Time".into(),
-                value: 0.0,
-                weight: 0,
-            };
-            let mut request_rate_metric = QuickPulseMetric {
-                name: "\\ApplicationInsights\\Requests/Sec".into(),
-                value: 0.0,
-                weight: 0,
-            };
-            let mut request_failure_rate_metric = QuickPulseMetric {
-                name: "\\ApplicationInsights\\Requests Failed/Sec".into(),
-                value: 0.0,
-                weight: 0,
-            };
-            let mut request_duration_metric = QuickPulseMetric {
-                name: "\\ApplicationInsights\\Request Duration".into(),
-                value: 0.0,
-                weight: 0,
-            };
-            let mut request_count = 0;
-            let mut request_failed_count = 0;
-            let mut request_duration = Duration::default();
+            let mut metrics_colllector = MetricsCollector::new();
 
             let message_receiver = message_receiver.fuse();
             pin_mut!(message_receiver);
@@ -84,17 +212,10 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                 };
                 match msg {
                     Message::ProcessSpan(span) => {
-                        // collect metrics
-                        // https://github.com/microsoft/ApplicationInsights-node.js/blob/aaafbfd8ffbc454d4a5c30cda4492891410b9f66/TelemetryProcessors/PerformanceMetricsTelemetryProcessor.ts#L6
-                        if matches!(span.span_kind, SpanKind::Server | SpanKind::Consumer) {
-                            let data: RequestData = (&span).into();
-                            request_count += 1;
-                            if !data.success {
-                                request_failed_count += 1;
-                            }
-                            request_duration += span.end_time.duration_since(span.start_time).unwrap_or_default();
-                            continue;
+                        if is_collecting {
+                            metrics_colllector.count_span(span);
                         }
+                        continue;
                     },
                     Message::Stop => break,
                     Message::Send => {
@@ -104,42 +225,22 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
 
                 println!("[QPS] Tick");
 
-                // TODO: collect metrics
-                sys.refresh_cpu();
-                let mut cpu_usage = 0.;
-                for cpu in sys.cpus() {
-                    cpu_usage += cpu.cpu_usage();
-                }
-                add_metric(&mut cpu_metric, cpu_usage);
-
-                let now = SystemTime::now();
-
-                let elapsed = now.duration_since(last_success_time).unwrap_or_default();
-                if elapsed.as_secs() > 0 {
-                    add_metric(&mut request_rate_metric, request_count as f32 / elapsed.as_secs() as f32);
-                    add_metric(&mut request_failure_rate_metric, request_failed_count as f32 / elapsed.as_secs() as f32);
-                    if request_count > 0 {
-                        add_metric(&mut request_duration_metric, request_duration.as_millis() as f32 / request_count as f32);
-                    }
-                    request_count = 0;
-                    request_failed_count = 0;
-                    request_duration = Duration::default();
-                }
+                let metrics = if is_collecting {
+                    metrics_colllector.collect()
+                } else {
+                    Vec::new()
+                };
 
                 println!("[QPS] Action is_collecting={}", is_collecting);
 
+                let now = SystemTime::now();
                 let now_ms = now
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .map(|d| d.as_millis())
                     .unwrap_or(0);
                 let envelope = QuickPulseEnvelope {
                     documents: Vec::new(),
-                    metrics: vec![
-                        cpu_metric.clone(),
-                        request_rate_metric.clone(),
-                        request_failure_rate_metric.clone(),
-                        request_duration_metric.clone(),
-                    ],
+                    metrics,
                     invariant_version: 1,
                     timestamp: format!("/Date({})/", now_ms),
                     version: None,
@@ -148,11 +249,6 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                     instance: "Unknown".into(),
                     role_name: None,
                 };
-
-                reset_metric(&mut cpu_metric);
-                reset_metric(&mut request_rate_metric);
-                reset_metric(&mut request_failure_rate_metric);
-                reset_metric(&mut request_duration_metric);
 
                 let res = uploader_quick_pulse::send(
                     exporter.client.as_ref(),
@@ -176,6 +272,10 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                     );
                     last_success_time = now;
                     is_collecting = res.should_post;
+                    if is_collecting {
+                        // Reset last collection time to get accurate metrics on next collection.
+                        metrics_colllector.reset();
+                    }
                     if res.redirected_host.is_some() {
                         redirected_host = res.redirected_host;
                     }
@@ -243,19 +343,4 @@ impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
             opentelemetry::global::handle_error(err);
         }
     }
-}
-
-fn add_metric(metric: &mut QuickPulseMetric, value: f32) {
-    if metric.weight == 0 {
-        metric.value = value;
-        metric.weight = 1;
-    } else {
-        metric.value = (metric.value * (metric.weight as f32) + value) / (metric.weight + 1) as f32;
-        metric.weight += 1;
-    }
-}
-
-fn reset_metric(metric: &mut QuickPulseMetric) {
-    metric.value = 0.0;
-    metric.weight = 0;
 }

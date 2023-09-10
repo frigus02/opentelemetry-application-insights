@@ -58,7 +58,7 @@ pub(crate) struct QuickPulseDocumentProperty {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseMetric {
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
     pub(crate) value: f32,
     pub(crate) weight: u32,
 }
