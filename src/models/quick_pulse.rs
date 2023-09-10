@@ -4,10 +4,10 @@ use serde::Serialize;
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseDocument {
     #[serde(rename = "__type")]
-    pub(crate) type_: String,
+    pub(crate) type_: &'static str,
     #[serde(flatten)]
     pub(crate) document_type: QuickPulseDocumentType,
-    pub(crate) version: String,
+    pub(crate) version: &'static str,
     pub(crate) operation_id: String,
     pub(crate) properties: Vec<QuickPulseDocumentProperty>,
 }
@@ -27,7 +27,7 @@ pub(crate) enum QuickPulseDocumentType {
     },
     Trace {
         message: String,
-        severity_level: String,
+        severity_level: &'static str,
     },
     Request {
         name: String,
