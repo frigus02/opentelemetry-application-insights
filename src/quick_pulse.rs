@@ -20,7 +20,7 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use std::{fmt::Debug, sync::Arc, time::Duration, time::SystemTime};
-use sysinfo::{CpuExt as _, System, SystemExt as _};
+use sysinfo::{CpuExt as _, CpuRefreshKind, RefreshKind, System, SystemExt as _};
 
 const CHANNEL_CAPACITY: usize = 100;
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
@@ -30,6 +30,7 @@ const PING_INTERVAL: Duration = Duration::from_secs(5);
 const POST_INTERVAL: Duration = Duration::from_secs(1);
 
 const METRIC_PROCESSOR_TIME: &str = "\\Processor(_Total)\\% Processor Time";
+const METRIC_COMMITTED_BYTES: &str = "\\Memory\\Committed Bytes";
 const METRIC_REQUEST_RATE: &str = "\\ApplicationInsights\\Requests/Sec";
 const METRIC_REQUEST_FAILURE_RATE: &str = "\\ApplicationInsights\\Requests Failed/Sec";
 const METRIC_REQUEST_DURATION: &str = "\\ApplicationInsights\\Request Duration";
@@ -232,6 +233,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
 
 struct MetricsCollector {
     system: System,
+    system_refresh_kind: RefreshKind,
     request_count: u32,
     request_failed_count: u32,
     request_duration: Duration,
@@ -247,6 +249,9 @@ impl MetricsCollector {
     fn new() -> Self {
         Self {
             system: System::new(),
+            system_refresh_kind: RefreshKind::new()
+                .with_cpu(CpuRefreshKind::new().with_cpu_usage())
+                .with_memory(),
             request_count: 0,
             request_failed_count: 0,
             request_duration: Duration::default(),
@@ -317,7 +322,9 @@ impl MetricsCollector {
 
     fn collect(&mut self) -> (Vec<QuickPulseMetric>, Vec<QuickPulseDocument>) {
         let mut metrics = Vec::new();
+        self.system.refresh_specifics(self.system_refresh_kind);
         self.collect_cpu_usage(&mut metrics);
+        self.collect_memory_usage(&mut metrics);
         self.collect_requests_dependencies_exceptions(&mut metrics);
         let documents = self.documents.split_off(0);
         self.reset();
@@ -325,7 +332,6 @@ impl MetricsCollector {
     }
 
     fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
-        self.system.refresh_cpu();
         let mut cpu_usage = 0.;
         for cpu in self.system.cpus() {
             cpu_usage += cpu.cpu_usage();
@@ -333,6 +339,14 @@ impl MetricsCollector {
         metrics.push(QuickPulseMetric {
             name: METRIC_PROCESSOR_TIME,
             value: cpu_usage,
+            weight: 1,
+        });
+    }
+
+    fn collect_memory_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        metrics.push(QuickPulseMetric {
+            name: METRIC_COMMITTED_BYTES,
+            value: self.system.used_memory() as f32,
             weight: 1,
         });
     }
