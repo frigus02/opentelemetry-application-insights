@@ -27,6 +27,11 @@ impl Tags {
         self.0.insert(key.key, value)
     }
 
+    #[cfg(feature = "live-metrics")]
+    pub(crate) fn remove(&mut self, key: ContextTagKey) -> Option<String> {
+        self.0.remove(key.key)
+    }
+
     #[cfg(test)]
     pub(crate) fn get(&self, key: &ContextTagKey) -> Option<&String> {
         self.0.get(key.key)

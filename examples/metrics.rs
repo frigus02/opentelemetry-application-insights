@@ -3,7 +3,9 @@ use opentelemetry::{
     metrics::Unit,
     sdk::{
         metrics::{MeterProvider, PeriodicReader},
+        resource::{SdkProvidedResourceDetector, TelemetryResourceDetector},
         trace::TracerProvider,
+        Resource,
     },
     trace::{SpanKind, Status, Tracer as _, TracerProvider as _},
     KeyValue,
@@ -35,8 +37,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     global::set_meter_provider(meter_provider);
 
     // LIVE METRICS START
+    let resource = Resource::from_detectors(
+        Duration::from_secs(1),
+        vec![
+            Box::new(TelemetryResourceDetector),
+            Box::new(SdkProvidedResourceDetector),
+        ],
+    );
     let quick_pulse = opentelemetry_application_insights::QuickPulseManager::new(
         exporter(&connection_string),
+        resource,
         opentelemetry::runtime::Tokio,
     );
     let tracer_provider = TracerProvider::builder()

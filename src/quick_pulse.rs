@@ -1,9 +1,10 @@
 use crate::{
     models::{
-        EventData, ExceptionData, MessageData, Properties, QuickPulseDocument,
+        context_tag_keys, EventData, ExceptionData, MessageData, Properties, QuickPulseDocument,
         QuickPulseDocumentProperty, QuickPulseDocumentType, QuickPulseEnvelope, QuickPulseMetric,
         RemoteDependencyData, RequestData, SeverityLevel,
     },
+    tags::get_tags_from_attrs,
     trace::{get_duration, EVENT_NAME_CUSTOM, EVENT_NAME_EXCEPTION},
     uploader_quick_pulse::{self, PostOrPing},
     Exporter,
@@ -14,11 +15,13 @@ use opentelemetry::{
     sdk::{
         export::trace::SpanData,
         trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
+        Resource,
     },
     trace::{SpanKind, TraceError, TraceId},
     Context,
 };
 use opentelemetry_http::HttpClient;
+use opentelemetry_semantic_conventions as semcov;
 use std::{fmt::Debug, sync::Arc, time::Duration, time::SystemTime};
 use sysinfo::{CpuExt as _, CpuRefreshKind, RefreshKind, System, SystemExt as _};
 
@@ -54,7 +57,11 @@ pub enum Message {
 
 impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
     /// Start live metrics
-    pub fn new<C: HttpClient + 'static>(exporter: Exporter<C>, runtime: R) -> QuickPulseManager<R> {
+    pub fn new<C: HttpClient + 'static>(
+        exporter: Exporter<C>,
+        resource: Resource,
+        runtime: R,
+    ) -> QuickPulseManager<R> {
         let (message_sender, message_receiver) = runtime.batch_message_channel(CHANNEL_CAPACITY);
         let delay_runtime = runtime.clone();
         runtime.spawn(Box::pin(async move {
@@ -64,6 +71,7 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                 exporter.client,
                 exporter.live_metrics_endpoint,
                 exporter.instrumentation_key,
+                resource,
             );
 
             let message_receiver = message_receiver.fuse();
@@ -140,18 +148,38 @@ struct QuickPulseSender<C: HttpClient + 'static> {
     instrumentation_key: String,
     last_success_time: SystemTime,
     polling_interval_hint: Option<Duration>,
+    version: Option<String>,
     stream_id: String,
+    machine_name: String,
+    instance: String,
+    role_name: Option<String>,
 }
 
 impl<C: HttpClient + 'static> QuickPulseSender<C> {
-    fn new(client: Arc<C>, host: Arc<http::Uri>, instrumentation_key: String) -> Self {
+    fn new(
+        client: Arc<C>,
+        host: Arc<http::Uri>,
+        instrumentation_key: String,
+        resource: Resource,
+    ) -> Self {
+        let mut tags = get_tags_from_attrs(resource.iter());
+        let machine_name = resource
+            .get(semcov::resource::HOST_NAME)
+            .map(|v| v.as_str().into_owned())
+            .unwrap_or_else(|| "Unknown".into());
         Self {
             client,
             host,
             instrumentation_key,
             last_success_time: SystemTime::now(),
             polling_interval_hint: None,
+            version: tags.remove(context_tag_keys::INTERNAL_SDK_VERSION),
             stream_id: format!("{:032x}", RandomIdGenerator::default().new_trace_id()),
+            role_name: tags.remove(context_tag_keys::CLOUD_ROLE),
+            instance: tags
+                .remove(context_tag_keys::CLOUD_ROLE_INSTANCE)
+                .unwrap_or_else(|| machine_name.clone()),
+            machine_name,
         }
     }
 
@@ -171,11 +199,11 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
             metrics,
             invariant_version: 1,
             timestamp: format!("/Date({})/", now_ms),
-            version: None,
+            version: self.version.clone(),
             stream_id: self.stream_id.clone(),
-            machine_name: "Unknown".into(),
-            instance: "Unknown".into(),
-            role_name: None,
+            machine_name: self.machine_name.clone(),
+            instance: self.instance.clone(),
+            role_name: self.role_name.clone(),
         };
 
         let res = uploader_quick_pulse::send(

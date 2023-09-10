@@ -71,7 +71,7 @@ pub(crate) struct QuickPulseEnvelope {
     pub(crate) instance: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) role_name: Option<String>,
-    pub(crate) invariant_version: i32,
+    pub(crate) invariant_version: u16,
     pub(crate) machine_name: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) metrics: Vec<QuickPulseMetric>,
