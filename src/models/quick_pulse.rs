@@ -1,60 +1,5 @@
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
-pub(crate) struct QuickPulseDocument {
-    #[serde(rename = "__type")]
-    pub(crate) type_: &'static str,
-    #[serde(flatten)]
-    pub(crate) document_type: QuickPulseDocumentType,
-    pub(crate) version: &'static str,
-    pub(crate) operation_id: String,
-    pub(crate) properties: Vec<QuickPulseDocumentProperty>,
-}
-
-// TODO: map trace models to this
-// https://github.com/microsoft/ApplicationInsights-node.js/blob/84d57aa1565ca8c3dff1e14aa8f63f00b8f87d34/Library/QuickPulseEnvelopeFactory.ts#L55
-#[derive(Debug, Serialize)]
-#[serde(tag = "document_type", rename_all = "PascalCase")]
-pub(crate) enum QuickPulseDocumentType {
-    Event {
-        name: String,
-    },
-    Exception {
-        exception: String,
-        exception_message: String,
-        exception_type: String,
-    },
-    Trace {
-        message: String,
-        severity_level: &'static str,
-    },
-    Request {
-        name: String,
-        success: Option<bool>,
-        duration: String,
-        response_code: String,
-        operation_name: String,
-    },
-    Dependency {
-        name: String,
-        target: String,
-        success: Option<bool>,
-        duration: String,
-        result_code: String,
-        command_name: String,
-        dependency_type_name: String,
-        operation_name: String,
-    },
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct QuickPulseDocumentProperty {
-    pub(crate) key: String,
-    pub(crate) value: String,
-}
-
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseMetric {
@@ -66,8 +11,6 @@ pub(crate) struct QuickPulseMetric {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct QuickPulseEnvelope {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub(crate) documents: Vec<QuickPulseDocument>,
     pub(crate) instance: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) role_name: Option<String>,

@@ -1,8 +1,7 @@
 use crate::{
     models::{
-        context_tag_keys, EventData, ExceptionData, MessageData, Properties, QuickPulseDocument,
-        QuickPulseDocumentProperty, QuickPulseDocumentType, QuickPulseEnvelope, QuickPulseMetric,
-        RemoteDependencyData, RequestData, SeverityLevel,
+        context_tag_keys, QuickPulseEnvelope, QuickPulseMetric, RemoteDependencyData, 
+        RequestData,
     },
     tags::get_tags_from_attrs,
     trace::{get_duration, EVENT_NAME_CUSTOM, EVENT_NAME_EXCEPTION},
@@ -90,13 +89,13 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                         }
                     }
                     Message::Send => {
-                        let (metrics, documents) = if is_collecting {
+                        let metrics = if is_collecting {
                             metrics_colllector.collect()
                         } else {
-                            (Vec::new(), Vec::new())
+                            Vec::new()
                         };
                         let (next_is_collecting, next_timeout) =
-                            sender.send(is_collecting, metrics, documents).await;
+                            sender.send(is_collecting, metrics).await;
                         if !is_collecting && next_is_collecting {
                             // Reset last collection time to get accurate metrics on next collection.
                             metrics_colllector.reset();
@@ -187,7 +186,6 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
         &mut self,
         is_collecting: bool,
         metrics: Vec<QuickPulseMetric>,
-        documents: Vec<QuickPulseDocument>,
     ) -> (bool, Duration) {
         let now = SystemTime::now();
         let now_ms = now
@@ -195,7 +193,6 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
             .map(|d| d.as_millis())
             .unwrap_or(0);
         let envelope = QuickPulseEnvelope {
-            documents,
             metrics,
             invariant_version: 1,
             timestamp: format!("/Date({})/", now_ms),
@@ -269,7 +266,6 @@ struct MetricsCollector {
     dependency_failed_count: u32,
     dependency_duration: Duration,
     exception_count: u32,
-    documents: Vec<QuickPulseDocument>,
     last_collection_time: SystemTime,
 }
 
@@ -287,7 +283,6 @@ impl MetricsCollector {
             dependency_failed_count: 0,
             dependency_duration: Duration::default(),
             exception_count: 0,
-            documents: Vec::new(),
             last_collection_time: SystemTime::now(),
         }
     }
@@ -300,7 +295,6 @@ impl MetricsCollector {
         self.dependency_failed_count = 0;
         self.dependency_duration = Duration::default();
         self.exception_count = 0;
-        self.documents.clear();
         self.last_collection_time = SystemTime::now();
     }
 
@@ -314,8 +308,6 @@ impl MetricsCollector {
                     self.request_failed_count += 1;
                 }
                 self.request_duration += get_duration(&span);
-                self.documents
-                    .push((span.span_context.trace_id(), data).into());
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
                 let data: RemoteDependencyData = (&span).into();
@@ -324,39 +316,24 @@ impl MetricsCollector {
                     self.dependency_failed_count += 1;
                 }
                 self.dependency_duration += get_duration(&span);
-                self.documents
-                    .push((span.span_context.trace_id(), data).into());
             }
         }
 
         for event in span.events.iter() {
-            match event.name.as_ref() {
-                x if x == EVENT_NAME_CUSTOM => {
-                    self.documents
-                        .push((span.span_context.trace_id(), EventData::from(event)).into());
-                }
-                x if x == EVENT_NAME_EXCEPTION => {
-                    self.exception_count += 1;
-                    self.documents
-                        .push((span.span_context.trace_id(), ExceptionData::from(event)).into());
-                }
-                _ => {
-                    self.documents
-                        .push((span.span_context.trace_id(), MessageData::from(event)).into());
-                }
-            };
+            if event.name == EVENT_NAME_EXCEPTION {
+                self.exception_count += 1;
+            }
         }
     }
 
-    fn collect(&mut self) -> (Vec<QuickPulseMetric>, Vec<QuickPulseDocument>) {
+    fn collect(&mut self) -> Vec<QuickPulseMetric> {
         let mut metrics = Vec::new();
         self.system.refresh_specifics(self.system_refresh_kind);
         self.collect_cpu_usage(&mut metrics);
         self.collect_memory_usage(&mut metrics);
         self.collect_requests_dependencies_exceptions(&mut metrics);
-        let documents = self.documents.split_off(0);
         self.reset();
-        (metrics, documents)
+        metrics
     }
 
     fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
@@ -430,112 +407,4 @@ impl MetricsCollector {
             weight: 1,
         });
     }
-}
-
-impl From<(TraceId, RequestData)> for QuickPulseDocument {
-    fn from((trace_id, value): (TraceId, RequestData)) -> Self {
-        let name: String = value.name.map(Into::into).unwrap_or_default();
-        Self {
-            type_: "RequestTelemetryDocument",
-            version: "1.0",
-            operation_id: trace_id.to_string(),
-            properties: value.properties.map(convert_properties).unwrap_or_default(),
-            document_type: QuickPulseDocumentType::Request {
-                name: name.clone(),
-                success: Some(value.success),
-                duration: value.duration,
-                response_code: value.response_code.into(),
-                operation_name: name,
-            },
-        }
-    }
-}
-
-impl From<(TraceId, RemoteDependencyData)> for QuickPulseDocument {
-    fn from((trace_id, value): (TraceId, RemoteDependencyData)) -> Self {
-        let name: String = value.name.into();
-        Self {
-            type_: "DependencyTelemetryDocument",
-            version: "1.0",
-            operation_id: trace_id.to_string(),
-            properties: value.properties.map(convert_properties).unwrap_or_default(),
-            document_type: QuickPulseDocumentType::Dependency {
-                name: name.clone(),
-                target: value.target.map(Into::into).unwrap_or_default(),
-                success: value.success,
-                duration: value.duration,
-                result_code: value.result_code.map(Into::into).unwrap_or_default(),
-                command_name: value.data.map(Into::into).unwrap_or_default(),
-                dependency_type_name: value.type_.map(Into::into).unwrap_or_default(),
-                operation_name: name,
-            },
-        }
-    }
-}
-
-impl From<(TraceId, EventData)> for QuickPulseDocument {
-    fn from((trace_id, value): (TraceId, EventData)) -> Self {
-        Self {
-            type_: "EventTelemetryDocument",
-            version: "1.0",
-            operation_id: trace_id.to_string(),
-            properties: value.properties.map(convert_properties).unwrap_or_default(),
-            document_type: QuickPulseDocumentType::Event {
-                name: value.name.into(),
-            },
-        }
-    }
-}
-
-impl From<(TraceId, ExceptionData)> for QuickPulseDocument {
-    fn from((trace_id, mut value): (TraceId, ExceptionData)) -> Self {
-        let exception = value
-            .exceptions
-            .pop()
-            .expect("contains always 1 exception detail");
-        Self {
-            type_: "ExceptionTelemetryDocument",
-            version: "1.0",
-            operation_id: trace_id.to_string(),
-            properties: value.properties.map(convert_properties).unwrap_or_default(),
-            document_type: QuickPulseDocumentType::Exception {
-                exception: exception.stack.map(Into::into).unwrap_or_default(),
-                exception_message: exception.message.into(),
-                exception_type: exception.type_name.into(),
-            },
-        }
-    }
-}
-
-impl From<(TraceId, MessageData)> for QuickPulseDocument {
-    fn from((trace_id, value): (TraceId, MessageData)) -> Self {
-        Self {
-            type_: "TraceTelemetryDocument",
-            version: "1.0",
-            operation_id: trace_id.to_string(),
-            properties: value.properties.map(convert_properties).unwrap_or_default(),
-            document_type: QuickPulseDocumentType::Trace {
-                message: value.message.into(),
-                severity_level: value
-                    .severity_level
-                    .map(|severity_level| match severity_level {
-                        SeverityLevel::Verbose => "Verbose",
-                        SeverityLevel::Information => "Information",
-                        SeverityLevel::Warning => "Warning",
-                        SeverityLevel::Error => "Error",
-                    })
-                    .unwrap_or_default(),
-            },
-        }
-    }
-}
-
-fn convert_properties(value: Properties) -> Vec<QuickPulseDocumentProperty> {
-    value
-        .into_iter()
-        .map(|(k, v)| QuickPulseDocumentProperty {
-            key: k.into(),
-            value: v.into(),
-        })
-        .collect()
 }

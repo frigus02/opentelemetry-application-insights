@@ -39,10 +39,4 @@ impl<const N: usize> AsRef<str> for LimitedLenString<N> {
     }
 }
 
-impl<const N: usize> From<LimitedLenString<N>> for String {
-    fn from(v: LimitedLenString<N>) -> Self {
-        v.0
-    }
-}
-
 pub(crate) type Properties = BTreeMap<LimitedLenString<150>, LimitedLenString<8192>>;
