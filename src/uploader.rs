@@ -3,7 +3,7 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
 use serde::Deserialize;
-use std::io::Write;
+use std::{convert::TryInto, io::Write};
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -33,7 +33,7 @@ pub(crate) async fn send(
     endpoint: &Uri,
     items: Vec<Envelope>,
 ) -> Result<(), Error> {
-    let payload = serialize_request_body(items)?;
+    let payload = serialize_envelopes(items)?;
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
         .header(http::header::CONTENT_ENCODING, "gzip")
@@ -48,16 +48,20 @@ pub(crate) async fn send(
     handle_response(response)
 }
 
-fn serialize_request_body(items: Vec<Envelope>) -> Result<Vec<u8>, Error> {
+fn serialize_envelopes(items: Vec<Envelope>) -> Result<Vec<u8>, Error> {
     // Weirdly gzip_encoder.write_all(serde_json::to_vec()) seems to be faster than
     // serde_json::to_writer(gzip_encoder). In a local test operating on items that result in
     // ~13MiB of JSON, this is what I've seen:
     // gzip_encoder.write_all(serde_json::to_vec()): 159ms
     // serde_json::to_writer(gzip_encoder):          247ms
     let serialized = serde_json::to_vec(&items).map_err(Error::UploadSerializeRequest)?;
+    serialize_request_body(serialized)
+}
+
+pub(crate) fn serialize_request_body(data: Vec<u8>) -> Result<Vec<u8>, Error> {
     let mut gzip_encoder = GzEncoder::new(Vec::new(), Compression::default());
     gzip_encoder
-        .write_all(&serialized)
+        .write_all(&data)
         .map_err(Error::UploadCompressRequest)?;
     gzip_encoder.finish().map_err(Error::UploadCompressRequest)
 }
@@ -120,4 +124,16 @@ fn can_retry_item(item: &TransmissionItem) -> bool {
         || item.status_code == STATUS_APPLICATION_INACTIVE
         || item.status_code == STATUS_INTERNAL_SERVER_ERROR
         || item.status_code == STATUS_SERVICE_UNAVAILABLE
+}
+
+pub(crate) fn append_path(
+    uri: impl ToString,
+    path: impl AsRef<str>,
+) -> Result<http::Uri, http::uri::InvalidUri> {
+    let mut curr = uri.to_string();
+    if !curr.ends_with('/') {
+        curr.push('/');
+    }
+    curr.push_str(path.as_ref());
+    curr.try_into()
 }

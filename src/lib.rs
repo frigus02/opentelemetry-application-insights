@@ -115,6 +115,41 @@ async fn main() {
 ```
 "#
 )]
+#![cfg_attr(
+    feature = "live-metrics",
+    doc = r#"
+## Live Metrics
+
+Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
+
+Metrics are based on traces. See attribute mapping below for how traces are mapped to requests,
+dependencies and exceptions and how they are deemed "successful" or not.
+
+To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
+`host.name` resource attributes respectively in the trace config.
+
+Sample telemetry is not supported, yet.
+
+This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
+
+```no_run
+use opentelemetry::trace::Tracer as _;
+
+#[tokio::main]
+async fn main() {
+    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
+        .with_client(reqwest::Client::new())
+        .with_live_metrics(true)
+        .install_batch(opentelemetry::runtime::Tokio);
+
+    // ... send traces ...
+
+    opentelemetry::global::shutdown_tracer_provider();
+}
+```
+"#
+)]
 //!
 //! # Attribute mapping
 //!
@@ -255,12 +290,18 @@ mod convert;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
+#[cfg(feature = "live-metrics")]
+mod quick_pulse;
 #[cfg(doctest)]
 mod readme_test;
 mod tags;
 mod trace;
 mod uploader;
+#[cfg(feature = "live-metrics")]
+mod uploader_quick_pulse;
 
+#[cfg(feature = "live-metrics")]
+use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 #[cfg(feature = "metrics")]
@@ -277,6 +318,8 @@ use opentelemetry::{
 };
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
+#[cfg(feature = "live-metrics")]
+use quick_pulse::QuickPulseManager;
 use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
@@ -289,6 +332,10 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         client: (),
         config: None,
         endpoint: http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT),
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: http::Uri::from_static(DEFAULT_LIVE_ENDPOINT),
+        #[cfg(feature = "live-metrics")]
+        live_metrics: false,
         instrumentation_key,
         sample_rate: None,
     }
@@ -314,6 +361,10 @@ pub fn new_pipeline_from_connection_string(
         client: (),
         config: None,
         endpoint: connection_string.ingestion_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: connection_string.live_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
     })
@@ -339,6 +390,10 @@ pub fn new_pipeline_from_env(
         client: (),
         config: None,
         endpoint: connection_string.ingestion_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics_endpoint: connection_string.live_endpoint,
+        #[cfg(feature = "live-metrics")]
+        live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
     })
@@ -350,6 +405,10 @@ pub struct PipelineBuilder<C> {
     client: C,
     config: Option<sdk::trace::Config>,
     endpoint: http::Uri,
+    #[cfg(feature = "live-metrics")]
+    live_metrics_endpoint: http::Uri,
+    #[cfg(feature = "live-metrics")]
+    live_metrics: bool,
     instrumentation_key: String,
     sample_rate: Option<f64>,
 }
@@ -363,6 +422,10 @@ impl<C> PipelineBuilder<C> {
             client,
             config: self.config,
             endpoint: self.endpoint,
+            #[cfg(feature = "live-metrics")]
+            live_metrics_endpoint: self.live_metrics_endpoint,
+            #[cfg(feature = "live-metrics")]
+            live_metrics: self.live_metrics,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
         }
@@ -479,6 +542,16 @@ impl<C> PipelineBuilder<C> {
             ..self
         }
     }
+
+    /// Enable live metrics.
+    #[cfg(feature = "live-metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
+    pub fn with_live_metrics(self, enable_live_metrics: bool) -> Self {
+        PipelineBuilder {
+            live_metrics: enable_live_metrics,
+            ..self
+        }
+    }
 }
 
 impl<C> PipelineBuilder<C>
@@ -519,9 +592,27 @@ where
         runtime: R,
     ) -> sdk::trace::TracerProvider {
         let config = self.config.take();
+        #[cfg(feature = "live-metrics")]
+        let live_metrics = self.live_metrics;
+        #[cfg(feature = "live-metrics")]
+        let live_metrics_endpoint = self.live_metrics_endpoint.clone();
         let exporter = self.init_exporter();
-        let mut builder =
-            sdk::trace::TracerProvider::builder().with_batch_exporter(exporter, runtime);
+        let mut builder = sdk::trace::TracerProvider::builder();
+        #[cfg(feature = "live-metrics")]
+        if live_metrics {
+            let mut resource = sdk::Resource::default();
+            if let Some(ref config) = config {
+                resource = resource.merge(config.resource.as_ref());
+            };
+            builder = builder.with_span_processor(QuickPulseManager::new(
+                exporter.client.clone(),
+                live_metrics_endpoint,
+                exporter.instrumentation_key.clone(),
+                resource,
+                runtime.clone(),
+            ));
+        }
+        builder = builder.with_batch_exporter(exporter, runtime);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -673,12 +764,7 @@ impl<C> Exporter<C> {
 }
 
 fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUri> {
-    let mut curr = uri.to_string();
-    if !curr.ends_with('/') {
-        curr.push('/');
-    }
-    curr.push_str("v2/track");
-    curr.try_into()
+    uploader::append_path(uri, "v2/track")
 }
 
 /// Errors that occurred during span export.
@@ -716,6 +802,18 @@ pub enum Error {
     /// Application Insights returned at least one error for the reported telemetry data.
     #[error("upload failed with {0}")]
     Upload(String),
+
+    /// Failed to process span for live metrics.
+    #[cfg(feature = "live-metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
+    #[error("process span for live metrics failed with {0}")]
+    QuickPulseProcessSpan(opentelemetry::runtime::TrySendError),
+
+    /// Failed to stop live metrics.
+    #[cfg(feature = "live-metrics")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
+    #[error("stop live metrics failed with {0}")]
+    QuickPulseShutdown(opentelemetry::runtime::TrySendError),
 }
 
 impl ExportError for Error {

@@ -72,7 +72,7 @@ pub(crate) fn get_tags_for_metric(
     )
 }
 
-fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags
+pub(crate) fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags
 where
     T: IntoIterator<Item = (&'a Key, &'a Value)>,
 {

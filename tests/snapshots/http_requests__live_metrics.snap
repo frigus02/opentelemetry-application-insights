@@ -1,0 +1,249 @@
+---
+source: tests/http_requests.rs
+expression: live_metrics
+---
+POST /QuickPulseService.svc/ping?ikey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66 HTTP/1.1
+host: rt.services.visualstudio.com
+expect: 100-continue
+x-ms-qps-transmission-time: STRIPPED
+content-type: application/json
+content-encoding: gzip
+x-ms-qps-stream-id: STRIPPED
+x-ms-qps-machine-name: Unknown
+x-ms-qps-instance-name: Unknown
+x-ms-qps-invariant-version: 1
+x-ms-qps-role-name: unknown_service
+
+{
+  "Instance": "Unknown",
+  "InvariantVersion": 1,
+  "MachineName": "Unknown",
+  "RoleName": "unknown_service",
+  "StreamId": "STRIPPED",
+  "Timestamp": "STRIPPED"
+}
+
+
+POST /QuickPulseService.svc/post?ikey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66 HTTP/1.1
+host: redirected
+expect: 100-continue
+x-ms-qps-transmission-time: STRIPPED
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "Instance": "Unknown",
+    "InvariantVersion": 1,
+    "MachineName": "Unknown",
+    "Metrics": [
+      {
+        "Name": "\\Processor(_Total)\\% Processor Time",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\Memory\\Committed Bytes",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests/Sec",
+        "Value": 2.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests Failed/Sec",
+        "Value": 1.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Request Duration",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls/Sec",
+        "Value": 1.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls Failed/Sec",
+        "Value": 1.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Call Duration",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Exceptions/Sec",
+        "Value": 1.0,
+        "Weight": 1
+      }
+    ],
+    "RoleName": "unknown_service",
+    "StreamId": "STRIPPED",
+    "Timestamp": "STRIPPED"
+  }
+]
+
+
+POST /QuickPulseService.svc/post?ikey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66 HTTP/1.1
+host: redirected
+expect: 100-continue
+x-ms-qps-transmission-time: STRIPPED
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "Instance": "Unknown",
+    "InvariantVersion": 1,
+    "MachineName": "Unknown",
+    "Metrics": [
+      {
+        "Name": "\\Processor(_Total)\\% Processor Time",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\Memory\\Committed Bytes",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests Failed/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls Failed/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Exceptions/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      }
+    ],
+    "RoleName": "unknown_service",
+    "StreamId": "STRIPPED",
+    "Timestamp": "STRIPPED"
+  }
+]
+
+
+POST /v2/track HTTP/1.1
+host: dc.services.visualstudio.com
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "data": {
+      "baseData": {
+        "duration": "STRIPPED",
+        "id": "STRIPPED",
+        "name": "live-metrics",
+        "properties": {
+          "service.name": "unknown_service"
+        },
+        "resultCode": "2",
+        "success": false,
+        "ver": 2
+      },
+      "baseType": "RemoteDependencyData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.RemoteDependency",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.operation.id": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "exceptions": [
+          {
+            "message": "An error",
+            "typeName": "<no type>"
+          }
+        ],
+        "ver": 2
+      },
+      "baseType": "ExceptionData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Exception",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.operation.id": "STRIPPED",
+      "ai.operation.parentId": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "duration": "STRIPPED",
+        "id": "STRIPPED",
+        "name": "live-metrics",
+        "properties": {
+          "service.name": "unknown_service"
+        },
+        "responseCode": "2",
+        "success": false,
+        "ver": 2
+      },
+      "baseType": "RequestData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Request",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.operation.id": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "duration": "STRIPPED",
+        "id": "STRIPPED",
+        "name": "live-metrics",
+        "properties": {
+          "service.name": "unknown_service"
+        },
+        "responseCode": "0",
+        "success": true,
+        "ver": 2
+      },
+      "baseType": "RequestData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Request",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.operation.id": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  }
+]
