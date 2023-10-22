@@ -130,7 +130,7 @@ To configure role, instance, and machine name provide `service.name`, `service.i
 
 Sample telemetry is not supported, yet.
 
-This requires the **live-metrics** feature.
+This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
 
 ```no_run
 use opentelemetry::trace::Tracer as _;
