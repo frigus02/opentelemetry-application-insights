@@ -1,6 +1,9 @@
 use crate::{models::QuickPulseEnvelope, uploader::serialize_request_body, Error, HttpClient};
 use http::{HeaderName, Request, Uri};
-use std::convert::TryFrom;
+use std::{
+    convert::TryFrom,
+    time::{Duration, SystemTime},
+};
 
 // Allow interior mutability. See https://github.com/hyperium/http/issues/599
 #[allow(clippy::declare_interior_mutable_const)]
@@ -59,7 +62,10 @@ pub(crate) async fn send(
 
     let mut request_builder = Request::post(endpoint)
         .header(http::header::EXPECT, "100-continue")
-        .header(QPS_TRANSMISSION_TIME, quick_pulse_transmission_time())
+        .header(
+            QPS_TRANSMISSION_TIME,
+            quick_pulse_transmission_time(SystemTime::now()),
+        )
         .header(http::header::CONTENT_TYPE, "application/json")
         .header(http::header::CONTENT_ENCODING, "gzip");
     if matches!(post_or_ping, PostOrPing::Ping) {
@@ -93,20 +99,23 @@ pub(crate) async fn send(
             .headers()
             .get(QPS_REDIRECT)
             .and_then(|v| v.to_str().ok())
-            .and_then(|v| http::Uri::try_from(v).ok());
+            .and_then(|v| Uri::try_from(v).ok());
         let polling_interval_hint = response
             .headers()
             .get(QPS_INTERVAL_HINT)
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<u64>().ok())
-            .map(std::time::Duration::from_millis);
+            .map(Duration::from_millis);
         Ok(QuickPulseResponse {
             should_post,
             redirected_host,
             polling_interval_hint,
         })
     } else {
-        Err(Error::Upload(String::new()))
+        Err(Error::Upload(format!(
+            "{}: Failed to upload live metrics",
+            response.status().as_u16(),
+        )))
     }
 }
 
@@ -122,16 +131,35 @@ fn serialize_envelope(
     serialize_request_body(serialized)
 }
 
-/// UTC time the request was made. Expressed as the number of 100-nanosecond intervals that have
-/// elapsed since 12:00:00 midnight on January 1, 0001. This is used for clock skew calculations,
-/// so the value can never be stale (cached).
-fn quick_pulse_transmission_time() -> String {
-    use std::time::SystemTime;
-
-    let ms_since_0001 = 62135596800000u128;
-    let ms_since_epoch = SystemTime::now()
+/// Time the request was made.
+///
+/// Expressed as the number of 100-nanosecond intervals elapsed since 12:00 midnight, January 1, 0001.
+///
+/// .NET uses System.DateTimeOffset.Ticks:
+///
+/// - https://github.com/microsoft/ApplicationInsights-dotnet/blob/de66d679ff32f5a74553edbf52b10b9dc57ded70/WEB/Src/PerformanceCollector/Perf.Shared.NetStandard/Implementation/QuickPulse/QuickPulseServiceClient.cs#L399
+/// - https://learn.microsoft.com/en-us/dotnet/api/system.datetimeoffset?view=net-7.0
+///
+/// Node.js uses Date.now():
+///
+/// - https://github.com/microsoft/ApplicationInsights-node.js/blob/11c70daa206d2d225a7c6c8d2d05e98c5c4cc8d0/Library/QuickPulseUtil.ts#L10
+fn quick_pulse_transmission_time(now: SystemTime) -> String {
+    let nanos_between_0001_and_epoch = 62135596800000000000u128;
+    let nanos_since_epoch = now
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_millis())
+        .map(|d| d.as_nanos())
         .unwrap_or(0);
-    ((ms_since_0001 + ms_since_epoch) * 10_000).to_string()
+    ((nanos_between_0001_and_epoch + nanos_since_epoch) / 100).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case(SystemTime::UNIX_EPOCH + Duration::from_secs(1596665700), "637322625000000000")]
+    #[test_case(SystemTime::UNIX_EPOCH + Duration::from_secs(1596665701), "637322625010000000")]
+    fn transmission_time(now: SystemTime, expected: &'static str) {
+        assert_eq!(expected.to_string(), quick_pulse_transmission_time(now));
+    }
 }
