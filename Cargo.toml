@@ -85,6 +85,10 @@ name = "http_client_surf"
 required-features = ["surf-client", "opentelemetry/rt-async-std"]
 
 [[example]]
+name = "live_metrics"
+required-features = ["live-metrics"]
+
+[[example]]
 name = "metrics"
 required-features = ["metrics"]
 

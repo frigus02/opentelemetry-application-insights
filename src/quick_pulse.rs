@@ -219,10 +219,6 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
         )
         .await;
         let (last_send_succeeded, mut next_is_collecting) = if let Ok(res) = res {
-            println!(
-                "[QPS] Success should_post={} redirected_host={:?} polling_interval_hint={:?}",
-                res.should_post, res.redirected_host, res.polling_interval_hint
-            );
             self.last_success_time = now;
             if let Some(redirected_host) = res.redirected_host {
                 self.host = redirected_host;
@@ -232,7 +228,6 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
             }
             (true, res.should_post)
         } else {
-            println!("[QPS] Failure");
             (false, is_collecting)
         };
 
