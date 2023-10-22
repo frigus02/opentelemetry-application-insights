@@ -3,14 +3,14 @@ use crate::{
     tags::get_tags_from_attrs,
     trace::{get_duration, is_remote_dependency_success, is_request_success, EVENT_NAME_EXCEPTION},
     uploader_quick_pulse::{self, PostOrPing},
-    Error, Exporter,
+    Error,
 };
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{
     runtime::{RuntimeChannel, TrySend},
     sdk::{
         export::trace::SpanData,
-        trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
+        trace::{BatchMessage, IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
         Resource,
     },
     trace::{SpanKind, TraceError, TraceResult},
@@ -18,7 +18,7 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{fmt::Debug, sync::Arc, time::Duration, time::SystemTime};
+use std::{sync::Arc, time::Duration, time::SystemTime};
 use sysinfo::{CpuExt as _, CpuRefreshKind, RefreshKind, System, SystemExt as _};
 
 const CHANNEL_CAPACITY: usize = 100;
@@ -38,23 +38,21 @@ const METRIC_DEPENDENCY_FAILURE_RATE: &str = "\\ApplicationInsights\\Dependency 
 const METRIC_DEPENDENCY_DURATION: &str = "\\ApplicationInsights\\Dependency Call Duration";
 const METRIC_EXCEPTION_RATE: &str = "\\ApplicationInsights\\Exceptions/Sec";
 
-/// Live metrics
-#[derive(Debug)]
-pub struct QuickPulseManager<R: RuntimeChannel<Message> + Debug> {
+pub(crate) struct QuickPulseManager<R: RuntimeChannel<BatchMessage>> {
     message_sender: R::Sender,
 }
 
-#[derive(Debug)]
-pub enum Message {
-    ProcessSpan(SpanData),
-    Send,
-    Stop,
+impl<R: RuntimeChannel<BatchMessage>> std::fmt::Debug for QuickPulseManager<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QuickPulseManager").finish()
+    }
 }
 
-impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
-    /// Start live metrics
-    pub fn new<C: HttpClient + 'static>(
-        exporter: Exporter<C>,
+impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
+    pub(crate) fn new<C: HttpClient + 'static>(
+        client: Arc<C>,
+        live_metrics_endpoint: http::Uri,
+        instrumentation_key: String,
         resource: Resource,
         runtime: R,
     ) -> QuickPulseManager<R> {
@@ -63,12 +61,8 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
         runtime.spawn(Box::pin(async move {
             let mut is_collecting = false;
             let mut metrics_colllector = MetricsCollector::new();
-            let mut sender = QuickPulseSender::new(
-                exporter.client,
-                exporter.live_metrics_endpoint,
-                exporter.instrumentation_key,
-                resource,
-            );
+            let mut sender =
+                QuickPulseSender::new(client, live_metrics_endpoint, instrumentation_key, resource);
 
             let message_receiver = message_receiver.fuse();
             pin_mut!(message_receiver);
@@ -76,16 +70,16 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
 
             loop {
                 let msg = select_biased! {
-                    msg = message_receiver.next() => msg.unwrap_or(Message::Stop),
-                    _ = send_delay => Message::Send,
+                    msg = message_receiver.next() => msg.unwrap_or_else(shutdown_message),
+                    _ = send_delay => BatchMessage::Flush(None),
                 };
                 match msg {
-                    Message::ProcessSpan(span) => {
+                    BatchMessage::ExportSpan(span) => {
                         if is_collecting {
                             metrics_colllector.count_span(span);
                         }
                     }
-                    Message::Send => {
+                    BatchMessage::Flush(_) => {
                         let metrics = if is_collecting {
                             metrics_colllector.collect()
                         } else {
@@ -100,7 +94,7 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
                         is_collecting = next_is_collecting;
                         send_delay = delay_runtime.delay(next_timeout).fuse();
                     }
-                    Message::Stop => break,
+                    BatchMessage::Shutdown(_) => break,
                 }
             }
         }));
@@ -109,13 +103,13 @@ impl<R: RuntimeChannel<Message> + Debug> QuickPulseManager<R> {
     }
 }
 
-impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> {
+impl<R: RuntimeChannel<BatchMessage>> SpanProcessor for QuickPulseManager<R> {
     fn on_start(&self, _span: &mut Span, _cx: &Context) {}
 
     fn on_end(&self, span: SpanData) {
         if let Err(err) = self
             .message_sender
-            .try_send(Message::ProcessSpan(span))
+            .try_send(BatchMessage::ExportSpan(span))
             .map_err(Error::QuickPulseProcessSpan)
         {
             opentelemetry::global::handle_error(TraceError::Other(err.into()));
@@ -128,13 +122,13 @@ impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> 
 
     fn shutdown(&mut self) -> TraceResult<()> {
         self.message_sender
-            .try_send(Message::Stop)
+            .try_send(shutdown_message())
             .map_err(Error::QuickPulseShutdown)?;
         Ok(())
     }
 }
 
-impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
+impl<R: RuntimeChannel<BatchMessage>> Drop for QuickPulseManager<R> {
     fn drop(&mut self) {
         if let Err(err) = self.shutdown() {
             opentelemetry::global::handle_error(err);
@@ -142,9 +136,17 @@ impl<R: RuntimeChannel<Message> + Debug> Drop for QuickPulseManager<R> {
     }
 }
 
+// This feels terrible. I think using opentelemetry::runtime::RuntimeChannel gives the nicest API
+// for this crate, because no additional type is needed. But this means we need to use BatchMessage
+// here and that requires a futures_channel::oneshot for the shutdown message.
+fn shutdown_message() -> BatchMessage {
+    let (sender, _) = futures_channel::oneshot::channel();
+    BatchMessage::Shutdown(sender)
+}
+
 struct QuickPulseSender<C: HttpClient + 'static> {
     client: Arc<C>,
-    host: Arc<http::Uri>,
+    host: http::Uri,
     instrumentation_key: String,
     last_success_time: SystemTime,
     polling_interval_hint: Option<Duration>,
@@ -158,7 +160,7 @@ struct QuickPulseSender<C: HttpClient + 'static> {
 impl<C: HttpClient + 'static> QuickPulseSender<C> {
     fn new(
         client: Arc<C>,
-        host: Arc<http::Uri>,
+        host: http::Uri,
         instrumentation_key: String,
         resource: Resource,
     ) -> Self {
@@ -206,7 +208,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
 
         let res = uploader_quick_pulse::send(
             self.client.as_ref(),
-            self.host.as_ref(),
+            &self.host,
             &self.instrumentation_key,
             if is_collecting {
                 PostOrPing::Post
@@ -223,7 +225,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
             );
             self.last_success_time = now;
             if let Some(redirected_host) = res.redirected_host {
-                self.host = Arc::new(redirected_host);
+                self.host = redirected_host;
             }
             if res.polling_interval_hint.is_some() {
                 self.polling_interval_hint = res.polling_interval_hint;

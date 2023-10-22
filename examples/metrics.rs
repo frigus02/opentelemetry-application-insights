@@ -1,12 +1,7 @@
 use opentelemetry::{
     global,
     metrics::Unit,
-    sdk::{
-        metrics::{MeterProvider, PeriodicReader},
-        resource::{SdkProvidedResourceDetector, TelemetryResourceDetector},
-        trace::TracerProvider,
-        Resource,
-    },
+    sdk::metrics::{MeterProvider, PeriodicReader},
     trace::{SpanKind, Status, Tracer as _, TracerProvider as _},
     KeyValue,
 };
@@ -25,7 +20,7 @@ fn exporter(
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     env_logger::init();
 
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
@@ -37,22 +32,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     global::set_meter_provider(meter_provider);
 
     // LIVE METRICS START
-    let resource = Resource::from_detectors(
-        Duration::from_secs(1),
-        vec![
-            Box::new(TelemetryResourceDetector),
-            Box::new(SdkProvidedResourceDetector),
-        ],
-    );
-    let quick_pulse = opentelemetry_application_insights::QuickPulseManager::new(
-        exporter(&connection_string),
-        resource,
-        opentelemetry::runtime::Tokio,
-    );
-    let tracer_provider = TracerProvider::builder()
-        .with_batch_exporter(exporter(&connection_string), opentelemetry::runtime::Tokio)
-        .with_span_processor(quick_pulse)
-        .build();
+    let tracer_provider =
+        opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)?
+            .with_client(reqwest::Client::new())
+            .with_live_metrics(true)
+            .build_batch(opentelemetry::runtime::Tokio);
     let tracer = tracer_provider.tracer("example-metrics");
     // LIVE METRICS END
 
