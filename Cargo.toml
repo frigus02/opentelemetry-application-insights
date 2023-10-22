@@ -57,7 +57,7 @@ doc-comment = "0.3.3"
 env_logger = "0.10.0"
 insta = "1.13.0"
 opentelemetry = { version = "0.20", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
-opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client"] }
+opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client", "live-metrics"] }
 rand = "0.8.5"
 regex = "1.5.5"
 surf = "2.3.2"

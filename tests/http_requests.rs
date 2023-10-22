@@ -10,7 +10,8 @@ use format::requests_to_string;
 use opentelemetry::{
     sdk::{trace::Config, Resource},
     trace::{
-        get_active_span, mark_span_as_active, SpanKind, TraceContextExt, Tracer, TracerProvider,
+        get_active_span, mark_span_as_active, Span, SpanKind, Status, TraceContextExt, Tracer,
+        TracerProvider,
     },
     Context, KeyValue,
 };
@@ -28,7 +29,7 @@ fn traces_simple() {
     let requests = record(NoTick, |client| {
         // Fake instrumentation key (this is a random uuid)
         let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+            .expect("connection string is valid")
             .with_client(client.clone())
             .with_trace_config(Config::default().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("test"),
@@ -38,7 +39,7 @@ fn traces_simple() {
         let client_tracer = client_provider.tracer("test");
 
         let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+            .expect("connection string is valid")
             .with_client(client)
             .with_trace_config(Config::default().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("test"),
@@ -125,7 +126,7 @@ fn traces_simple() {
 async fn traces_batch_async_std() {
     let requests = record(AsyncStdTick, |client| {
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+            .expect("connection string is valid")
             .with_client(client)
             .build_batch(opentelemetry::runtime::AsyncStd);
         let tracer = tracer_provider.tracer("test");
@@ -140,7 +141,7 @@ async fn traces_batch_async_std() {
 async fn traces_batch_tokio() {
     let requests = record(TokioTick, |client| {
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+            .expect("connection string is valid")
             .with_client(client)
             .build_batch(opentelemetry::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
@@ -149,6 +150,45 @@ async fn traces_batch_tokio() {
     });
     let traces_batch_tokio = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_tokio);
+}
+
+#[tokio::test]
+async fn live_metrics() {
+    let requests = record(TokioTick, |client| {
+        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("connection string is valid")
+            .with_client(client)
+            .with_live_metrics(true)
+            .build_batch(opentelemetry::runtime::TokioCurrentThread);
+        let tracer = tracer_provider.tracer("test");
+
+        // Wait for one ping request so we start to collect metrics.
+        std::thread::sleep(Duration::from_secs(6));
+
+        {
+            let _span = tracer
+                .span_builder("live-metrics")
+                .with_kind(SpanKind::Server)
+                .start(&tracer);
+            let _span = tracer
+                .span_builder("live-metrics")
+                .with_kind(SpanKind::Server)
+                .with_status(Status::error(""))
+                .start(&tracer);
+            let mut span = tracer
+                .span_builder("live-metrics")
+                .with_kind(SpanKind::Client)
+                .with_status(Status::error(""))
+                .start(&tracer);
+            let error: Box<dyn std::error::Error> = "An error".into();
+            span.record_error(error.as_ref());
+        }
+
+        // Wait for two pong requests.
+        std::thread::sleep(Duration::from_secs(2));
+    });
+    let live_metrics = requests_to_string(requests);
+    insta::assert_snapshot!(live_metrics);
 }
 
 mod recording_client {
@@ -172,14 +212,31 @@ mod recording_client {
     impl HttpClient for RecordingClient {
         async fn send(&self, req: Request<Vec<u8>>) -> Result<Response<Bytes>, HttpError> {
             self.tick.tick().await;
+
+            let is_live_metrics = req.uri().path().contains("QuickPulseService.svc");
+            let res = if is_live_metrics {
+                Response::builder()
+                    .status(200)
+                    .header("x-ms-qps-subscribed", "true")
+                    .header(
+                        "x-ms-qps-service-endpoint-redirect-v2",
+                        "https://redirected",
+                    )
+                    .header("x-ms-qps-service-endpoint-interval-hint", "500")
+                    .body(Bytes::new())
+                    .expect("response is fell formed")
+            } else {
+                Response::builder()
+                    .status(200)
+                    .body(Bytes::from("{}"))
+                    .expect("response is fell formed")
+            };
+
             self.requests
                 .lock()
                 .expect("requests mutex is healthy")
                 .push(req);
-            Ok(Response::builder()
-                .status(200)
-                .body(Bytes::from("{}"))
-                .expect("response is fell formed"))
+            Ok(res)
         }
     }
 
@@ -244,7 +301,7 @@ mod tick {
 
 mod format {
     use flate2::read::GzDecoder;
-    use http::Request;
+    use http::{HeaderName, Request};
     use regex::Regex;
 
     pub fn requests_to_string(requests: Vec<Request<Vec<u8>>>) -> String {
@@ -265,12 +322,20 @@ mod format {
             .into_iter()
             .map(|(name, value)| {
                 let value = value.to_str().expect("header value is valid string");
-                format!("{name}: {value}")
+                format!("{}: {}", name, strip_changing_header(name, value))
             })
             .collect::<Vec<_>>()
             .join("\n");
         let body = strip_changing_values(&pretty_print_json(req.body()));
         format!("{method} {path} {version}\nhost: {host}\n{headers}\n\n{body}")
+    }
+
+    fn strip_changing_header<'a>(name: &HeaderName, value: &'a str) -> &'a str {
+        if name == "x-ms-qps-transmission-time" || name == "x-ms-qps-stream-id" {
+            "STRIPPED"
+        } else {
+            value
+        }
     }
 
     fn strip_changing_values(body: &str) -> String {
@@ -280,10 +345,19 @@ mod format {
             Regex::new(r#""(?P<field>duration)": "\d+\.\d{2}:\d{2}:\d{2}\.\d{6}""#).unwrap(),
             Regex::new(r#""(?P<field>id|ai\.operation\.parentId)": "[a-z0-9]{16}""#).unwrap(),
             Regex::new(r#""(?P<field>ai\.operation\.id)": "[a-z0-9]{32}""#).unwrap(),
+            Regex::new(r#""(?P<field>StreamId)": "[a-z0-9]{32}""#).unwrap(),
+            Regex::new(r#""(?P<field>Timestamp)": "/Date\(\d+\)/""#).unwrap(),
+            Regex::new(
+                r#"(?P<prefix>"\\\\Processor\(_Total\)\\\\% Processor Time",\s*)"(?P<field>Value)": \d+\.\d+"#,
+            ).unwrap(),
+            Regex::new(
+                r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#,
+            ).unwrap(),
         ];
 
         res.into_iter().fold(body.into(), |body, re| {
-            re.replace_all(&body, r#""$field": "STRIPPED""#).into()
+            re.replace_all(&body, r#"$prefix"$field": "STRIPPED""#)
+                .into()
         })
     }
 

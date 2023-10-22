@@ -764,12 +764,7 @@ impl<C> Exporter<C> {
 }
 
 fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUri> {
-    let mut curr = uri.to_string();
-    if !curr.ends_with('/') {
-        curr.push('/');
-    }
-    curr.push_str("v2/track");
-    curr.try_into()
+    uploader::append_path(uri, "v2/track")
 }
 
 /// Errors that occurred during span export.
