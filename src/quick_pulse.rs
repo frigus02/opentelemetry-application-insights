@@ -1,12 +1,9 @@
 use crate::{
-    models::{
-        context_tag_keys, QuickPulseEnvelope, QuickPulseMetric, RemoteDependencyData, 
-        RequestData,
-    },
+    models::{context_tag_keys, QuickPulseEnvelope, QuickPulseMetric},
     tags::get_tags_from_attrs,
-    trace::{get_duration, EVENT_NAME_CUSTOM, EVENT_NAME_EXCEPTION},
+    trace::{get_duration, is_remote_dependency_success, is_request_success, EVENT_NAME_EXCEPTION},
     uploader_quick_pulse::{self, PostOrPing},
-    Exporter,
+    Error, Exporter,
 };
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{
@@ -16,7 +13,7 @@ use opentelemetry::{
         trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
         Resource,
     },
-    trace::{SpanKind, TraceError, TraceId},
+    trace::{SpanKind, TraceError, TraceResult},
     Context,
 };
 use opentelemetry_http::HttpClient;
@@ -116,19 +113,23 @@ impl<R: RuntimeChannel<Message> + Debug> SpanProcessor for QuickPulseManager<R> 
     fn on_start(&self, _span: &mut Span, _cx: &Context) {}
 
     fn on_end(&self, span: SpanData) {
-        if let Err(err) = self.message_sender.try_send(Message::ProcessSpan(span)) {
+        if let Err(err) = self
+            .message_sender
+            .try_send(Message::ProcessSpan(span))
+            .map_err(Error::QuickPulseProcessSpan)
+        {
             opentelemetry::global::handle_error(TraceError::Other(err.into()));
         }
     }
 
-    fn force_flush(&self) -> Result<(), TraceError> {
+    fn force_flush(&self) -> TraceResult<()> {
         Ok(())
     }
 
-    fn shutdown(&mut self) -> Result<(), TraceError> {
+    fn shutdown(&mut self) -> TraceResult<()> {
         self.message_sender
             .try_send(Message::Stop)
-            .map_err(|err| TraceError::Other(err.into()))?;
+            .map_err(Error::QuickPulseShutdown)?;
         Ok(())
     }
 }
@@ -259,13 +260,13 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
 struct MetricsCollector {
     system: System,
     system_refresh_kind: RefreshKind,
-    request_count: u32,
-    request_failed_count: u32,
+    request_count: usize,
+    request_failed_count: usize,
     request_duration: Duration,
-    dependency_count: u32,
-    dependency_failed_count: u32,
+    dependency_count: usize,
+    dependency_failed_count: usize,
     dependency_duration: Duration,
-    exception_count: u32,
+    exception_count: usize,
     last_collection_time: SystemTime,
 }
 
@@ -302,17 +303,15 @@ impl MetricsCollector {
         // https://github.com/microsoft/ApplicationInsights-node.js/blob/aaafbfd8ffbc454d4a5c30cda4492891410b9f66/TelemetryProcessors/PerformanceMetricsTelemetryProcessor.ts#L6
         match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let data: RequestData = (&span).into();
                 self.request_count += 1;
-                if !data.success {
+                if !is_request_success(&span) {
                     self.request_failed_count += 1;
                 }
                 self.request_duration += get_duration(&span);
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let data: RemoteDependencyData = (&span).into();
                 self.dependency_count += 1;
-                if let Some(false) = data.success {
+                if let Some(false) = is_remote_dependency_success(&span) {
                     self.dependency_failed_count += 1;
                 }
                 self.dependency_duration += get_duration(&span);
@@ -339,7 +338,7 @@ impl MetricsCollector {
     fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
         let mut cpu_usage = 0.;
         for cpu in self.system.cpus() {
-            cpu_usage += cpu.cpu_usage();
+            cpu_usage += f64::from(cpu.cpu_usage());
         }
         metrics.push(QuickPulseMetric {
             name: METRIC_PROCESSOR_TIME,
@@ -351,7 +350,7 @@ impl MetricsCollector {
     fn collect_memory_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
         metrics.push(QuickPulseMetric {
             name: METRIC_COMMITTED_BYTES,
-            value: self.system.used_memory() as f32,
+            value: self.system.used_memory() as f64,
             weight: 1,
         });
     }
@@ -367,43 +366,43 @@ impl MetricsCollector {
 
         metrics.push(QuickPulseMetric {
             name: METRIC_REQUEST_RATE,
-            value: self.request_count as f32 / elapsed_seconds as f32,
+            value: self.request_count as f64 / elapsed_seconds as f64,
             weight: 1,
         });
         metrics.push(QuickPulseMetric {
             name: METRIC_REQUEST_FAILURE_RATE,
-            value: self.request_failed_count as f32 / elapsed_seconds as f32,
+            value: self.request_failed_count as f64 / elapsed_seconds as f64,
             weight: 1,
         });
         if self.request_count > 0 {
             metrics.push(QuickPulseMetric {
                 name: METRIC_REQUEST_DURATION,
-                value: self.request_duration.as_millis() as f32 / self.request_count as f32,
+                value: self.request_duration.as_millis() as f64 / self.request_count as f64,
                 weight: 1,
             });
         }
 
         metrics.push(QuickPulseMetric {
             name: METRIC_DEPENDENCY_RATE,
-            value: self.dependency_count as f32 / elapsed_seconds as f32,
+            value: self.dependency_count as f64 / elapsed_seconds as f64,
             weight: 1,
         });
         metrics.push(QuickPulseMetric {
             name: METRIC_DEPENDENCY_FAILURE_RATE,
-            value: self.dependency_failed_count as f32 / elapsed_seconds as f32,
+            value: self.dependency_failed_count as f64 / elapsed_seconds as f64,
             weight: 1,
         });
         if self.dependency_count > 0 {
             metrics.push(QuickPulseMetric {
                 name: METRIC_DEPENDENCY_DURATION,
-                value: self.dependency_duration.as_millis() as f32 / self.dependency_count as f32,
+                value: self.dependency_duration.as_millis() as f64 / self.dependency_count as f64,
                 weight: 1,
             });
         }
 
         metrics.push(QuickPulseMetric {
             name: METRIC_EXCEPTION_RATE,
-            value: self.exception_count as f32 / elapsed_seconds as f32,
+            value: self.exception_count as f64 / elapsed_seconds as f64,
             weight: 1,
         });
     }

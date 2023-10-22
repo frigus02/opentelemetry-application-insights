@@ -178,6 +178,18 @@ pub(crate) fn get_duration(span: &SpanData) -> Duration {
         .unwrap_or_default()
 }
 
+pub(crate) fn is_request_success(span: &SpanData) -> bool {
+    !matches!(span.status, Status::Error { .. })
+}
+
+pub(crate) fn is_remote_dependency_success(span: &SpanData) -> Option<bool> {
+    match span.status {
+        Status::Unset => None,
+        Status::Ok => Some(true),
+        Status::Error { .. } => Some(false),
+    }
+}
+
 impl From<&SpanData> for RequestData {
     fn from(span: &SpanData) -> RequestData {
         let mut data = RequestData {
@@ -187,7 +199,7 @@ impl From<&SpanData> for RequestData {
                 .filter(|x| !x.as_ref().is_empty()),
             duration: duration_to_string(get_duration(span)),
             response_code: status_to_result_code(&span.status).to_string().into(),
-            success: !matches!(span.status, Status::Error { .. }),
+            success: is_request_success(span),
             source: None,
             url: None,
             properties: attrs_to_properties(&span.attributes, &span.resource),
@@ -277,11 +289,7 @@ impl From<&SpanData> for RemoteDependencyData {
             name: span.name.clone().into(),
             duration: duration_to_string(get_duration(span)),
             result_code: Some(status_to_result_code(&span.status).to_string().into()),
-            success: match span.status {
-                Status::Unset => None,
-                Status::Ok => Some(true),
-                Status::Error { .. } => Some(false),
-            },
+            success: is_remote_dependency_success(span),
             data: None,
             target: None,
             type_: None,

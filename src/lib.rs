@@ -742,6 +742,14 @@ pub enum Error {
     /// Application Insights returned at least one error for the reported telemetry data.
     #[error("upload failed with {0}")]
     Upload(String),
+
+    /// Failed to process span for live metrics.
+    #[error("process span for live metrics failed with {0}")]
+    QuickPulseProcessSpan(opentelemetry::runtime::TrySendError),
+
+    /// Failed to stop live metrics.
+    #[error("stop live metrics failed with {0}")]
+    QuickPulseShutdown(opentelemetry::runtime::TrySendError),
 }
 
 impl ExportError for Error {
