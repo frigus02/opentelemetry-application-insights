@@ -72,7 +72,7 @@ where
                         .map(|(k, v)| (k.as_str().into(), v.into()))
                         .collect();
                     envelopes.push(Envelope {
-                        name: "Microsoft.ApplicationInsights.Metric".into(),
+                        name: "Microsoft.ApplicationInsights.Metric",
                         time: time_to_string(data.time).into(),
                         sample_rate: None,
                         i_key: Some(self.instrumentation_key.clone().into()),

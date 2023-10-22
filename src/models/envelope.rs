@@ -8,7 +8,9 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Envelope {
     /// Type name of telemetry data item.
-    pub(crate) name: LimitedLenString<1024>,
+    ///
+    /// Max len: 1024
+    pub(crate) name: &'static str,
 
     /// Event date time when telemetry item was created. This is the wall clock time on the client
     /// when the event was generated. There is no guarantee that the client's time is accurate.

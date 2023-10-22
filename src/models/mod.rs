@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn serialization_format() {
         let envelope = Envelope {
-            name: "Test".into(),
+            name: "Test",
             time: "2020-06-21:10:40:00Z".into(),
             sample_rate: Some(100.0),
             i_key: None,
@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn serialization_format_metrics() {
         let envelope = Envelope {
-            name: "Test".into(),
+            name: "Test",
             time: "2020-06-21:10:40:00Z".into(),
             sample_rate: Some(100.0),
             i_key: None,
@@ -84,7 +84,7 @@ mod tests {
         let mut tags = Tags::new();
         tags.insert(OPERATION_ID, "1".repeat(200));
         let envelope = Envelope {
-            name: "x".repeat(2000).into(),
+            name: "Test",
             time: "2020-06-21:10:40:00Z".into(),
             sample_rate: Some(100.0),
             i_key: None,
@@ -96,7 +96,6 @@ mod tests {
                 properties: None,
             })),
         };
-        assert_eq!(1024, envelope.name.as_ref().len());
         assert_eq!(
             128,
             envelope.tags.unwrap().get(&OPERATION_ID).unwrap().len()

@@ -70,7 +70,7 @@ impl<C> Exporter<C> {
             }
         };
         result.push(Envelope {
-            name: name.into(),
+            name,
             time: time_to_string(span.start_time).into(),
             sample_rate: Some(self.sample_rate),
             i_key: Some(self.instrumentation_key.clone().into()),
@@ -94,7 +94,7 @@ impl<C> Exporter<C> {
                 ),
             };
             result.push(Envelope {
-                name: name.into(),
+                name,
                 time: time_to_string(event.timestamp).into(),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone().into()),
