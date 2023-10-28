@@ -612,7 +612,7 @@ where
                 runtime.clone(),
             ));
         }
-        builder = builder.with_batch_exporter(exporter, runtime);
+        //builder = builder.with_batch_exporter(exporter, runtime);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }

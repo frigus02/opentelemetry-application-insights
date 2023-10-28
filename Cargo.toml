@@ -53,9 +53,12 @@ sysinfo = { version = "0.29", optional = true }
 
 [dev-dependencies]
 async-std = { version = "1.10.0", features = ["attributes"] }
+ctrlc = "3.2.5"
 doc-comment = "0.3.3"
 env_logger = "0.10.0"
 insta = "1.13.0"
+num-format = "0.4.4"
+num_cpus = "1.15.0"
 opentelemetry = { version = "0.20", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
 opentelemetry-application-insights = { path = ".", features = ["reqwest-client", "reqwest-blocking-client", "live-metrics"] }
 rand = "0.8.5"
@@ -95,6 +98,10 @@ required-features = ["metrics"]
 [[example]]
 name = "opentelemetry"
 required-features = ["reqwest-client", "opentelemetry/rt-tokio"]
+
+[[example]]
+name = "stress"
+required-features = ["live-metrics", "opentelemetry/rt-tokio"]
 
 [[example]]
 name = "stress_test"
