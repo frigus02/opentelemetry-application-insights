@@ -1,10 +1,7 @@
 use crate::models::{Properties, SeverityLevel};
 use chrono::{DateTime, SecondsFormat, Utc};
-use opentelemetry::{
-    sdk::{trace::EvictedHashMap, Resource},
-    trace::Status,
-    Value,
-};
+use opentelemetry::{trace::Status, KeyValue, Value};
+use opentelemetry_sdk::Resource;
 use std::time::{Duration, SystemTime};
 
 pub(crate) fn duration_to_string(duration: Duration) -> String {
@@ -25,13 +22,13 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
 }
 
 pub(crate) fn attrs_to_properties(
-    attributes: &EvictedHashMap,
+    attributes: &[KeyValue],
     resource: &Resource,
 ) -> Option<Properties> {
     let properties = attributes
         .iter()
-        .map(|(k, v)| (k.as_str().into(), v.into()))
-        .chain(resource.iter().map(|(k, v)| (k.as_str().into(), v.into())))
+        .map(|kv| ((&kv.key).into(), (&kv.value).into()))
+        .chain(resource.iter().map(|(k, v)| (k.into(), v.into())))
         .collect();
 
     Some(properties).filter(|x: &Properties| !x.is_empty())

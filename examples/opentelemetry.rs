@@ -1,10 +1,10 @@
 use opentelemetry::{
     global,
     propagation::TextMapPropagator,
-    sdk::propagation::TraceContextPropagator,
     trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
     Context, Key,
 };
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry::runtime::Tokio);
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     match traceparent {
         Some(traceparent) => {

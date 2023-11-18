@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade to `v0.21.0` of `opentelemetry` and `opentelemetry_sdk`.
+- Upgrade to `v0.10.0` of `opentelemetry-http`.
+- Upgrade to `v0.13.0` of `opentelemetry-semantic-conventions`.
+- Improve live metrics performance ([#64](https://github.com/frigus02/opentelemetry-application-insights/pull/64)).
+
 ## [0.28.0] - 2023-10-22
 
 - Support for [Live Metrics](https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream).

@@ -1,19 +1,22 @@
 use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
+#[cfg(feature = "metrics")]
+use opentelemetry::InstrumentationLibrary;
 use opentelemetry::{
-    sdk::export::trace::SpanData,
     trace::{SpanId, SpanKind},
     Key, Value,
 };
+use opentelemetry_sdk::export::trace::SpanData;
 #[cfg(feature = "metrics")]
-use opentelemetry::{
-    sdk::{AttributeSet, Resource},
-    InstrumentationLibrary,
-};
+use opentelemetry_sdk::{AttributeSet, Resource};
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
-    let mut tags = get_tags_from_attrs(span.resource.iter().chain(span.attributes.iter()));
+    let mut tags = get_tags_from_attrs(
+        span.resource
+            .iter()
+            .chain(span.attributes.iter().map(|kv| (&kv.key, &kv.value))),
+    );
 
     // Set the operation id and operation parent id.
     tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
@@ -23,22 +26,23 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
     // Ensure the name of the operation is `METHOD /the/route/path`.
     if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
-        if let Some(method) = span
-            .attributes
-            .get(&semcov::trace::HTTP_REQUEST_METHOD)
-            .or_else(|| {
-                span.attributes.get(
-                    #[allow(deprecated)]
-                    &semcov::trace::HTTP_METHOD,
-                )
-            })
-        {
-            if let Some(route) = span.attributes.get(&semcov::trace::HTTP_ROUTE) {
-                tags.insert(
-                    tags::OPERATION_NAME,
-                    format!("{} {}", method.as_str(), route.as_str()),
-                );
+        let mut method: Option<&Value> = None;
+        let mut route: Option<&Value> = None;
+        for kv in &span.attributes {
+            #[allow(deprecated)]
+            if kv.key == semcov::trace::HTTP_REQUEST_METHOD || kv.key == semcov::trace::HTTP_METHOD
+            {
+                method = Some(&kv.value);
+            } else if kv.key == semcov::trace::HTTP_ROUTE {
+                route = Some(&kv.value);
             }
+        }
+
+        if let (Some(method), Some(route)) = (method, route) {
+            tags.insert(
+                tags::OPERATION_NAME,
+                format!("{} {}", method.as_str(), route.as_str()),
+            );
         }
     }
 

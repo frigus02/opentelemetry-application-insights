@@ -8,7 +8,6 @@
 
 use format::requests_to_string;
 use opentelemetry::{
-    sdk::{trace::Config, Resource},
     trace::{
         get_active_span, mark_span_as_active, Span, SpanKind, Status, TraceContextExt, Tracer,
         TracerProvider,
@@ -16,6 +15,7 @@ use opentelemetry::{
     Context, KeyValue,
 };
 use opentelemetry_application_insights::{attrs as ai, new_pipeline_from_connection_string};
+use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
 use std::time::Duration;
@@ -31,20 +31,24 @@ fn traces_simple() {
         let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client.clone())
-            .with_trace_config(Config::default().with_resource(Resource::new(vec![
-                semcov::resource::SERVICE_NAMESPACE.string("test"),
-                semcov::resource::SERVICE_NAME.string("client"),
-            ])))
+            .with_trace_config(
+                opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
+                    semcov::resource::SERVICE_NAMESPACE.string("test"),
+                    semcov::resource::SERVICE_NAME.string("client"),
+                ])),
+            )
             .build_simple();
         let client_tracer = client_provider.tracer("test");
 
         let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client)
-            .with_trace_config(Config::default().with_resource(Resource::new(vec![
-                semcov::resource::SERVICE_NAMESPACE.string("test"),
-                semcov::resource::SERVICE_NAME.string("server"),
-            ])))
+            .with_trace_config(
+                opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
+                    semcov::resource::SERVICE_NAMESPACE.string("test"),
+                    semcov::resource::SERVICE_NAME.string("server"),
+                ])),
+            )
             .build_simple();
         let server_tracer = server_provider.tracer("test");
 
@@ -128,7 +132,7 @@ async fn traces_batch_async_std() {
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client)
-            .build_batch(opentelemetry::runtime::AsyncStd);
+            .build_batch(opentelemetry_sdk::runtime::AsyncStd);
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("async-std", |_cx| {});
@@ -143,7 +147,7 @@ async fn traces_batch_tokio() {
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client)
-            .build_batch(opentelemetry::runtime::TokioCurrentThread);
+            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("tokio", |_cx| {});
@@ -159,7 +163,7 @@ async fn live_metrics() {
             .expect("connection string is valid")
             .with_client(client)
             .with_live_metrics(true)
-            .build_batch(opentelemetry::runtime::TokioCurrentThread);
+            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
 
         // Wait for one ping request so we start to collect metrics.

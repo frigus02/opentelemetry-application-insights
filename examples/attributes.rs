@@ -1,11 +1,11 @@
 use opentelemetry::{
-    sdk,
     trace::{
         get_active_span, mark_span_as_active, SpanKind, TraceContextExt, Tracer, TracerProvider,
     },
     Context, KeyValue,
 };
 use opentelemetry_application_insights::attrs as ai;
+use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 
 fn log() {
@@ -40,7 +40,7 @@ fn main() {
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::blocking::Client::new())
         .with_trace_config(
-            sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
+            opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
                 semcov::resource::SERVICE_NAME.string("client"),
             ])),
@@ -52,7 +52,7 @@ fn main() {
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::blocking::Client::new())
         .with_trace_config(
-            sdk::trace::Config::default().with_resource(sdk::Resource::new(vec![
+            opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                 semcov::resource::SERVICE_NAMESPACE.string("example-attributes"),
                 semcov::resource::SERVICE_NAME.string("server"),
             ])),

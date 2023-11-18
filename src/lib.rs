@@ -45,7 +45,7 @@
 //!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
 //!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
 //!         .with_client(reqwest::Client::new())
-//!         .install_batch(opentelemetry::runtime::Tokio);
+//!         .install_batch(opentelemetry_sdk::runtime::Tokio);
 //!
 //!     tracer.in_span("main", |_cx| {});
 //!
@@ -88,7 +88,7 @@ This requires the **metrics** feature.
 
 ```no_run
 use opentelemetry::global;
-use opentelemetry::sdk::metrics::{MeterProvider, PeriodicReader};
+use opentelemetry_sdk::metrics::{MeterProvider, PeriodicReader};
 use std::time::Duration;
 
 #[tokio::main]
@@ -100,7 +100,7 @@ async fn main() {
         reqwest::Client::new(),
     )
     .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio).build();
+    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
     let meter_provider = MeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
 
@@ -141,7 +141,7 @@ async fn main() {
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
         .with_client(reqwest::Client::new())
         .with_live_metrics(true)
-        .install_batch(opentelemetry::runtime::Tokio);
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     // ... send traces ...
 
@@ -304,19 +304,19 @@ mod uploader_quick_pulse;
 use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
+use opentelemetry::{global, trace::TracerProvider as _, StringValue};
+pub use opentelemetry_http::HttpClient;
 #[cfg(feature = "metrics")]
-use opentelemetry::sdk::metrics::reader::{
+use opentelemetry_sdk::metrics::reader::{
     AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
     TemporalitySelector,
 };
-use opentelemetry::{
-    global,
+use opentelemetry_sdk::{
+    export::ExportError,
     runtime::RuntimeChannel,
-    sdk::{self, export::ExportError, trace::BatchMessage},
-    trace::TracerProvider,
-    StringValue,
+    trace::{Config, Tracer, TracerProvider},
+    Resource,
 };
-pub use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
 #[cfg(feature = "live-metrics")]
 use quick_pulse::QuickPulseManager;
@@ -403,7 +403,7 @@ pub fn new_pipeline_from_env(
 #[derive(Debug)]
 pub struct PipelineBuilder<C> {
     client: C,
-    config: Option<sdk::trace::Config>,
+    config: Option<Config>,
     endpoint: http::Uri,
     #[cfg(feature = "live-metrics")]
     live_metrics_endpoint: http::Uri,
@@ -492,17 +492,18 @@ impl<C> PipelineBuilder<C> {
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
     /// ```no_run
-    /// # use opentelemetry::{KeyValue, sdk};
+    /// # use opentelemetry::KeyValue;
+    /// # use opentelemetry_sdk::Resource;
     /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_trace_config(sdk::trace::Config::default().with_resource(
-    ///         sdk::Resource::new(vec![
+    ///     .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
+    ///         Resource::new(vec![
     ///             KeyValue::new("service.name", "my-application"),
     ///         ]),
     ///     ))
     ///     .install_simple();
     /// ```
-    pub fn with_trace_config(self, mut config: sdk::trace::Config) -> Self {
+    pub fn with_trace_config(self, mut config: Config) -> Self {
         if let Some(old_config) = self.config {
             let merged_resource = old_config.resource.merge(config.resource.clone());
             config = config.with_resource(merged_resource);
@@ -522,19 +523,18 @@ impl<C> PipelineBuilder<C> {
     /// This will be translated, along with the service namespace, to the Cloud Role Name.
     ///
     /// ```
-    /// # use opentelemetry::{KeyValue, sdk};
     /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<StringValue>>(self, name: T) -> Self {
-        let new_resource = sdk::Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
+        let new_resource = Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
         let config = if let Some(old_config) = self.config {
             let merged_resource = old_config.resource.merge(&new_resource);
             old_config.with_resource(merged_resource)
         } else {
-            sdk::trace::Config::default().with_resource(new_resource)
+            Config::default().with_resource(new_resource)
         };
 
         PipelineBuilder {
@@ -574,10 +574,10 @@ where
     }
 
     /// Build a configured `TracerProvider` with a simple span processor.
-    pub fn build_simple(mut self) -> sdk::trace::TracerProvider {
+    pub fn build_simple(mut self) -> TracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
-        let mut builder = sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
+        let mut builder = TracerProvider::builder().with_simple_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -587,20 +587,17 @@ where
 
     /// Build a configured `TracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: RuntimeChannel<BatchMessage>>(
-        mut self,
-        runtime: R,
-    ) -> sdk::trace::TracerProvider {
+    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> TracerProvider {
         let config = self.config.take();
         #[cfg(feature = "live-metrics")]
         let live_metrics = self.live_metrics;
         #[cfg(feature = "live-metrics")]
         let live_metrics_endpoint = self.live_metrics_endpoint.clone();
         let exporter = self.init_exporter();
-        let mut builder = sdk::trace::TracerProvider::builder();
+        let mut builder = TracerProvider::builder();
         #[cfg(feature = "live-metrics")]
         if live_metrics {
-            let mut resource = sdk::Resource::default();
+            let mut resource = Resource::default();
             if let Some(ref config) = config {
                 resource = resource.merge(config.resource.as_ref());
             };
@@ -624,7 +621,7 @@ where
     ///
     /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
     /// that.
-    pub fn install_simple(self) -> sdk::trace::Tracer {
+    pub fn install_simple(self) -> Tracer {
         let trace_provider = self.build_simple();
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
@@ -640,7 +637,7 @@ where
     ///
     /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
     /// that.
-    pub fn install_batch<R: RuntimeChannel<BatchMessage>>(self, runtime: R) -> sdk::trace::Tracer {
+    pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
         let trace_provider = self.build_batch(runtime);
         let tracer = trace_provider.versioned_tracer(
             "opentelemetry-application-insights",
@@ -807,13 +804,13 @@ pub enum Error {
     #[cfg(feature = "live-metrics")]
     #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
     #[error("process span for live metrics failed with {0}")]
-    QuickPulseProcessSpan(opentelemetry::runtime::TrySendError),
+    QuickPulseProcessSpan(opentelemetry_sdk::runtime::TrySendError),
 
     /// Failed to stop live metrics.
     #[cfg(feature = "live-metrics")]
     #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
     #[error("stop live metrics failed with {0}")]
-    QuickPulseShutdown(opentelemetry::runtime::TrySendError),
+    QuickPulseShutdown(opentelemetry_sdk::runtime::TrySendError),
 }
 
 impl ExportError for Error {
