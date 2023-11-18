@@ -13,15 +13,21 @@ use opentelemetry::{
         trace::{BatchMessage, IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
         Resource,
     },
-    trace::{SpanKind, TraceError, TraceResult},
+    trace::{SpanKind, TraceResult},
     Context,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_semantic_conventions as semcov;
-use std::{sync::Arc, time::Duration, time::SystemTime};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+    time::SystemTime,
+};
 use sysinfo::{CpuExt as _, CpuRefreshKind, RefreshKind, System, SystemExt as _};
 
-const CHANNEL_CAPACITY: usize = 100;
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
 const FALLBACK_INTERVAL: Duration = Duration::from_secs(60);
@@ -39,6 +45,8 @@ const METRIC_DEPENDENCY_DURATION: &str = "\\ApplicationInsights\\Dependency Call
 const METRIC_EXCEPTION_RATE: &str = "\\ApplicationInsights\\Exceptions/Sec";
 
 pub(crate) struct QuickPulseManager<R: RuntimeChannel<BatchMessage>> {
+    is_collecting: Arc<AtomicBool>,
+    metrics_collector: Arc<Mutex<MetricsCollector>>,
     message_sender: R::Sender,
 }
 
@@ -56,11 +64,13 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
         resource: Resource,
         runtime: R,
     ) -> QuickPulseManager<R> {
-        let (message_sender, message_receiver) = runtime.batch_message_channel(CHANNEL_CAPACITY);
+        let (message_sender, message_receiver) = runtime.batch_message_channel(1);
         let delay_runtime = runtime.clone();
+        let is_collecting_outer = Arc::new(AtomicBool::new(false));
+        let is_collecting = is_collecting_outer.clone();
+        let metrics_collector_outer = Arc::new(Mutex::new(MetricsCollector::new()));
+        let metrics_collector = metrics_collector_outer.clone();
         runtime.spawn(Box::pin(async move {
-            let mut is_collecting = false;
-            let mut metrics_colllector = MetricsCollector::new();
             let mut sender =
                 QuickPulseSender::new(client, live_metrics_endpoint, instrumentation_key, resource);
 
@@ -74,24 +84,23 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
                     _ = send_delay => BatchMessage::Flush(None),
                 };
                 match msg {
-                    BatchMessage::ExportSpan(span) => {
-                        if is_collecting {
-                            metrics_colllector.count_span(span);
-                        }
-                    }
+                    BatchMessage::ExportSpan(_) => {}
                     BatchMessage::Flush(_) => {
-                        let metrics = if is_collecting {
-                            metrics_colllector.collect()
+                        let curr_is_collecting = is_collecting.load(Ordering::SeqCst);
+                        let metrics = if curr_is_collecting {
+                            metrics_collector.lock().unwrap().collect_and_reset()
                         } else {
                             Vec::new()
                         };
                         let (next_is_collecting, next_timeout) =
-                            sender.send(is_collecting, metrics).await;
-                        if !is_collecting && next_is_collecting {
-                            // Reset last collection time to get accurate metrics on next collection.
-                            metrics_colllector.reset();
+                            sender.send(curr_is_collecting, metrics).await;
+                        if curr_is_collecting != next_is_collecting {
+                            is_collecting.store(next_is_collecting, Ordering::SeqCst);
+                            if next_is_collecting {
+                                // Reset last collection time to get accurate metrics on next collection.
+                                metrics_collector.lock().unwrap().reset();
+                            }
                         }
-                        is_collecting = next_is_collecting;
                         send_delay = delay_runtime.delay(next_timeout).fuse();
                     }
                     BatchMessage::Shutdown(_) => break,
@@ -99,7 +108,11 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
             }
         }));
 
-        QuickPulseManager { message_sender }
+        QuickPulseManager {
+            is_collecting: is_collecting_outer,
+            metrics_collector: metrics_collector_outer,
+            message_sender,
+        }
     }
 }
 
@@ -107,12 +120,8 @@ impl<R: RuntimeChannel<BatchMessage>> SpanProcessor for QuickPulseManager<R> {
     fn on_start(&self, _span: &mut Span, _cx: &Context) {}
 
     fn on_end(&self, span: SpanData) {
-        if let Err(err) = self
-            .message_sender
-            .try_send(BatchMessage::ExportSpan(span))
-            .map_err(Error::QuickPulseProcessSpan)
-        {
-            opentelemetry::global::handle_error(TraceError::Other(err.into()));
+        if self.is_collecting.load(Ordering::SeqCst) {
+            self.metrics_collector.lock().unwrap().count_span(span);
         }
     }
 
@@ -322,7 +331,7 @@ impl MetricsCollector {
         }
     }
 
-    fn collect(&mut self) -> Vec<QuickPulseMetric> {
+    fn collect_and_reset(&mut self) -> Vec<QuickPulseMetric> {
         let mut metrics = Vec::new();
         self.system.refresh_specifics(self.system_refresh_kind);
         self.collect_cpu_usage(&mut metrics);
