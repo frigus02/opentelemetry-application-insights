@@ -7,16 +7,16 @@ use crate::{
 };
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{
-    runtime::{RuntimeChannel, TrySend},
-    sdk::{
-        export::trace::SpanData,
-        trace::{BatchMessage, IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
-        Resource,
-    },
     trace::{SpanKind, TraceResult},
     Context,
 };
 use opentelemetry_http::HttpClient;
+use opentelemetry_sdk::{
+    export::trace::SpanData,
+    runtime::{RuntimeChannel, TrySend},
+    trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
+    Resource,
+};
 use opentelemetry_semantic_conventions as semcov;
 use std::{
     sync::{
@@ -44,19 +44,25 @@ const METRIC_DEPENDENCY_FAILURE_RATE: &str = "\\ApplicationInsights\\Dependency 
 const METRIC_DEPENDENCY_DURATION: &str = "\\ApplicationInsights\\Dependency Call Duration";
 const METRIC_EXCEPTION_RATE: &str = "\\ApplicationInsights\\Exceptions/Sec";
 
-pub(crate) struct QuickPulseManager<R: RuntimeChannel<BatchMessage>> {
+pub(crate) struct QuickPulseManager<R: RuntimeChannel> {
     is_collecting: Arc<AtomicBool>,
     metrics_collector: Arc<Mutex<MetricsCollector>>,
-    message_sender: R::Sender,
+    message_sender: R::Sender<Message>,
 }
 
-impl<R: RuntimeChannel<BatchMessage>> std::fmt::Debug for QuickPulseManager<R> {
+impl<R: RuntimeChannel> std::fmt::Debug for QuickPulseManager<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("QuickPulseManager").finish()
     }
 }
 
-impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
+#[derive(Debug)]
+enum Message {
+    Send,
+    Stop,
+}
+
+impl<R: RuntimeChannel> QuickPulseManager<R> {
     pub(crate) fn new<C: HttpClient + 'static>(
         client: Arc<C>,
         live_metrics_endpoint: http::Uri,
@@ -80,12 +86,11 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
 
             loop {
                 let msg = select_biased! {
-                    msg = message_receiver.next() => msg.unwrap_or_else(shutdown_message),
-                    _ = send_delay => BatchMessage::Flush(None),
+                    msg = message_receiver.next() => msg.unwrap_or(Message::Stop),
+                    _ = send_delay => Message::Send
                 };
                 match msg {
-                    BatchMessage::ExportSpan(_) => {}
-                    BatchMessage::Flush(_) => {
+                    Message::Send => {
                         let curr_is_collecting = is_collecting.load(Ordering::SeqCst);
                         let metrics = if curr_is_collecting {
                             metrics_collector.lock().unwrap().collect_and_reset()
@@ -103,7 +108,7 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
                         }
                         send_delay = delay_runtime.delay(next_timeout).fuse();
                     }
-                    BatchMessage::Shutdown(_) => break,
+                    Message::Stop => break,
                 }
             }
         }));
@@ -116,7 +121,7 @@ impl<R: RuntimeChannel<BatchMessage>> QuickPulseManager<R> {
     }
 }
 
-impl<R: RuntimeChannel<BatchMessage>> SpanProcessor for QuickPulseManager<R> {
+impl<R: RuntimeChannel> SpanProcessor for QuickPulseManager<R> {
     fn on_start(&self, _span: &mut Span, _cx: &Context) {}
 
     fn on_end(&self, span: SpanData) {
@@ -131,26 +136,18 @@ impl<R: RuntimeChannel<BatchMessage>> SpanProcessor for QuickPulseManager<R> {
 
     fn shutdown(&mut self) -> TraceResult<()> {
         self.message_sender
-            .try_send(shutdown_message())
+            .try_send(Message::Stop)
             .map_err(Error::QuickPulseShutdown)?;
         Ok(())
     }
 }
 
-impl<R: RuntimeChannel<BatchMessage>> Drop for QuickPulseManager<R> {
+impl<R: RuntimeChannel> Drop for QuickPulseManager<R> {
     fn drop(&mut self) {
         if let Err(err) = self.shutdown() {
             opentelemetry::global::handle_error(err);
         }
     }
-}
-
-// This feels terrible. I think using opentelemetry::runtime::RuntimeChannel gives the nicest API
-// for this crate, because no additional type is needed. But this means we need to use BatchMessage
-// here and that requires a futures_channel::oneshot for the shutdown message.
-fn shutdown_message() -> BatchMessage {
-    let (sender, _) = futures_channel::oneshot::channel();
-    BatchMessage::Shutdown(sender)
 }
 
 struct QuickPulseSender<C: HttpClient + 'static> {

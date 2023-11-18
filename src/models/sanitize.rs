@@ -26,6 +26,12 @@ impl<'a, const N: usize> From<Cow<'a, str>> for LimitedLenString<N> {
     }
 }
 
+impl<const N: usize> From<&opentelemetry::Key> for LimitedLenString<N> {
+    fn from(k: &opentelemetry::Key) -> Self {
+        k.as_str().into()
+    }
+}
+
 impl<const N: usize> From<&opentelemetry::Value> for LimitedLenString<N> {
     fn from(v: &opentelemetry::Value) -> Self {
         v.as_str().into()

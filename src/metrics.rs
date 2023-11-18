@@ -8,17 +8,17 @@ use async_trait::async_trait;
 use opentelemetry::{
     global,
     metrics::{MetricsError, Result as MetricsResult},
-    sdk::{
-        metrics::{
-            data::{Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
-            exporter::PushMetricsExporter,
-            reader::{AggregationSelector, TemporalitySelector},
-            Aggregation, InstrumentKind,
-        },
-        AttributeSet,
-    },
 };
 use opentelemetry_http::HttpClient;
+use opentelemetry_sdk::{
+    metrics::{
+        data::{Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
+        exporter::PushMetricsExporter,
+        reader::{AggregationSelector, TemporalitySelector},
+        Aggregation, InstrumentKind,
+    },
+    AttributeSet,
+};
 use std::{convert::TryInto, sync::Arc, time::SystemTime};
 
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]

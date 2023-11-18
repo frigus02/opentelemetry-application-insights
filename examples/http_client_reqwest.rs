@@ -7,7 +7,7 @@ async fn main() {
     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry::runtime::Tokio);
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     tracer.in_span("reqwest-client", |_cx| {});
 

@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_service_name("stress-test")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry::runtime::Tokio);
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     for i in 1..num_root_spans + 1 {
         mock_serve_http_request(i).await;

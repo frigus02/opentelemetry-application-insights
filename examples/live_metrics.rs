@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let tracer = opentelemetry_application_insights::new_pipeline_from_env()?
         .with_client(reqwest::Client::new())
         .with_live_metrics(true)
-        .install_batch(opentelemetry::runtime::Tokio);
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     print!("Simulating requests. Press Ctrl+C to stop.");
 

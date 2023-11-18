@@ -1,9 +1,5 @@
-use opentelemetry::{
-    global,
-    metrics::Unit,
-    sdk::metrics::{MeterProvider, PeriodicReader},
-    KeyValue,
-};
+use opentelemetry::{global, metrics::Unit, KeyValue};
+use opentelemetry_sdk::metrics::{MeterProvider, PeriodicReader};
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
 
@@ -17,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         reqwest::Client::new(),
     )
     .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry::runtime::Tokio)
+    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_interval(Duration::from_secs(1))
         .build();
     let meter_provider = MeterProvider::builder().with_reader(reader).build();

@@ -20,7 +20,8 @@ x-ms-qps-role-name: unknown_service
   "MachineName": "Unknown",
   "RoleName": "unknown_service",
   "StreamId": "STRIPPED",
-  "Timestamp": "STRIPPED"
+  "Timestamp": "STRIPPED",
+  "Version": "opentelemetry:0.21.1"
 }
 
 
@@ -85,7 +86,8 @@ content-encoding: gzip
     ],
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
-    "Timestamp": "STRIPPED"
+    "Timestamp": "STRIPPED",
+    "Version": "opentelemetry:0.21.1"
   }
 ]
 
@@ -141,7 +143,8 @@ content-encoding: gzip
     ],
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
-    "Timestamp": "STRIPPED"
+    "Timestamp": "STRIPPED",
+    "Version": "opentelemetry:0.21.1"
   }
 ]
 
@@ -159,7 +162,10 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service"
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "0.21.1"
         },
         "resultCode": "2",
         "success": false,
@@ -172,6 +178,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "opentelemetry:0.21.1",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"
@@ -205,7 +212,10 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service"
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "0.21.1"
         },
         "responseCode": "2",
         "success": false,
@@ -218,6 +228,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "opentelemetry:0.21.1",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"
@@ -229,7 +240,10 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service"
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "0.21.1"
         },
         "responseCode": "0",
         "success": true,
@@ -242,6 +256,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "opentelemetry:0.21.1",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"
