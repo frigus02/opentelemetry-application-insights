@@ -8,7 +8,7 @@ use crate::{
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{
     trace::{SpanKind, TraceResult},
-    Context,
+    Context, Key,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
@@ -26,7 +26,7 @@ use std::{
     time::Duration,
     time::SystemTime,
 };
-use sysinfo::{CpuExt as _, CpuRefreshKind, RefreshKind, System, SystemExt as _};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
@@ -172,7 +172,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
     ) -> Self {
         let mut tags = get_tags_from_attrs(resource.iter());
         let machine_name = resource
-            .get(semcov::resource::HOST_NAME)
+            .get(Key::from_static_str(semcov::resource::HOST_NAME))
             .map(|v| v.as_str().into_owned())
             .unwrap_or_else(|| "Unknown".into());
         Self {
@@ -279,7 +279,7 @@ impl MetricsCollector {
             system: System::new(),
             system_refresh_kind: RefreshKind::new()
                 .with_cpu(CpuRefreshKind::new().with_cpu_usage())
-                .with_memory(),
+                .with_memory(MemoryRefreshKind::new().with_ram()),
             request_count: 0,
             request_failed_count: 0,
             request_duration: Duration::default(),

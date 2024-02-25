@@ -8,7 +8,7 @@
 //! # Usage
 //!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans (this example requires the **reqwest-client** feature):
+//! spans (this example requires the **opentelemetry-http/reqwest** feature):
 //!
 //! ```no_run
 //! use opentelemetry::trace::Tracer as _;
@@ -35,7 +35,7 @@
 //! feature requires an async runtime such as Tokio or async-std. If you decide to use a batch span
 //! processor, make sure to call `opentelemetry::global::shutdown_tracer_provider()` before your
 //! program exits to ensure all remaining spans are exported properly (this example requires the
-//! **reqwest-client** and **opentelemetry/rt-tokio** features).
+//! **opentelemetry/rt-tokio** and **opentelemetry-http/reqwest** features).
 //!
 //! ```no_run
 //! use opentelemetry::trace::Tracer as _;
@@ -59,16 +59,17 @@
 //! client that works with your chosen runtime. The [`opentelemetry-http`] crate comes with support
 //! for:
 //!
-//! - [`surf`] for [`async-std`]: enable the **surf-client** and **opentelemetry/rt-async-std**
-//!   features and configure the exporter with `with_client(surf::Client::new())`.
-//! - [`reqwest`] for [`tokio`]: enable the **reqwest-client** and **opentelemetry/rt-tokio**
-//!   features and configure the exporter with either `with_client(reqwest::Client::new())` or
+//! - [`isahc`]: enable the **opentelemetry-http/isahc** feature and configure the exporter with
+//!   `with_client(isahc::HttpClient::new()?)`.
+//! - [`reqwest`]: enable the **opentelemetry-http/reqwest** feature and configure the exporter
+//!   with either `with_client(reqwest::Client::new())` or
 //!   `with_client(reqwest::blocking::Client::new())`.
+//! - and more...
 //!
 //! [`async-std`]: https://crates.io/crates/async-std
 //! [`opentelemetry-http`]: https://crates.io/crates/opentelemetry-http
 //! [`reqwest`]: https://crates.io/crates/reqwest
-//! [`surf`]: https://crates.io/crates/surf
+//! [`isahc`]: https://crates.io/crates/isahc
 //! [`tokio`]: https://crates.io/crates/tokio
 //!
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
@@ -88,7 +89,7 @@ This requires the **metrics** feature.
 
 ```no_run
 use opentelemetry::global;
-use opentelemetry_sdk::metrics::{MeterProvider, PeriodicReader};
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use std::time::Duration;
 
 #[tokio::main]
@@ -101,7 +102,7 @@ async fn main() {
     )
     .expect("valid connection string");
     let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
-    let meter_provider = MeterProvider::builder().with_reader(reader).build();
+    let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
 
     // Record value
@@ -304,7 +305,7 @@ mod uploader_quick_pulse;
 use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
-use opentelemetry::{global, trace::TracerProvider as _, StringValue};
+use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
 #[cfg(feature = "metrics")]
 use opentelemetry_sdk::metrics::reader::{
@@ -436,7 +437,7 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Default: <https://dc.services.visualstudio.com>
     ///
-    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
     ///
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
@@ -466,7 +467,7 @@ impl<C> PipelineBuilder<C> {
     ///
     /// Default: 1.0
     ///
-    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
     ///
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
@@ -487,7 +488,7 @@ impl<C> PipelineBuilder<C> {
     /// If there is an existing `sdk::Config` in the `PipelineBuilder` the `sdk::Resource`s
     /// are merged and any other parameters are overwritten.
     ///
-    /// Note: This example requires [`reqwest`] and the **reqwest-client-blocking** feature.
+    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
     ///
     /// [`reqwest`]: https://crates.io/crates/reqwest
     ///
@@ -528,8 +529,8 @@ impl<C> PipelineBuilder<C> {
     ///     .with_service_name("my-application")
     ///     .install_simple();
     /// ```
-    pub fn with_service_name<T: Into<StringValue>>(self, name: T) -> Self {
-        let new_resource = Resource::new(vec![semcov::resource::SERVICE_NAME.string(name)]);
+    pub fn with_service_name<T: Into<Value>>(self, name: T) -> Self {
+        let new_resource = Resource::new(vec![KeyValue::new(semcov::resource::SERVICE_NAME, name)]);
         let config = if let Some(old_config) = self.config {
             let merged_resource = old_config.resource.merge(&new_resource);
             old_config.with_resource(merged_resource)

@@ -1,5 +1,5 @@
 use opentelemetry::{global, metrics::Unit, KeyValue};
-use opentelemetry_sdk::metrics::{MeterProvider, PeriodicReader};
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
 
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
         .with_interval(Duration::from_secs(1))
         .build();
-    let meter_provider = MeterProvider::builder().with_reader(reader).build();
+    let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
     global::set_meter_provider(meter_provider);
 
     let meter = global::meter("custom.instrumentation");
