@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.30.0] - 2024-03-08
+
 - Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.22`.
 - Upgrade `opentelemetry-http` to `v0.11`.
 - Remove `surf-client` feature, since [`opentelemetry-http/surf` has been removed](https://github.com/open-telemetry/opentelemetry-rust/pull/1537).
@@ -234,7 +236,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.29.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.30.0...HEAD
+[0.30.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.29.0...0.30.0
 [0.29.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.28.0...0.29.0
 [0.28.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.27.0...0.28.0
 [0.27.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.26.0...0.27.0
