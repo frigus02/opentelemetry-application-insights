@@ -33,8 +33,8 @@ fn traces_simple() {
             .with_client(client.clone())
             .with_trace_config(
                 opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
-                    semcov::resource::SERVICE_NAMESPACE.string("test"),
-                    semcov::resource::SERVICE_NAME.string("client"),
+                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                    KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
                 ])),
             )
             .build_simple();
@@ -45,8 +45,8 @@ fn traces_simple() {
             .with_client(client)
             .with_trace_config(
                 opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
-                    semcov::resource::SERVICE_NAMESPACE.string("test"),
-                    semcov::resource::SERVICE_NAME.string("server"),
+                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                    KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
                 ])),
             )
             .build_simple();
@@ -57,15 +57,18 @@ fn traces_simple() {
             .span_builder("dependency")
             .with_kind(SpanKind::Client)
             .with_attributes(vec![
-                semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
-                semcov::trace::NETWORK_PROTOCOL_NAME.string("http"),
-                semcov::trace::NETWORK_PROTOCOL_VERSION.string("1.1"),
-                semcov::trace::URL_FULL.string("https://example.com:8080/hello/world?name=marry"),
-                semcov::trace::SERVER_ADDRESS.string("example.com"),
-                semcov::trace::SERVER_PORT.i64(8080),
-                semcov::trace::SERVER_SOCKET_ADDRESS.string("10.1.2.4"),
-                semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
-                semcov::trace::ENDUSER_ID.string("marry"),
+                KeyValue::new(semcov::trace::HTTP_REQUEST_METHOD, "GET"),
+                KeyValue::new(semcov::trace::NETWORK_PROTOCOL_NAME, "http"),
+                KeyValue::new(semcov::trace::NETWORK_PROTOCOL_VERSION, "1.1"),
+                KeyValue::new(
+                    semcov::trace::URL_FULL,
+                    "https://example.com:8080/hello/world?name=marry",
+                ),
+                KeyValue::new(semcov::trace::SERVER_ADDRESS, "example.com"),
+                KeyValue::new(semcov::trace::SERVER_PORT, 8080),
+                KeyValue::new(semcov::trace::SERVER_SOCKET_ADDRESS, "10.1.2.4"),
+                KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
+                KeyValue::new(semcov::trace::ENDUSER_ID, "marry"),
             ])
             .start(&client_tracer);
         {
@@ -76,20 +79,20 @@ fn traces_simple() {
                 .span_builder("request")
                 .with_kind(SpanKind::Server)
                 .with_attributes(vec![
-                    semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
-                    semcov::trace::NETWORK_PROTOCOL_NAME.string("http"),
-                    semcov::trace::NETWORK_PROTOCOL_VERSION.string("1.1"),
-                    semcov::trace::URL_PATH.string("/hello/world"),
-                    semcov::trace::URL_QUERY.string("name=marry"),
-                    semcov::trace::SERVER_ADDRESS.string("example.com"),
-                    semcov::trace::SERVER_PORT.i64(8080),
-                    semcov::trace::URL_SCHEME.string("https"),
-                    semcov::trace::HTTP_ROUTE.string("/hello/world"),
-                    semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
-                    semcov::trace::CLIENT_ADDRESS.string("10.1.2.3"),
-                    semcov::trace::CLIENT_SOCKET_ADDRESS.string("10.1.2.2"),
-                    semcov::trace::USER_AGENT_ORIGINAL.string("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
-                    semcov::trace::ENDUSER_ID.string("marry"),
+                    KeyValue::new(semcov::trace::HTTP_REQUEST_METHOD, "GET"),
+                    KeyValue::new(semcov::trace::NETWORK_PROTOCOL_NAME, "http"),
+                    KeyValue::new(semcov::trace::NETWORK_PROTOCOL_VERSION, "1.1"),
+                    KeyValue::new(semcov::trace::URL_PATH, "/hello/world"),
+                    KeyValue::new(semcov::trace::URL_QUERY, "name=marry"),
+                    KeyValue::new(semcov::trace::SERVER_ADDRESS, "example.com"),
+                    KeyValue::new(semcov::trace::SERVER_PORT, 8080),
+                    KeyValue::new(semcov::trace::URL_SCHEME, "https"),
+                    KeyValue::new(semcov::trace::HTTP_ROUTE, "/hello/world"),
+                    KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
+                    KeyValue::new(semcov::trace::CLIENT_ADDRESS, "10.1.2.3"),
+                    KeyValue::new(semcov::trace::CLIENT_SOCKET_ADDRESS, "10.1.2.2"),
+                    KeyValue::new(semcov::trace::USER_AGENT_ORIGINAL, "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
+                    KeyValue::new(semcov::trace::ENDUSER_ID,"marry"),
                 ]);
             let span = server_tracer.build_with_context(builder, &cx);
             {
@@ -107,7 +110,7 @@ fn traces_simple() {
                     span.add_event(
                         "ai.custom",
                         vec![
-                            ai::CUSTOM_EVENT_NAME.string("A custom event!"),
+                            KeyValue::new(ai::CUSTOM_EVENT_NAME, "A custom event!"),
                             KeyValue::new("happened", true),
                         ],
                     );

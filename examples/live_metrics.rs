@@ -1,4 +1,7 @@
-use opentelemetry::trace::{Span, SpanKind, Status, Tracer as _};
+use opentelemetry::{
+    trace::{Span, SpanKind, Status, Tracer as _},
+    KeyValue,
+};
 use opentelemetry_semantic_conventions as semcov;
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
@@ -26,11 +29,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 Status::error("")
             })
             .with_attributes(vec![
-                semcov::trace::HTTP_REQUEST_METHOD.string("GET"),
-                semcov::trace::URL_SCHEME.string("https"),
-                semcov::trace::URL_PATH.string("/hello/world"),
-                semcov::trace::URL_QUERY.string("name=marry"),
-                semcov::trace::HTTP_RESPONSE_STATUS_CODE.i64(200),
+                KeyValue::new(semcov::trace::HTTP_REQUEST_METHOD, "GET"),
+                KeyValue::new(semcov::trace::URL_SCHEME, "https"),
+                KeyValue::new(semcov::trace::URL_PATH, "/hello/world"),
+                KeyValue::new(semcov::trace::URL_QUERY, "name=marry"),
+                KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
             ])
             .start(&tracer);
         {

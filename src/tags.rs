@@ -30,10 +30,11 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
         let mut route: Option<&Value> = None;
         for kv in &span.attributes {
             #[allow(deprecated)]
-            if kv.key == semcov::trace::HTTP_REQUEST_METHOD || kv.key == semcov::trace::HTTP_METHOD
+            if kv.key.as_str() == semcov::trace::HTTP_REQUEST_METHOD
+                || kv.key.as_str() == semcov::trace::HTTP_METHOD
             {
                 method = Some(&kv.value);
-            } else if kv.key == semcov::trace::HTTP_ROUTE {
+            } else if kv.key.as_str() == semcov::trace::HTTP_ROUTE {
                 route = Some(&kv.value);
             }
         }
@@ -88,7 +89,8 @@ where
         // These attributes do not collide with any opentelemetry semantic conventions, so it is
         // assumed that the user intends for them to be a part of the `tags` portion of the
         // envelope.
-        if k.as_str().starts_with("ai.") {
+        let k = k.as_str();
+        if k.starts_with("ai.") {
             if let Some(ctk) = TAG_KEY_LOOKUP.get(k) {
                 tags.insert(ctk.clone(), v.to_string());
             }
@@ -97,15 +99,15 @@ where
         attrs_map.insert(k, v);
     }
 
-    if let Some(user_id) = attrs_map.get(&semcov::trace::ENDUSER_ID) {
+    if let Some(user_id) = attrs_map.get(semcov::trace::ENDUSER_ID) {
         // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
         // fit better?
         tags.insert(tags::USER_AUTH_USER_ID, user_id.as_str().into_owned());
     }
 
-    if let Some(service_name) = attrs_map.get(&semcov::resource::SERVICE_NAME) {
+    if let Some(service_name) = attrs_map.get(semcov::resource::SERVICE_NAME) {
         let mut cloud_role = service_name.as_str().into_owned();
-        if let Some(service_namespace) = attrs_map.get(&semcov::resource::SERVICE_NAMESPACE) {
+        if let Some(service_namespace) = attrs_map.get(semcov::resource::SERVICE_NAMESPACE) {
             cloud_role.insert(0, '.');
             cloud_role.insert_str(0, &service_namespace.as_str());
         }
@@ -113,23 +115,23 @@ where
         tags.insert(tags::CLOUD_ROLE, cloud_role);
     }
 
-    if let Some(service_instance) = attrs_map.get(&semcov::resource::SERVICE_INSTANCE_ID) {
+    if let Some(service_instance) = attrs_map.get(semcov::resource::SERVICE_INSTANCE_ID) {
         tags.insert(
             tags::CLOUD_ROLE_INSTANCE,
             service_instance.as_str().into_owned(),
         );
     }
 
-    if let Some(service_version) = attrs_map.get(&semcov::resource::SERVICE_VERSION) {
+    if let Some(service_version) = attrs_map.get(semcov::resource::SERVICE_VERSION) {
         tags.insert(
             tags::APPLICATION_VERSION,
             service_version.as_str().into_owned(),
         );
     }
 
-    if let Some(sdk_name) = attrs_map.get(&semcov::resource::TELEMETRY_SDK_NAME) {
+    if let Some(sdk_name) = attrs_map.get(semcov::resource::TELEMETRY_SDK_NAME) {
         let sdk_version = attrs_map
-            .get(&semcov::resource::TELEMETRY_SDK_VERSION)
+            .get(semcov::resource::TELEMETRY_SDK_VERSION)
             .map(|v| v.as_str())
             .unwrap_or_else(|| "0.0.0".into());
         tags.insert(

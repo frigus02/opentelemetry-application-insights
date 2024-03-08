@@ -55,21 +55,21 @@ macro_rules! context_tag_keys {
         /// ## Usage
         ///
         /// ```rust
-        /// use opentelemetry::{global, trace::Tracer as _};
+        /// use opentelemetry::{global, trace::Tracer as _, KeyValue};
         /// use opentelemetry_application_insights::attrs as ai;
         ///
         /// let tracer = global::tracer("my-component");
         /// let _span = tracer
         ///     .span_builder("span-name")
         ///     .with_attributes(vec![
-        ///         ai::SESSION_ID.string("42"),
-        ///         ai::DEVICE_LOCALE.string("en-GB"),
+        ///         KeyValue::new(ai::SESSION_ID, "42"),
+        ///         KeyValue::new(ai::DEVICE_LOCALE, "en-GB"),
         ///     ])
         ///     .start(&tracer);
         /// ```
         pub mod attrs {
             $($(#[doc = $doc])+
-            pub const $var: opentelemetry::Key = opentelemetry::Key::from_static_str($name);)*
+            pub const $var: &str = $name;)*
 
             /// Name for a custom event recorded with special name "ai.custom".
             ///
@@ -78,14 +78,13 @@ macro_rules! context_tag_keys {
             /// name for each generated instance of an event.
             ///
             /// If not specified, the custom event name defaults to "&lt;no name&gt;".
-            pub const CUSTOM_EVENT_NAME: opentelemetry::Key =
-                opentelemetry::Key::from_static_str("ai.customEvent.name");
+            pub const CUSTOM_EVENT_NAME: &str = "ai.customEvent.name";
         }
 
         $($(#[doc = $doc])+
         pub(crate) const $var: ContextTagKey = ContextTagKey::new($name, $max_len);)*
 
-        pub(crate) static TAG_KEY_LOOKUP: Lazy<BTreeMap<opentelemetry::Key, ContextTagKey>> = Lazy::new(|| {
+        pub(crate) static TAG_KEY_LOOKUP: Lazy<BTreeMap<&str, ContextTagKey>> = Lazy::new(|| {
             vec![
                 $((attrs::$var, $var),)*
             ]

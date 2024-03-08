@@ -13,7 +13,7 @@ use crate::{
 };
 use opentelemetry::{
     trace::{Event, SpanKind, Status},
-    Key, Value,
+    Value,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
@@ -25,22 +25,22 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// Deprecated semantic convention key for HTTP host
 ///
 /// Removed in https://github.com/open-telemetry/opentelemetry-specification/pull/2469.
-const DEPRECATED_HTTP_HOST: Key = Key::from_static_str("http.host");
+const DEPRECATED_HTTP_HOST: &str = "http.host";
 
 /// Semantic convention key for HTTP 'Host' request header.
-const HTTP_REQUEST_HEADER_HOST: Key = Key::from_static_str("http.request.header.host");
+const HTTP_REQUEST_HEADER_HOST: &str = "http.request.header.host";
 
 /// Deprecated semantic convention key for peer IP.
 ///
 /// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/2614 with
 /// `net.sock.peer.addr`.
-const DEPRECATED_NET_PEER_IP: Key = Key::from_static_str("net.peer.ip");
+const DEPRECATED_NET_PEER_IP: &str = "net.peer.ip";
 
 /// Deprecated semantic convention key for HTTP client IP.
 ///
 /// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3402 with
 /// `client.address`.
-const DEPRECATED_HTTP_CLIENT_IP: Key = Key::from_static_str("http.client_ip");
+const DEPRECATED_HTTP_CLIENT_IP: &str = "http.client_ip";
 
 pub(crate) const EVENT_NAME_CUSTOM: &str = "ai.custom";
 pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
@@ -127,9 +127,9 @@ where
     }
 }
 
-fn get_url_path_and_query<'v>(attrs: &HashMap<&Key, &'v Value>) -> Option<Cow<'v, str>> {
-    if let Some(path) = attrs.get(&semcov::trace::URL_PATH) {
-        if let Some(query) = attrs.get(&semcov::trace::URL_QUERY) {
+fn get_url_path_and_query<'v>(attrs: &HashMap<&str, &'v Value>) -> Option<Cow<'v, str>> {
+    if let Some(path) = attrs.get(semcov::trace::URL_PATH) {
+        if let Some(query) = attrs.get(semcov::trace::URL_QUERY) {
             Some(format!("{}?{}", path, query).into())
         } else {
             Some(path.as_str())
@@ -138,28 +138,28 @@ fn get_url_path_and_query<'v>(attrs: &HashMap<&Key, &'v Value>) -> Option<Cow<'v
         attrs
             .get(
                 #[allow(deprecated)]
-                &semcov::trace::HTTP_TARGET,
+                semcov::trace::HTTP_TARGET,
             )
             .map(|target| target.as_str())
     }
 }
 
-fn get_server_host<'v>(attrs: &HashMap<&Key, &'v Value>) -> Option<Cow<'v, str>> {
-    if let Some(host) = attrs.get(&HTTP_REQUEST_HEADER_HOST) {
+fn get_server_host<'v>(attrs: &HashMap<&str, &'v Value>) -> Option<Cow<'v, str>> {
+    if let Some(host) = attrs.get(HTTP_REQUEST_HEADER_HOST) {
         Some(host.as_str())
-    } else if let Some(host) = attrs.get(&DEPRECATED_HTTP_HOST) {
+    } else if let Some(host) = attrs.get(DEPRECATED_HTTP_HOST) {
         Some(host.as_str())
     } else if let (Some(host_name), Some(host_port)) = (
-        attrs.get(&semcov::trace::SERVER_ADDRESS).or_else(|| {
+        attrs.get(semcov::trace::SERVER_ADDRESS).or_else(|| {
             attrs.get(
                 #[allow(deprecated)]
-                &semcov::trace::NET_HOST_NAME,
+                semcov::trace::NET_HOST_NAME,
             )
         }),
-        attrs.get(&semcov::trace::SERVER_PORT).or_else(|| {
+        attrs.get(semcov::trace::SERVER_PORT).or_else(|| {
             attrs.get(
                 #[allow(deprecated)]
-                &semcov::trace::NET_HOST_PORT,
+                semcov::trace::NET_HOST_PORT,
             )
         }),
     ) {
@@ -202,37 +202,37 @@ impl From<&SpanData> for RequestData {
             properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
-        let attrs: HashMap<&Key, &Value> = span
+        let attrs: HashMap<&str, &Value> = span
             .attributes
             .iter()
-            .map(|kv| (&kv.key, &kv.value))
+            .map(|kv| (kv.key.as_str(), &kv.value))
             .collect();
 
-        if let Some(&method) = attrs.get(&semcov::trace::HTTP_REQUEST_METHOD).or_else(|| {
+        if let Some(&method) = attrs.get(semcov::trace::HTTP_REQUEST_METHOD).or_else(|| {
             #[allow(deprecated)]
-            attrs.get(&semcov::trace::HTTP_METHOD)
+            attrs.get(semcov::trace::HTTP_METHOD)
         }) {
-            data.name = Some(if let Some(route) = attrs.get(&semcov::trace::HTTP_ROUTE) {
+            data.name = Some(if let Some(route) = attrs.get(semcov::trace::HTTP_ROUTE) {
                 format!("{} {}", method.as_str(), route.as_str()).into()
             } else {
                 method.into()
             });
         }
 
-        if let Some(&status_code) = attrs.get(&semcov::trace::HTTP_RESPONSE_STATUS_CODE) {
+        if let Some(&status_code) = attrs.get(semcov::trace::HTTP_RESPONSE_STATUS_CODE) {
             data.response_code = status_code.into();
         } else if let Some(&status_code) = attrs.get(
             #[allow(deprecated)]
-            &semcov::trace::HTTP_STATUS_CODE,
+            semcov::trace::HTTP_STATUS_CODE,
         ) {
             data.response_code = status_code.into();
         }
 
-        if let Some(&url) = attrs.get(&semcov::trace::URL_FULL) {
+        if let Some(&url) = attrs.get(semcov::trace::URL_FULL) {
             data.url = Some(url.into());
         } else if let Some(&url) = attrs.get(
             #[allow(deprecated)]
-            &semcov::trace::HTTP_URL,
+            semcov::trace::HTTP_URL,
         ) {
             data.url = Some(url.into());
         } else if let Some(target) = get_url_path_and_query(&attrs) {
@@ -242,10 +242,10 @@ impl From<&SpanData> for RequestData {
             }
 
             if let (Some(scheme), Some(host)) = (
-                attrs.get(&semcov::trace::URL_SCHEME).or_else(|| {
+                attrs.get(semcov::trace::URL_SCHEME).or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        &semcov::trace::HTTP_SCHEME,
+                        semcov::trace::HTTP_SCHEME,
                     )
                 }),
                 get_server_host(&attrs),
@@ -256,18 +256,18 @@ impl From<&SpanData> for RequestData {
             }
         }
 
-        if let Some(&client_address) = attrs.get(&semcov::trace::CLIENT_ADDRESS) {
+        if let Some(&client_address) = attrs.get(semcov::trace::CLIENT_ADDRESS) {
             data.source = Some(client_address.into());
-        } else if let Some(&client_ip) = attrs.get(&DEPRECATED_HTTP_CLIENT_IP) {
+        } else if let Some(&client_ip) = attrs.get(DEPRECATED_HTTP_CLIENT_IP) {
             data.source = Some(client_ip.into());
-        } else if let Some(&peer_addr) = attrs.get(&semcov::trace::CLIENT_SOCKET_ADDRESS) {
+        } else if let Some(&peer_addr) = attrs.get(semcov::trace::CLIENT_SOCKET_ADDRESS) {
             data.source = Some(peer_addr.into());
         } else if let Some(&peer_addr) = attrs.get(
             #[allow(deprecated)]
-            &semcov::trace::NET_SOCK_PEER_ADDR,
+            semcov::trace::NET_SOCK_PEER_ADDR,
         ) {
             data.source = Some(peer_addr.into());
-        } else if let Some(&peer_ip) = attrs.get(&DEPRECATED_NET_PEER_IP) {
+        } else if let Some(&peer_ip) = attrs.get(DEPRECATED_NET_PEER_IP) {
             data.source = Some(peer_ip.into());
         }
 
@@ -290,72 +290,72 @@ impl From<&SpanData> for RemoteDependencyData {
             properties: attrs_to_properties(&span.attributes, &span.resource),
         };
 
-        let attrs: HashMap<&Key, &Value> = span
+        let attrs: HashMap<&str, &Value> = span
             .attributes
             .iter()
-            .map(|kv| (&kv.key, &kv.value))
+            .map(|kv| (kv.key.as_str(), &kv.value))
             .collect();
 
-        if let Some(&status_code) = attrs.get(&semcov::trace::HTTP_RESPONSE_STATUS_CODE) {
+        if let Some(&status_code) = attrs.get(semcov::trace::HTTP_RESPONSE_STATUS_CODE) {
             data.result_code = Some(status_code.into());
         } else if let Some(&status_code) = attrs.get(
             #[allow(deprecated)]
-            &semcov::trace::HTTP_STATUS_CODE,
+            semcov::trace::HTTP_STATUS_CODE,
         ) {
             data.result_code = Some(status_code.into());
         }
 
-        if let Some(&url) = attrs.get(&semcov::trace::URL_FULL) {
+        if let Some(&url) = attrs.get(semcov::trace::URL_FULL) {
             data.data = Some(url.into());
         } else if let Some(&url) = attrs.get(
             #[allow(deprecated)]
-            &semcov::trace::HTTP_URL,
+            semcov::trace::HTTP_URL,
         ) {
             data.data = Some(url.into());
-        } else if let Some(&statement) = attrs.get(&semcov::trace::DB_STATEMENT) {
+        } else if let Some(&statement) = attrs.get(semcov::trace::DB_STATEMENT) {
             data.data = Some(statement.into());
         }
 
-        if let Some(&host) = attrs.get(&HTTP_REQUEST_HEADER_HOST) {
+        if let Some(&host) = attrs.get(HTTP_REQUEST_HEADER_HOST) {
             data.target = Some(host.into());
-        } else if let Some(&host) = attrs.get(&DEPRECATED_HTTP_HOST) {
+        } else if let Some(&host) = attrs.get(DEPRECATED_HTTP_HOST) {
             data.target = Some(host.into());
         } else if let Some(&peer_name) = attrs
-            .get(&semcov::trace::SERVER_ADDRESS)
-            .or_else(|| attrs.get(&semcov::trace::SERVER_SOCKET_ADDRESS))
+            .get(semcov::trace::SERVER_ADDRESS)
+            .or_else(|| attrs.get(semcov::trace::SERVER_SOCKET_ADDRESS))
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    &semcov::trace::NET_SOCK_PEER_NAME,
+                    semcov::trace::NET_SOCK_PEER_NAME,
                 )
             })
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    &semcov::trace::NET_PEER_NAME,
+                    semcov::trace::NET_PEER_NAME,
                 )
             })
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    &semcov::trace::NET_SOCK_PEER_ADDR,
+                    semcov::trace::NET_SOCK_PEER_ADDR,
                 )
             })
-            .or_else(|| attrs.get(&DEPRECATED_NET_PEER_IP))
+            .or_else(|| attrs.get(DEPRECATED_NET_PEER_IP))
         {
             if let Some(peer_port) = attrs
-                .get(&semcov::trace::SERVER_PORT)
-                .or_else(|| attrs.get(&semcov::trace::SERVER_SOCKET_PORT))
+                .get(semcov::trace::SERVER_PORT)
+                .or_else(|| attrs.get(semcov::trace::SERVER_SOCKET_PORT))
                 .or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        &semcov::trace::NET_SOCK_PEER_PORT,
+                        semcov::trace::NET_SOCK_PEER_PORT,
                     )
                 })
                 .or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        &semcov::trace::NET_PEER_PORT,
+                        semcov::trace::NET_PEER_PORT,
                     )
                 })
             {
@@ -363,17 +363,17 @@ impl From<&SpanData> for RemoteDependencyData {
             } else {
                 data.target = Some(peer_name.into());
             }
-        } else if let Some(&db_name) = attrs.get(&semcov::trace::DB_NAME) {
+        } else if let Some(&db_name) = attrs.get(semcov::trace::DB_NAME) {
             data.target = Some(db_name.into());
         }
 
         if span.span_kind == SpanKind::Internal {
             data.type_ = Some("InProc".into());
-        } else if let Some(&db_system) = attrs.get(&semcov::trace::DB_SYSTEM) {
+        } else if let Some(&db_system) = attrs.get(semcov::trace::DB_SYSTEM) {
             data.type_ = Some(db_system.into());
-        } else if let Some(&messaging_system) = attrs.get(&semcov::trace::MESSAGING_SYSTEM) {
+        } else if let Some(&messaging_system) = attrs.get(semcov::trace::MESSAGING_SYSTEM) {
             data.type_ = Some(messaging_system.into());
-        } else if let Some(&rpc_system) = attrs.get(&semcov::trace::RPC_SYSTEM) {
+        } else if let Some(&rpc_system) = attrs.get(semcov::trace::RPC_SYSTEM) {
             data.type_ = Some(rpc_system.into());
         } else if let Some(ref properties) = data.properties {
             if properties.keys().any(|x| x.as_ref().starts_with("http.")) {
@@ -387,29 +387,24 @@ impl From<&SpanData> for RemoteDependencyData {
     }
 }
 
-/// The `tracing` create includes the severity level in an attribute called "level".
-///
-/// https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
-const LEVEL: Key = Key::from_static_str("level");
-
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
-        let mut attrs: HashMap<&Key, &Value> = event
+        let mut attrs: HashMap<&str, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (&kv.key, &kv.value))
+            .map(|kv| (kv.key.as_str(), &kv.value))
             .collect();
         let exception = ExceptionDetails {
             type_name: attrs
-                .remove(&semcov::trace::EXCEPTION_TYPE)
+                .remove(semcov::trace::EXCEPTION_TYPE)
                 .map(Into::into)
                 .unwrap_or_else(|| "<no type>".into()),
             message: attrs
-                .remove(&semcov::trace::EXCEPTION_MESSAGE)
+                .remove(semcov::trace::EXCEPTION_MESSAGE)
                 .map(Into::into)
                 .unwrap_or_else(|| "<no message>".into()),
             stack: attrs
-                .remove(&semcov::trace::EXCEPTION_STACKTRACE)
+                .remove(semcov::trace::EXCEPTION_STACKTRACE)
                 .map(Into::into),
         };
         ExceptionData {
@@ -418,7 +413,7 @@ impl From<&Event> for ExceptionData {
             properties: Some(
                 attrs
                     .iter()
-                    .map(|(k, v)| (k.as_str().into(), (*v).into()))
+                    .map(|(k, v)| ((*k).into(), (*v).into()))
                     .collect(),
             )
             .filter(|x: &Properties| !x.is_empty()),
@@ -428,21 +423,21 @@ impl From<&Event> for ExceptionData {
 
 impl From<&Event> for EventData {
     fn from(event: &Event) -> EventData {
-        let mut attrs: HashMap<&Key, &Value> = event
+        let mut attrs: HashMap<&str, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (&kv.key, &kv.value))
+            .map(|kv| (kv.key.as_str(), &kv.value))
             .collect();
         EventData {
             ver: 2,
             name: attrs
-                .remove(&CUSTOM_EVENT_NAME)
+                .remove(CUSTOM_EVENT_NAME)
                 .map(Into::into)
                 .unwrap_or_else(|| "<no name>".into()),
             properties: Some(
                 attrs
                     .iter()
-                    .map(|(k, v)| (k.as_str().into(), (*v).into()))
+                    .map(|(k, v)| ((*k).into(), (*v).into()))
                     .collect(),
             )
             .filter(|x: &Properties| !x.is_empty()),
@@ -450,16 +445,21 @@ impl From<&Event> for EventData {
     }
 }
 
+/// The `tracing` create includes the severity level in an attribute called "level".
+///
+/// https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
+const LEVEL: &str = "level";
+
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
-        let mut attrs: HashMap<&Key, &Value> = event
+        let mut attrs: HashMap<&str, &Value> = event
             .attributes
             .iter()
-            .map(|kv| (&kv.key, &kv.value))
+            .map(|kv| (kv.key.as_str(), &kv.value))
             .collect();
-        let severity_level = attrs.get(&LEVEL).and_then(|x| value_to_severity_level(x));
+        let severity_level = attrs.get(LEVEL).and_then(|x| value_to_severity_level(x));
         if severity_level.is_some() {
-            attrs.remove(&LEVEL);
+            attrs.remove(LEVEL);
         }
         MessageData {
             ver: 2,
@@ -472,7 +472,7 @@ impl From<&Event> for MessageData {
             properties: Some(
                 attrs
                     .iter()
-                    .map(|(k, v)| (k.as_str().into(), (*v).into()))
+                    .map(|(k, v)| ((*k).into(), (*v).into()))
                     .collect(),
             )
             .filter(|x: &Properties| !x.is_empty()),

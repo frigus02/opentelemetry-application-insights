@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.22`.
+- Upgrade `opentelemetry-http` to `v0.11`.
+- Remove `surf-client` feature, since [`opentelemetry-http/surf` has been removed](https://github.com/open-telemetry/opentelemetry-rust/pull/1537).
+- Upgrade `opentelemetry-semantic-conventions` to `v0.14`.
+- Change `opentelemetry_application_insights::attrs::*` from `opentelemetry::Key` to `&str`. This matches the [change in `opentelemetry-semantic-conventions`](https://github.com/open-telemetry/opentelemetry-rust/issues/1320).
+- Upgrade `sysinfo` to `v0.30`.
+
 ## [0.29.0] - 2023-11-18
 
 - Upgrade to `v0.21.0` of `opentelemetry` and `opentelemetry_sdk`.
