@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Change how the tags Could role, Cloud role instance, Application version and Internal SDK version are extracted:
+
+  - Spans no longer extract them from span attributes. They still extract them from resource attributes. And they newly extract them also from instrumentation library attributes.
+  - Events newly extract them from resource and instrumentation library attributes.
+
+  In addition metrics no longer extract the tag Authenticated user id from the enduser.id attribute.
+
 ## [0.30.0] - 2024-03-08
 
 - Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.22`.

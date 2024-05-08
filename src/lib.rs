@@ -160,6 +160,21 @@ async fn main() {
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
 //! - [Application Insights data model](https://docs.microsoft.com/en-us/azure/azure-monitor/app/data-model)
 //!
+//! ## Resource
+//!
+//! Resource and instrumentation library attributes map to the following fields for spans, events
+//! and metrics (the mapping tries to follow the OpenTelemetry semantic conventions for [resource]).
+//!
+//! [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
+//!
+//! | OpenTelemetry attribute key                    | Application Insights field                               |
+//! | ---------------------------------------------- | -------------------------------------------------------- |
+//! | `service.namespace` + `service.name`           | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `service.instance.id`                          | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
+//! | `service.version`                              | Context: Application version (`ai.application.ver`)      |
+//! | `telemetry.sdk.name` + `telemetry.sdk.version` | Context: Internal SDK version (`ai.internal.sdkVersion`) |
+//! | `ai.*`                                         | Context: AppInsights Tag (`ai.*`)                        |
+//!
 //! ## Spans
 //!
 //! The OpenTelemetry SpanKind determines the Application Insights telemetry type:
@@ -173,22 +188,17 @@ async fn main() {
 //! the status `Error`; otherwise `true`.
 //!
 //! The following of the Span's attributes map to special fields in Application Insights (the
-//! mapping tries to follow the OpenTelemetry semantic conventions for [trace] and [resource]).
+//! mapping tries to follow the OpenTelemetry semantic conventions for [trace]).
 //!
 //! Note: for `INTERNAL` Spans the Dependency Type is always `"InProc"`.
 //!
 //! [trace]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/trace/semantic_conventions
-//! [resource]: https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/resource/semantic_conventions
 //! [Dependency]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-dependency-telemetry
 //! [Request]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-request-telemetry
 //!
 //! | OpenTelemetry attribute key                                                | Application Insights field                               |
-//! | -------------------------------------------------------------------------- | -----------------------------------------------------    |
-//! | `service.version`                                                          | Context: Application version (`ai.application.ver`)      |
+//! | -------------------------------------------------------------------------- | -------------------------------------------------------- |
 //! | `enduser.id`                                                               | Context: Authenticated user id (`ai.user.authUserId`)    |
-//! | `service.namespace` + `service.name`                                       | Context: Cloud role (`ai.cloud.role`)                    |
-//! | `service.instance.id`                                                      | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
-//! | `telemetry.sdk.name` + `telemetry.sdk.version`                             | Context: Internal SDK version (`ai.internal.sdkVersion`) |
 //! | `SpanKind::Server` + `http.request.method` + `http.route`                  | Context: Operation Name (`ai.operation.name`)            |
 //! | `ai.*`                                                                     | Context: AppInsights Tag (`ai.*`)                        |
 //! | `url.full`                                                                 | Dependency Data                                          |

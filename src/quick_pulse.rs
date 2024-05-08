@@ -1,6 +1,6 @@
 use crate::{
     models::{context_tag_keys, QuickPulseEnvelope, QuickPulseMetric},
-    tags::get_tags_from_attrs,
+    tags::get_tags_for_resource,
     trace::{get_duration, is_remote_dependency_success, is_request_success, EVENT_NAME_EXCEPTION},
     uploader_quick_pulse::{self, PostOrPing},
     Error,
@@ -170,7 +170,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
         instrumentation_key: String,
         resource: Resource,
     ) -> Self {
-        let mut tags = get_tags_from_attrs(resource.iter());
+        let mut tags = get_tags_for_resource(&resource);
         let machine_name = resource
             .get(Key::from_static_str(semcov::resource::HOST_NAME))
             .map(|v| v.as_str().into_owned())

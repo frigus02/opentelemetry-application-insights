@@ -68,6 +68,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Message",
     "sampleRate": 100.0,
     "tags": {
+      "ai.cloud.role": "test.server",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
     },
@@ -88,6 +89,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Event",
     "sampleRate": 100.0,
     "tags": {
+      "ai.cloud.role": "test.server",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
     },
@@ -110,6 +112,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Exception",
     "sampleRate": 100.0,
     "tags": {
+      "ai.cloud.role": "test.server",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
     },

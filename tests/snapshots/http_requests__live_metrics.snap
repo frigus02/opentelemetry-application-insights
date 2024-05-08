@@ -200,6 +200,8 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Exception",
     "sampleRate": 100.0,
     "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "opentelemetry:0.22.1",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
     },
