@@ -9,8 +9,8 @@
 use format::requests_to_string;
 use opentelemetry::{
     trace::{
-        get_active_span, mark_span_as_active, Span, SpanKind, Status, TraceContextExt, Tracer,
-        TracerProvider,
+        get_active_span, mark_span_as_active, Link, Span, SpanKind, Status, TraceContextExt,
+        Tracer, TracerProvider,
     },
     Context, KeyValue,
 };
@@ -118,6 +118,12 @@ fn traces_simple() {
                     );
                     let error: Box<dyn std::error::Error> = "An error".into();
                     span.record_error(error.as_ref());
+                    let async_op_builder = server_tracer
+                        .span_builder("async operation")
+                        .with_links(vec![Link::new(span.span_context().clone(), Vec::new())]);
+                    let async_op_context = Context::new();
+                    let _span =
+                        server_tracer.build_with_context(async_op_builder, &async_op_context);
                 });
             }
 
@@ -309,6 +315,8 @@ mod tick {
 }
 
 mod format {
+    use std::sync::OnceLock;
+
     use flate2::read::GzDecoder;
     use http::{HeaderName, Request};
     use regex::Regex;
@@ -348,26 +356,46 @@ mod format {
     }
 
     fn strip_changing_values(body: &str) -> String {
-        let res = vec![
-            Regex::new(r#""(?P<field>time)": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z""#)
-                .unwrap(),
-            Regex::new(r#""(?P<field>duration)": "\d+\.\d{2}:\d{2}:\d{2}\.\d{6}""#).unwrap(),
-            Regex::new(r#""(?P<field>id|ai\.operation\.parentId)": "[a-z0-9]{16}""#).unwrap(),
-            Regex::new(r#""(?P<field>ai\.operation\.id)": "[a-z0-9]{32}""#).unwrap(),
-            Regex::new(r#""(?P<field>StreamId)": "[a-z0-9]{32}""#).unwrap(),
-            Regex::new(r#""(?P<field>Timestamp)": "/Date\(\d+\)/""#).unwrap(),
-            Regex::new(
-                r#"(?P<prefix>"\\\\Processor\(_Total\)\\\\% Processor Time",\s*)"(?P<field>Value)": \d+\.\d+"#,
-            ).unwrap(),
-            Regex::new(
-                r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#,
-            ).unwrap(),
-        ];
+        struct Strip {
+            re: Regex,
+            replacement: &'static str,
+        }
+        impl Strip {
+            fn new(re: &str) -> Self {
+                Self {
+                    re: Regex::new(re).unwrap(),
+                    replacement: r#"$prefix"$field": "STRIPPED""#,
+                }
+            }
 
-        res.into_iter().fold(body.into(), |body, re| {
-            re.replace_all(&body, r#"$prefix"$field": "STRIPPED""#)
-                .into()
-        })
+            fn json_in_json(mut self) -> Self {
+                self.replacement = r#"$prefix\"$field\":\"STRIPPED\""#;
+                self
+            }
+
+            fn strip(&self, s: &str) -> String {
+                self.re.replace_all(s, self.replacement).into()
+            }
+        }
+        static STRIP_CONFIGS: OnceLock<Vec<Strip>> = OnceLock::new();
+        let configs = STRIP_CONFIGS.get_or_init(|| {
+            vec![
+                Strip::new(r#""(?P<field>time)": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z""#),
+                Strip::new(r#""(?P<field>duration)": "\d+\.\d{2}:\d{2}:\d{2}\.\d{6}""#),
+                Strip::new(r#""(?P<field>id|ai\.operation\.parentId)": "[a-f0-9]{16}""#),
+                Strip::new(r#""(?P<field>ai\.operation\.id)": "[a-f0-9]{32}""#),
+                Strip::new(r#""(?P<field>StreamId)": "[a-f0-9]{32}""#),
+                Strip::new(r#"\\"(?P<field>operation_Id)\\":\\"[a-f0-9]{32}\\""#).json_in_json(),
+                Strip::new(r#"\\"(?P<field>id)\\":\\"[a-f0-9]{16}\\""#).json_in_json(),
+                Strip::new(r#""(?P<field>Timestamp)": "/Date\(\d+\)/""#),
+                Strip::new(r#"(?P<prefix>"\\\\Processor\(_Total\)\\\\% Processor Time",\s*)"(?P<field>Value)": \d+\.\d+"#),
+                Strip::new(r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#),
+            ]
+        });
+
+        configs
+            .iter()
+            .fold(body.into(), |body, config| config.strip(&body))
     }
 
     fn pretty_print_json(body: &[u8]) -> String {
