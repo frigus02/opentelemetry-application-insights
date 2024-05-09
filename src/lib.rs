@@ -170,12 +170,22 @@ async fn main() {
 //! | OpenTelemetry attribute key                    | Application Insights field                               |
 //! | ---------------------------------------------- | -------------------------------------------------------- |
 //! | `service.namespace` + `service.name`           | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.deployment.name`                          | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.replicaset.name`                          | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.statefulset.name`                         | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.job.name`                                 | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.cronjob.name`                             | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.daemonset.name`                           | Context: Cloud role (`ai.cloud.role`)                    |
+//! | `k8s.pod.name`                                 | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
 //! | `service.instance.id`                          | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
 //! | `device.id`                                    | Context: Device id (`ai.device.id`)                      |
 //! | `device.model.name`                            | Context: Device model (`ai.device.model`)                |
 //! | `service.version`                              | Context: Application version (`ai.application.ver`)      |
 //! | `telemetry.sdk.name` + `telemetry.sdk.version` | Context: Internal SDK version (`ai.internal.sdkVersion`) |
 //! | `ai.*`                                         | Context: AppInsights Tag (`ai.*`)                        |
+//!
+//! If `service.name` is the default (i.e. starts with "unknown_service:"), the Kubernetes based
+//! values take precedence.
 //!
 //! ## Spans
 //!

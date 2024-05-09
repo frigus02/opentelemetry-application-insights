@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Set tags Cloud role and Cloud role instance also from resource attributes `k8s.{deployment,replicaset,statefulset,job,cronjob,daemonset,pod}.name`. This matches [the behavior of the JS exporter](https://github.com/Azure/azure-sdk-for-js/blob/c66cad23c4b803719db65cb48a453b0adc13307b/sdk/monitor/monitor-opentelemetry-exporter/src/utils/common.ts#L75-L138).
+
 ## [0.31.0] - 2024-05-09
 
 - Change how the tags Could role, Cloud role instance, Application version and Internal SDK version are extracted:
