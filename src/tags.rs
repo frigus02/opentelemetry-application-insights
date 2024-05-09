@@ -134,6 +134,14 @@ fn build_tags_from_resource_attrs(
         );
     }
 
+    if let Some(device_id) = attrs_map.get(semcov::resource::DEVICE_ID) {
+        tags.insert(tags::DEVICE_ID, device_id.as_str().into_owned());
+    }
+
+    if let Some(device_model_name) = attrs_map.get(semcov::resource::DEVICE_MODEL_NAME) {
+        tags.insert(tags::DEVICE_MODEL, device_model_name.as_str().into_owned());
+    }
+
     if let Some(service_version) = attrs_map.get(semcov::resource::SERVICE_VERSION) {
         tags.insert(
             tags::APPLICATION_VERSION,
