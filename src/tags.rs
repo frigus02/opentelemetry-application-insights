@@ -124,14 +124,27 @@ fn build_tags_from_resource_attrs(
             cloud_role.insert_str(0, &service_namespace.as_str());
         }
 
+        if service_name.as_str().starts_with("unknown_service:") {
+            if let Some(k8s_name) = attrs_map
+                .get(semcov::resource::K8S_DEPLOYMENT_NAME)
+                .or_else(|| attrs_map.get(semcov::resource::K8S_REPLICASET_NAME))
+                .or_else(|| attrs_map.get(semcov::resource::K8S_STATEFULSET_NAME))
+                .or_else(|| attrs_map.get(semcov::resource::K8S_JOB_NAME))
+                .or_else(|| attrs_map.get(semcov::resource::K8S_CRONJOB_NAME))
+                .or_else(|| attrs_map.get(semcov::resource::K8S_DAEMONSET_NAME))
+            {
+                cloud_role = k8s_name.as_str().into_owned();
+            }
+        }
+
         tags.insert(tags::CLOUD_ROLE, cloud_role);
     }
 
-    if let Some(service_instance) = attrs_map.get(semcov::resource::SERVICE_INSTANCE_ID) {
-        tags.insert(
-            tags::CLOUD_ROLE_INSTANCE,
-            service_instance.as_str().into_owned(),
-        );
+    if let Some(instance) = attrs_map
+        .get(semcov::resource::K8S_POD_NAME)
+        .or_else(|| attrs_map.get(semcov::resource::SERVICE_INSTANCE_ID))
+    {
+        tags.insert(tags::CLOUD_ROLE_INSTANCE, instance.as_str().into_owned());
     }
 
     if let Some(device_id) = attrs_map.get(semcov::resource::DEVICE_ID) {
