@@ -1,21 +1,21 @@
 use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
-#[cfg(feature = "metrics")]
-use opentelemetry::InstrumentationLibrary;
 use opentelemetry::{
     trace::{SpanId, SpanKind},
-    Key, Value,
+    InstrumentationLibrary, Key, Value,
 };
-use opentelemetry_sdk::export::trace::SpanData;
 #[cfg(feature = "metrics")]
-use opentelemetry_sdk::{AttributeSet, Resource};
+use opentelemetry_sdk::AttributeSet;
+use opentelemetry_sdk::{export::trace::SpanData, Resource};
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
 pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
-    let mut tags = get_tags_from_attrs(
-        span.resource
-            .iter()
-            .chain(span.attributes.iter().map(|kv| (&kv.key, &kv.value))),
+    let mut tags = Tags::new();
+    build_tags_from_resource_attrs(&mut tags, &span.resource, &span.instrumentation_lib);
+
+    let attrs_map = build_tags_from_attrs(
+        &mut tags,
+        span.attributes.iter().map(|kv| (&kv.key, &kv.value)),
     );
 
     // Set the operation id and operation parent id.
@@ -24,21 +24,21 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
         tags.insert(tags::OPERATION_PARENT_ID, span.parent_span_id.to_string());
     }
 
+    if let Some(user_id) = attrs_map.get(semcov::trace::ENDUSER_ID) {
+        // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
+        // fit better?
+        tags.insert(tags::USER_AUTH_USER_ID, user_id.as_str().into_owned());
+    }
+
     // Ensure the name of the operation is `METHOD /the/route/path`.
     if span.span_kind == SpanKind::Server || span.span_kind == SpanKind::Consumer {
-        let mut method: Option<&Value> = None;
-        let mut route: Option<&Value> = None;
-        for kv in &span.attributes {
-            #[allow(deprecated)]
-            if kv.key.as_str() == semcov::trace::HTTP_REQUEST_METHOD
-                || kv.key.as_str() == semcov::trace::HTTP_METHOD
-            {
-                method = Some(&kv.value);
-            } else if kv.key.as_str() == semcov::trace::HTTP_ROUTE {
-                route = Some(&kv.value);
-            }
-        }
-
+        let method = attrs_map
+            .get(semcov::trace::HTTP_REQUEST_METHOD)
+            .or_else(|| {
+                #[allow(deprecated)]
+                attrs_map.get(semcov::trace::HTTP_METHOD)
+            });
+        let route = attrs_map.get(semcov::trace::HTTP_ROUTE);
         if let (Some(method), Some(route)) = (method, route) {
             tags.insert(
                 tags::OPERATION_NAME,
@@ -52,6 +52,8 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
 pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
     let mut tags = Tags::new();
+    build_tags_from_resource_attrs(&mut tags, &span.resource, &span.instrumentation_lib);
+
     tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
     tags.insert(
         tags::OPERATION_PARENT_ID,
@@ -66,23 +68,23 @@ pub(crate) fn get_tags_for_metric(
     scope: &InstrumentationLibrary,
     attrs: &AttributeSet,
 ) -> Tags {
-    get_tags_from_attrs(
-        resource.iter().chain(
-            scope
-                .attributes
-                .iter()
-                .map(|kv| (&kv.key, &kv.value))
-                .chain(attrs.iter()),
-        ),
-    )
+    let mut tags = Tags::new();
+    build_tags_from_resource_attrs(&mut tags, resource, scope);
+    build_tags_from_attrs(&mut tags, attrs.iter());
+    tags
 }
 
-pub(crate) fn get_tags_from_attrs<'a, T>(attrs: T) -> Tags
+#[cfg(feature = "live-metrics")]
+pub(crate) fn get_tags_for_resource(resource: &Resource) -> Tags {
+    let mut tags = Tags::new();
+    build_tags_from_resource_attrs(&mut tags, resource, &Default::default());
+    tags
+}
+
+fn build_tags_from_attrs<'a, T>(tags: &mut Tags, attrs: T) -> HashMap<&'a str, &'a Value>
 where
     T: IntoIterator<Item = (&'a Key, &'a Value)>,
 {
-    let mut tags = Tags::new();
-
     let mut attrs_map: HashMap<_, _> = HashMap::new();
     for (k, v) in attrs.into_iter() {
         // First, allow the user to explicitly express tags with attributes that start with `ai.`
@@ -99,11 +101,21 @@ where
         attrs_map.insert(k, v);
     }
 
-    if let Some(user_id) = attrs_map.get(semcov::trace::ENDUSER_ID) {
-        // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
-        // fit better?
-        tags.insert(tags::USER_AUTH_USER_ID, user_id.as_str().into_owned());
-    }
+    attrs_map
+}
+
+fn build_tags_from_resource_attrs(
+    tags: &mut Tags,
+    resource: &Resource,
+    instrumentation_lib: &InstrumentationLibrary,
+) {
+    let attrs = resource.iter().chain(
+        instrumentation_lib
+            .attributes
+            .iter()
+            .map(|kv| (&kv.key, &kv.value)),
+    );
+    let attrs_map = build_tags_from_attrs(tags, attrs);
 
     if let Some(service_name) = attrs_map.get(semcov::resource::SERVICE_NAME) {
         let mut cloud_role = service_name.as_str().into_owned();
@@ -139,6 +151,4 @@ where
             format!("{}:{}", sdk_name.as_str(), sdk_version),
         );
     }
-
-    tags
 }
