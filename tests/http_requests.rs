@@ -35,6 +35,8 @@ fn traces_simple() {
                 opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                    KeyValue::new(semcov::resource::DEVICE_ID, "123"),
+                    KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "device"),
                 ])),
             )
             .build_simple();

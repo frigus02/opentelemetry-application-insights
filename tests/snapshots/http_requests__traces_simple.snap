@@ -135,6 +135,8 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "dependency",
         "properties": {
+          "device.id": "123",
+          "device.model.name": "device",
           "enduser.id": "marry",
           "http.request.method": "GET",
           "http.response.status_code": "200",
@@ -159,6 +161,8 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "test.client",
+      "ai.device.id": "123",
+      "ai.device.model": "device",
       "ai.operation.id": "STRIPPED",
       "ai.user.authUserId": "marry"
     },

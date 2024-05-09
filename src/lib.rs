@@ -171,6 +171,8 @@ async fn main() {
 //! | ---------------------------------------------- | -------------------------------------------------------- |
 //! | `service.namespace` + `service.name`           | Context: Cloud role (`ai.cloud.role`)                    |
 //! | `service.instance.id`                          | Context: Cloud role instance (`ai.cloud.roleInstance`)   |
+//! | `device.id`                                    | Context: Device id (`ai.device.id`)                      |
+//! | `device.model.name`                            | Context: Device model (`ai.device.model`)                |
 //! | `service.version`                              | Context: Application version (`ai.application.ver`)      |
 //! | `telemetry.sdk.name` + `telemetry.sdk.version` | Context: Internal SDK version (`ai.internal.sdkVersion`) |
 //! | `ai.*`                                         | Context: AppInsights Tag (`ai.*`)                        |

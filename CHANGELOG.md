@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
   In addition metrics no longer extract the tag Authenticated user id from the enduser.id attribute.
 
+- Set tags Device id and Device model based on resource attributes `device.id` and `device.model.name`. This matches [the behavior of the JS exporter](https://github.com/Azure/azure-sdk-for-js/blob/9646e4e3e438fe3a07325989830dd6be35cefc23/sdk/monitor/monitor-opentelemetry-exporter/src/utils/common.ts#L58-L65).
+
 ## [0.30.0] - 2024-03-08
 
 - Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.22`.
