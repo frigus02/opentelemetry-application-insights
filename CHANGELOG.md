@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.31.0] - 2024-05-09
+
 - Change how the tags Could role, Cloud role instance, Application version and Internal SDK version are extracted:
 
   - Spans no longer extract them from span attributes. They still extract them from resource attributes. And they newly extract them also from instrumentation library attributes.
@@ -245,7 +247,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.30.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.31.0...HEAD
+[0.31.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.30.0...0.31.0
 [0.30.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.29.0...0.30.0
 [0.29.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.28.0...0.29.0
 [0.28.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.27.0...0.28.0
