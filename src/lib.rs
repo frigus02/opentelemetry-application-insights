@@ -296,11 +296,12 @@ async fn main() {
 //! Metrics get reported to Application Insights as Metric Data. The [`Aggregation`] determines how
 //! the data is represented.
 //!
-//! | Aggregator | Data representation                                                  |
-//! | ---------- | -------------------------------------------------------------------- |
-//! | Histogram  | aggregation with sum, count, min, and max (buckets are not exported) |
-//! | Gauge      | one measurement                                                      |
-//! | Sum        | aggregation with only a value                                        |
+//! | Aggregator           | Data representation                                                  |
+//! | -------------------- | -------------------------------------------------------------------- |
+//! | Histogram            | aggregation with sum, count, min, and max (buckets are not exported) |
+//! | ExponentialHistogram | aggregation with sum, count, min, and max (buckets are not exported) |
+//! | Gauge                | one measurement                                                      |
+//! | Sum                  | aggregation with only a value                                        |
 //!
 //! [`Aggregation`]: https://docs.rs/opentelemetry/0.20.0/opentelemetry/sdk/metrics/data/trait.Aggregation.html
 #![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.31.0")]

@@ -12,7 +12,7 @@ use opentelemetry::{
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
     metrics::{
-        data::{Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
+        data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
         exporter::PushMetricsExporter,
         reader::{AggregationSelector, TemporalitySelector},
         Aggregation, InstrumentKind,
@@ -152,6 +152,12 @@ fn map_metric(metric: &Metric) -> Vec<EnvelopeData> {
         map_histogram(metric, histogram)
     } else if let Some(histogram) = data.downcast_ref::<Histogram<f64>>() {
         map_histogram(metric, histogram)
+    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<i64>>() {
+        map_exponential_histogram(metric, exp_histogram)
+    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<u64>>() {
+        map_exponential_histogram(metric, exp_histogram)
+    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<f64>>() {
+        map_exponential_histogram(metric, exp_histogram)
     } else if let Some(sum) = data.downcast_ref::<Sum<u64>>() {
         map_sum(metric, sum)
     } else if let Some(sum) = data.downcast_ref::<Sum<i64>>() {
@@ -187,6 +193,32 @@ fn map_gauge<T: ToF64Lossy>(metric: &Metric, gauge: &Gauge<T>) -> Vec<EnvelopeDa
 
 fn map_histogram<T: ToF64Lossy>(metric: &Metric, histogram: &Histogram<T>) -> Vec<EnvelopeData> {
     histogram
+        .data_points
+        .iter()
+        .map(|data_point| {
+            let time = data_point.time;
+            let data = DataPoint {
+                ns: None,
+                name: metric.name.clone().into(),
+                kind: Some(DataPointType::Aggregation {
+                    count: Some(data_point.count.try_into().unwrap_or_default()),
+                    min: data_point.min.as_ref().map(ToF64Lossy::to_f64_lossy),
+                    max: data_point.max.as_ref().map(ToF64Lossy::to_f64_lossy),
+                    std_dev: None,
+                }),
+                value: data_point.sum.to_f64_lossy(),
+            };
+            let attrs = data_point.attributes.to_owned();
+            EnvelopeData { time, data, attrs }
+        })
+        .collect()
+}
+
+fn map_exponential_histogram<T: ToF64Lossy>(
+    metric: &Metric,
+    exp_histogram: &ExponentialHistogram<T>,
+) -> Vec<EnvelopeData> {
+    exp_histogram
         .data_points
         .iter()
         .map(|data_point| {
