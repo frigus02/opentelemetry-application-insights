@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Set tags Cloud role and Cloud role instance also from resource attributes `k8s.{deployment,replicaset,statefulset,job,cronjob,daemonset,pod}.name`. This matches [the behavior of the JS exporter](https://github.com/Azure/azure-sdk-for-js/blob/c66cad23c4b803719db65cb48a453b0adc13307b/sdk/monitor/monitor-opentelemetry-exporter/src/utils/common.ts#L75-L138).
 - Remove option to configure temporality seletor (`with_temporality_selector`). Application Insights supports delta temporality only as defined in the [spec](https://github.com/open-telemetry/opentelemetry-specification/blob/58bfe48eabe887545198d66c43f44071b822373f/specification/metrics/sdk_exporters/otlp.md?plain=1#L46-L47).
+- Add support for `ExponentialHistogram` export.
 
 ## [0.31.0] - 2024-05-09
 
