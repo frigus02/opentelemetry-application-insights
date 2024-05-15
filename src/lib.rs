@@ -217,7 +217,7 @@ async fn main() {
 //! | `db.statement`                                                             | Dependency Data                                          |
 //! | `http.request.header.host`                                                 | Dependency Target                                        |
 //! | `server.address` + `server.port`                                           | Dependency Target                                        |
-//! | `server.socket.address` + `server.socket.port`                             | Dependency Target                                        |
+//! | `network.peer.address` + `network.peer.port`                               | Dependency Target                                        |
 //! | `db.name`                                                                  | Dependency Target                                        |
 //! | `http.response.status_code`                                                | Dependency Result code                                   |
 //! | `db.system`                                                                | Dependency Type                                          |
@@ -229,7 +229,7 @@ async fn main() {
 //! | `url.scheme` + `http.request.header.host` + `url.path` + `url.query`       | Request Url                                              |
 //! | `url.scheme` + `server.address` + `server.port` + `url.path` + `url.query` | Request Url                                              |
 //! | `client.address`                                                           | Request Source                                           |
-//! | `client.socket.address`                                                    | Request Source                                           |
+//! | `network.peer.address`                                                     | Request Source                                           |
 //! | `http.response.status_code`                                                | Request Response code                                    |
 //!
 //! All other attributes are directly converted to custom properties.
@@ -240,24 +240,27 @@ async fn main() {
 //!
 //! The following deprecated attributes also work:
 //!
-//! | Attribute                   | Deprecated attribute                    |
-//! | --------------------------- | --------------------------------------- |
-//! | `http.request.method`       | `http.method`                           |
-//! | `http.request.header.host`  | `http.host`                             |
-//! | `http.response.status_code` | `http.status_code`                      |
-//! | `url.full`                  | `http.url`                              |
-//! | `url.scheme`                | `http.scheme`                           |
-//! | `url.path` + `url.query`    | `http.target`                           |
-//! | `client.address`            | `http.client_ip`                        |
-//! | `client.socket.address`     | `net.sock.peer.addr`                    |
-//! | `client.socket.address`     | `net.peer.ip`                           |
-//! | `server.address`            | `net.peer.name`      (for client spans) |
-//! | `server.port`               | `net.peer.port`      (for client spans) |
-//! | `server.socket.address`     | `net.sock.peer.addr` (for client spans) |
-//! | `server.socket.address`     | `net.peer.ip`        (for client spans) |
-//! | `server.socket.port`        | `net.sock.peer.port` (for client spans) |
-//! | `server.address`            | `net.host.name`      (for server spans) |
-//! | `server.port`               | `net.host.port`      (for server spans) |
+//! | Attribute                   | Deprecated attribute                       |
+//! | --------------------------- | ------------------------------------------ |
+//! | `http.request.method`       | `http.method`                              |
+//! | `http.request.header.host`  | `http.host`                                |
+//! | `http.response.status_code` | `http.status_code`                         |
+//! | `url.full`                  | `http.url`                                 |
+//! | `url.scheme`                | `http.scheme`                              |
+//! | `url.path` + `url.query`    | `http.target`                              |
+//! | `client.address`            | `http.client_ip`                           |
+//! | `network.peer.address`      | `server.socket.address` (for client spans) |
+//! | `network.peer.address`      | `net.sock.peer.addr`    (for client spans) |
+//! | `network.peer.address`      | `net.peer.ip`           (for client spans) |
+//! | `network.peer.port`         | `server.socket.port`    (for client spans) |
+//! | `network.peer.port`         | `net.sock.peer.port`    (for client spans) |
+//! | `network.peer.address`      | `client.socket.address` (for server spans) |
+//! | `network.peer.address`      | `net.sock.peer.addr`    (for server spans) |
+//! | `network.peer.address`      | `net.peer.ip`           (for server spans) |
+//! | `server.address`            | `net.peer.name`         (for client spans) |
+//! | `server.port`               | `net.peer.port`         (for client spans) |
+//! | `server.address`            | `net.host.name`         (for server spans) |
+//! | `server.port`               | `net.host.port`         (for server spans) |
 //!
 //! ## Events
 //!
@@ -642,12 +645,11 @@ where
     /// that.
     pub fn install_simple(self) -> Tracer {
         let trace_provider = self.build_simple();
-        let tracer = trace_provider.versioned_tracer(
-            "opentelemetry-application-insights",
-            Some(env!("CARGO_PKG_VERSION")),
-            Some(semcov::SCHEMA_URL),
-            None,
-        );
+        let tracer = trace_provider
+            .tracer_builder("opentelemetry-application-insights")
+            .with_version(env!("CARGO_PKG_VERSION"))
+            .with_schema_url(semcov::SCHEMA_URL)
+            .build();
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer
     }
@@ -658,12 +660,11 @@ where
     /// that.
     pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
         let trace_provider = self.build_batch(runtime);
-        let tracer = trace_provider.versioned_tracer(
-            "opentelemetry-application-insights",
-            Some(env!("CARGO_PKG_VERSION")),
-            Some(semcov::SCHEMA_URL),
-            None,
-        );
+        let tracer = trace_provider
+            .tracer_builder("opentelemetry-application-insights")
+            .with_version(env!("CARGO_PKG_VERSION"))
+            .with_schema_url(semcov::SCHEMA_URL)
+            .build();
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer
     }

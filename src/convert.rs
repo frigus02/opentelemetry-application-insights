@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn attrs_to_properties_encodes_links() {
-        let links = vec![Link::new(SpanContext::empty_context(), Vec::new())];
+        let links = vec![Link::new(SpanContext::empty_context(), Vec::new(), 0)];
         let props = attrs_to_properties(&[], &Resource::empty(), &links).unwrap();
         assert_eq!(props.len(), 1);
         assert_eq!(
@@ -123,7 +123,7 @@ mod tests {
         let input_len = MS_LINKS_MAX_LEN + 10;
         let mut links = Vec::with_capacity(input_len);
         for _ in 0..input_len {
-            links.push(Link::new(SpanContext::empty_context(), Vec::new()));
+            links.push(Link::new(SpanContext::empty_context(), Vec::new(), 0));
         }
         let props = attrs_to_properties(&[], &Resource::empty(), &links).unwrap();
         assert_eq!(props.len(), 1);

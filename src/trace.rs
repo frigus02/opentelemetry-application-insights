@@ -41,6 +41,24 @@ const DEPRECATED_NET_PEER_IP: &str = "net.peer.ip";
 /// `client.address`.
 const DEPRECATED_HTTP_CLIENT_IP: &str = "http.client_ip";
 
+/// Deprecated semantic convention key for client socket address.
+///
+/// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3713 with
+/// `network.peer.address`.
+const DEPRECATED_CLIENT_SOCKET_ADDRESS: &str = "client.socket.address";
+
+/// Deprecated semantic convention key for server socket address.
+///
+/// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3713 with
+/// `network.local.address`.
+const DEPRECATED_SERVER_SOCKET_ADDRESS: &str = "server.socket.address";
+
+/// Deprecated semantic convention key for server socket port.
+///
+/// Replaced in https://github.com/open-telemetry/opentelemetry-specification/pull/3713 with
+/// `network.local.port`.
+const DEPRECATED_SERVER_SOCKET_PORT: &str = "server.socket.port";
+
 pub(crate) const EVENT_NAME_CUSTOM: &str = "ai.custom";
 pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
 
@@ -259,7 +277,9 @@ impl From<&SpanData> for RequestData {
             data.source = Some(client_address.into());
         } else if let Some(&client_ip) = attrs.get(DEPRECATED_HTTP_CLIENT_IP) {
             data.source = Some(client_ip.into());
-        } else if let Some(&peer_addr) = attrs.get(semcov::trace::CLIENT_SOCKET_ADDRESS) {
+        } else if let Some(&peer_addr) = attrs.get(semcov::trace::NETWORK_PEER_ADDRESS) {
+            data.source = Some(peer_addr.into());
+        } else if let Some(&peer_addr) = attrs.get(DEPRECATED_CLIENT_SOCKET_ADDRESS) {
             data.source = Some(peer_addr.into());
         } else if let Some(&peer_addr) = attrs.get(
             #[allow(deprecated)]
@@ -321,7 +341,8 @@ impl From<&SpanData> for RemoteDependencyData {
             data.target = Some(host.into());
         } else if let Some(&peer_name) = attrs
             .get(semcov::trace::SERVER_ADDRESS)
-            .or_else(|| attrs.get(semcov::trace::SERVER_SOCKET_ADDRESS))
+            .or_else(|| attrs.get(semcov::trace::NETWORK_PEER_ADDRESS))
+            .or_else(|| attrs.get(DEPRECATED_SERVER_SOCKET_ADDRESS))
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
@@ -344,7 +365,8 @@ impl From<&SpanData> for RemoteDependencyData {
         {
             if let Some(peer_port) = attrs
                 .get(semcov::trace::SERVER_PORT)
-                .or_else(|| attrs.get(semcov::trace::SERVER_SOCKET_PORT))
+                .or_else(|| attrs.get(semcov::trace::NETWORK_PEER_PORT))
+                .or_else(|| attrs.get(DEPRECATED_SERVER_SOCKET_PORT))
                 .or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]

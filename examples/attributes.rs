@@ -77,7 +77,7 @@ fn main() {
             ),
             KeyValue::new(semcov::trace::SERVER_ADDRESS, "example.com"),
             KeyValue::new(semcov::trace::SERVER_PORT, 8080),
-            KeyValue::new(semcov::trace::SERVER_SOCKET_ADDRESS, "10.1.2.4"),
+            KeyValue::new(semcov::trace::NETWORK_PEER_ADDRESS, "10.1.2.4"),
             KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
             KeyValue::new(semcov::trace::ENDUSER_ID, "marry"),
         ])
@@ -101,7 +101,7 @@ fn main() {
                 KeyValue::new(semcov::trace::HTTP_ROUTE, "/hello/world"),
                 KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
                 KeyValue::new(semcov::trace::CLIENT_ADDRESS, "10.1.2.3"),
-                KeyValue::new(semcov::trace::CLIENT_SOCKET_ADDRESS, "10.1.2.2"),
+                KeyValue::new(semcov::trace::NETWORK_PEER_ADDRESS, "10.1.2.2"),
                 KeyValue::new(semcov::trace::USER_AGENT_ORIGINAL, "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
                 KeyValue::new(semcov::trace::ENDUSER_ID, "marry"),
             ]);
@@ -115,7 +115,7 @@ fn main() {
             get_active_span(|span| {
                 let async_op_builder = server_tracer
                     .span_builder("async operation")
-                    .with_links(vec![Link::new(span.span_context().clone(), Vec::new())]);
+                    .with_links(vec![Link::new(span.span_context().clone(), Vec::new(), 0)]);
                 let async_op_context = Context::new();
                 let _span = server_tracer.build_with_context(async_op_builder, &async_op_context);
             })
