@@ -9,6 +9,7 @@ mod exception_details;
 mod message_data;
 #[cfg(feature = "metrics")]
 mod metric_data;
+mod ms_link;
 #[cfg(feature = "live-metrics")]
 mod quick_pulse;
 mod remote_dependency_data;
@@ -26,6 +27,7 @@ pub(crate) use exception_details::*;
 pub(crate) use message_data::*;
 #[cfg(feature = "metrics")]
 pub(crate) use metric_data::*;
+pub(crate) use ms_link::*;
 #[cfg(feature = "live-metrics")]
 pub(crate) use quick_pulse::*;
 pub(crate) use remote_dependency_data::*;

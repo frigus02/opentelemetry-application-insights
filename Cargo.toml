@@ -61,7 +61,7 @@ opentelemetry-http = { version = "0.11", features = ["reqwest"] }
 opentelemetry-application-insights = { path = ".", features = ["live-metrics"] }
 rand = "0.8.5"
 regex = "1.5.5"
-reqwest = { version = "0.11", default-features = false, features = ["blocking"] }
+reqwest = { version = "0.11", features = ["blocking"] }
 test-case = "3.0.0"
 tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "process", "time"] }
 version-sync = { version = "0.9.4", default-features = false, features = ["html_root_url_updated", "contains_regex"] }

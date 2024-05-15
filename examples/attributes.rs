@@ -1,6 +1,7 @@
 use opentelemetry::{
     trace::{
-        get_active_span, mark_span_as_active, SpanKind, TraceContextExt, Tracer, TracerProvider,
+        get_active_span, mark_span_as_active, Link, SpanKind, TraceContextExt, Tracer,
+        TracerProvider,
     },
     Context, KeyValue,
 };
@@ -110,6 +111,14 @@ fn main() {
             log();
             custom();
             exception();
+
+            get_active_span(|span| {
+                let async_op_builder = server_tracer
+                    .span_builder("async operation")
+                    .with_links(vec![Link::new(span.span_context().clone(), Vec::new())]);
+                let async_op_context = Context::new();
+                let _span = server_tracer.build_with_context(async_op_builder, &async_op_context);
+            })
         }
     }
 }

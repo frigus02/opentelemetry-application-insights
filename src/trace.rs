@@ -1,12 +1,11 @@
 use crate::{
     convert::{
-        attrs_to_properties, duration_to_string, status_to_result_code, time_to_string,
-        value_to_severity_level,
+        attrs_map_to_properties, attrs_to_map, attrs_to_properties, duration_to_string,
+        status_to_result_code, time_to_string, value_to_severity_level,
     },
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
-        ExceptionDetails, LimitedLenString, MessageData, Properties, RemoteDependencyData,
-        RequestData,
+        ExceptionDetails, LimitedLenString, MessageData, RemoteDependencyData, RequestData,
     },
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
@@ -199,7 +198,7 @@ impl From<&SpanData> for RequestData {
             success: is_request_success(span),
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource),
+            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -287,7 +286,7 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource),
+            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -389,11 +388,7 @@ impl From<&SpanData> for RemoteDependencyData {
 
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
-        let mut attrs: HashMap<&str, &Value> = event
-            .attributes
-            .iter()
-            .map(|kv| (kv.key.as_str(), &kv.value))
-            .collect();
+        let mut attrs = attrs_to_map(&event.attributes);
         let exception = ExceptionDetails {
             type_name: attrs
                 .remove(semcov::trace::EXCEPTION_TYPE)
@@ -410,37 +405,21 @@ impl From<&Event> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            properties: Some(
-                attrs
-                    .iter()
-                    .map(|(k, v)| ((*k).into(), (*v).into()))
-                    .collect(),
-            )
-            .filter(|x: &Properties| !x.is_empty()),
+            properties: attrs_map_to_properties(attrs),
         }
     }
 }
 
 impl From<&Event> for EventData {
     fn from(event: &Event) -> EventData {
-        let mut attrs: HashMap<&str, &Value> = event
-            .attributes
-            .iter()
-            .map(|kv| (kv.key.as_str(), &kv.value))
-            .collect();
+        let mut attrs = attrs_to_map(&event.attributes);
         EventData {
             ver: 2,
             name: attrs
                 .remove(CUSTOM_EVENT_NAME)
                 .map(Into::into)
                 .unwrap_or_else(|| "<no name>".into()),
-            properties: Some(
-                attrs
-                    .iter()
-                    .map(|(k, v)| ((*k).into(), (*v).into()))
-                    .collect(),
-            )
-            .filter(|x: &Properties| !x.is_empty()),
+            properties: attrs_map_to_properties(attrs),
         }
     }
 }
@@ -452,11 +431,7 @@ const LEVEL: &str = "level";
 
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
-        let mut attrs: HashMap<&str, &Value> = event
-            .attributes
-            .iter()
-            .map(|kv| (kv.key.as_str(), &kv.value))
-            .collect();
+        let mut attrs = attrs_to_map(&event.attributes);
         let severity_level = attrs.get(LEVEL).and_then(|x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);
@@ -469,13 +444,7 @@ impl From<&Event> for MessageData {
             } else {
                 event.name.clone().into_owned().into()
             },
-            properties: Some(
-                attrs
-                    .iter()
-                    .map(|(k, v)| ((*k).into(), (*v).into()))
-                    .collect(),
-            )
-            .filter(|x: &Properties| !x.is_empty()),
+            properties: attrs_map_to_properties(attrs),
         }
     }
 }
