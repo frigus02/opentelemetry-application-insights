@@ -330,10 +330,7 @@ pub use models::context_tag_keys::attrs;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
 #[cfg(feature = "metrics")]
-use opentelemetry_sdk::metrics::reader::{
-    AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
-    TemporalitySelector,
-};
+use opentelemetry_sdk::metrics::reader::{AggregationSelector, DefaultAggregationSelector};
 use opentelemetry_sdk::{
     export::ExportError,
     runtime::RuntimeChannel,
@@ -590,8 +587,6 @@ where
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
-            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
-            #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         }
     }
@@ -680,8 +675,6 @@ pub struct Exporter<C> {
     instrumentation_key: String,
     sample_rate: f64,
     #[cfg(feature = "metrics")]
-    temporality_selector: Box<dyn TemporalitySelector>,
-    #[cfg(feature = "metrics")]
     aggregation_selector: Box<dyn AggregationSelector>,
 }
 
@@ -710,8 +703,6 @@ impl<C> Exporter<C> {
             instrumentation_key,
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
-            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
-            #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         }
     }
@@ -730,8 +721,6 @@ impl<C> Exporter<C> {
             ),
             instrumentation_key: connection_string.instrumentation_key,
             sample_rate: 100.0,
-            #[cfg(feature = "metrics")]
-            temporality_selector: Box::new(DefaultTemporalitySelector::new()),
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
         })
@@ -757,17 +746,6 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
-        self
-    }
-
-    /// Set temporality selector.
-    #[cfg(feature = "metrics")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
-    pub fn with_temporality_selector(
-        mut self,
-        temporality_selector: impl TemporalitySelector + 'static,
-    ) -> Self {
-        self.temporality_selector = Box::new(temporality_selector);
         self
     }
 

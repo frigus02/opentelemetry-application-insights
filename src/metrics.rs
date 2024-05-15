@@ -27,7 +27,17 @@ where
     C: Send + Sync,
 {
     fn temporality(&self, kind: InstrumentKind) -> Temporality {
-        self.temporality_selector.temporality(kind)
+        // See https://github.com/frigus02/opentelemetry-application-insights/issues/74#issuecomment-2108488385
+        match kind {
+            InstrumentKind::Counter
+            | InstrumentKind::Histogram
+            | InstrumentKind::ObservableCounter
+            | InstrumentKind::Gauge
+            | InstrumentKind::ObservableGauge => Temporality::Delta,
+            InstrumentKind::UpDownCounter | InstrumentKind::ObservableUpDownCounter => {
+                Temporality::Cumulative
+            }
+        }
     }
 }
 
