@@ -280,7 +280,7 @@ async fn main() {
 //! | --------------------------- | -------------------------- |
 //! | `ai.customEvent.name`       | Event name                 |
 //!
-//! All other events are converted into [Trace] telemetry with the follwing mapping:
+//! All other events are converted into [Trace] telemetry with the following mapping:
 //!
 //! | OpenTelemetry attribute key  | Application Insights field |
 //! | ---------------------------- | -------------------------- |
