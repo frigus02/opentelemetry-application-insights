@@ -154,7 +154,7 @@ async fn main() {
 //!
 //! # Attribute mapping
 //!
-//! OpenTelemetry and Application Insights are using different terminology. This crate tries it's
+//! OpenTelemetry and Application Insights are using different terminology. This crate tries its
 //! best to map OpenTelemetry fields to their correct Application Insights pendant.
 //!
 //! - [OpenTelemetry specification: Span](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md#span)
