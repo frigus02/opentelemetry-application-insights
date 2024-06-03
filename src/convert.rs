@@ -1,11 +1,14 @@
 use crate::models::{serialize_ms_links, Properties, SeverityLevel, MS_LINKS_KEY};
 use chrono::{DateTime, SecondsFormat, Utc};
+#[cfg(feature = "logs")]
+use opentelemetry::logs::AnyValue;
 use opentelemetry::{
     trace::{Link, Status},
-    KeyValue, Value,
+    Key, KeyValue, Value,
 };
 use opentelemetry_sdk::Resource;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     time::{Duration, SystemTime},
 };
@@ -53,11 +56,32 @@ pub(crate) fn attrs_to_map(attributes: &[KeyValue]) -> HashMap<&str, &Value> {
         .collect()
 }
 
+#[cfg(feature = "logs")]
+pub(crate) fn log_attrs_to_map(attributes: &[(Key, AnyValue)]) -> HashMap<&str, &dyn AttrValue> {
+    attributes
+        .iter()
+        .map(|(k, v)| (k.as_str(), v as &dyn AttrValue))
+        .collect()
+}
+
 pub(crate) fn attrs_map_to_properties(attributes: HashMap<&str, &Value>) -> Option<Properties> {
     let properties: Properties = attributes
         .iter()
         .filter(|(&k, _)| !k.starts_with("_MS."))
         .map(|(&k, &v)| (k.into(), v.into()))
+        .collect();
+
+    Some(properties).filter(|x| !x.is_empty())
+}
+
+#[cfg(feature = "logs")]
+pub(crate) fn log_attrs_map_to_properties(
+    attributes: HashMap<&str, &dyn AttrValue>,
+) -> Option<Properties> {
+    let properties: Properties = attributes
+        .iter()
+        .filter(|(&k, _)| !k.starts_with("_MS."))
+        .map(|(&k, &v)| (k.into(), v.as_str().into()))
         .collect();
 
     Some(properties).filter(|x| !x.is_empty())
@@ -84,6 +108,69 @@ pub(crate) fn value_to_severity_level(value: &Value) -> Option<SeverityLevel> {
         "WARN" => Some(SeverityLevel::Warning),
         "ERROR" => Some(SeverityLevel::Error),
         _ => None,
+    }
+}
+
+pub(crate) trait AttrValue {
+    fn as_str(&self) -> Cow<'_, str>;
+}
+
+impl AttrValue for Value {
+    fn as_str(&self) -> Cow<'_, str> {
+        self.as_str()
+    }
+}
+
+#[cfg(feature = "logs")]
+impl AttrValue for AnyValue {
+    fn as_str(&self) -> Cow<'_, str> {
+        match self {
+            AnyValue::Int(v) => format!("{}", v).into(),
+            AnyValue::Double(v) => format!("{}", v).into(),
+            AnyValue::String(v) => Cow::Borrowed(v.as_str()),
+            AnyValue::Boolean(v) => format!("{}", v).into(),
+            AnyValue::Bytes(bytes) => {
+                let mut s = String::new();
+                s.push('[');
+                for &b in bytes {
+                    s.push_str(&format!("{}", b));
+                    s.push(',');
+                }
+                if !bytes.is_empty() {
+                    s.pop(); // remove trailing comma
+                }
+                s.push(']');
+                s.into()
+            }
+            AnyValue::ListAny(list) => {
+                let mut s = String::new();
+                s.push('[');
+                for v in list {
+                    s.push_str(v.as_str().as_ref());
+                    s.push(',');
+                }
+                if !list.is_empty() {
+                    s.pop(); // remove trailing comma
+                }
+                s.push(']');
+                s.into()
+            }
+            AnyValue::Map(map) => {
+                let mut s = String::new();
+                s.push('{');
+                for (k, v) in map {
+                    s.push_str(k.as_str());
+                    s.push(':');
+                    s.push_str(v.as_str().as_ref());
+                    s.push(',');
+                }
+                if !map.is_empty() {
+                    s.pop(); // remove trailing comma
+                }
+                s.push('}');
+                s.into()
+            }
+        }
     }
 }
 

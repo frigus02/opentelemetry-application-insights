@@ -314,6 +314,8 @@ async fn main() {
 
 mod connection_string;
 mod convert;
+#[cfg(feature = "logs")]
+mod logs;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
@@ -592,6 +594,8 @@ where
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Default::default(),
         }
     }
 
@@ -678,6 +682,8 @@ pub struct Exporter<C> {
     sample_rate: f64,
     #[cfg(feature = "metrics")]
     aggregation_selector: Box<dyn AggregationSelector>,
+    #[cfg(feature = "logs")]
+    resource: Resource,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -706,6 +712,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Default::default(),
         }
     }
 
@@ -725,6 +733,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Default::default(),
         })
     }
 
@@ -759,6 +769,14 @@ impl<C> Exporter<C> {
         aggregation_selector: impl AggregationSelector + 'static,
     ) -> Self {
         self.aggregation_selector = Box::new(aggregation_selector);
+        self
+    }
+
+    /// Set resource for log exporter.
+    #[cfg(feature = "logs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "logs")))]
+    pub fn with_resource(mut self, resource: Resource) -> Self {
+        self.resource = resource;
         self
     }
 }

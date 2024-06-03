@@ -427,6 +427,7 @@ impl From<&Event> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
+            severity_level: None,
             properties: attrs_map_to_properties(attrs),
         }
     }

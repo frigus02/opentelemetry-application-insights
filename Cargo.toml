@@ -29,6 +29,7 @@ reqwest-client = ["opentelemetry-http/reqwest", "reqwest/native-tls"]
 reqwest-client-vendored-tls = ["opentelemetry-http/reqwest", "reqwest/native-tls-vendored"]
 reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
 metrics = ["opentelemetry_sdk/metrics"]
+logs = ["opentelemetry_sdk/logs"]
 live-metrics = ["futures-util", "sysinfo"]
 
 [dependencies]
