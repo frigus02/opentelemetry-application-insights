@@ -1,10 +1,10 @@
 use crate::models::{serialize_ms_links, Properties, SeverityLevel, MS_LINKS_KEY};
 use chrono::{DateTime, SecondsFormat, Utc};
 #[cfg(feature = "logs")]
-use opentelemetry::logs::AnyValue;
+use opentelemetry::{logs::AnyValue, Key};
 use opentelemetry::{
     trace::{Link, Status},
-    Key, KeyValue, Value,
+    KeyValue, Value,
 };
 use opentelemetry_sdk::Resource;
 use std::{

@@ -18,14 +18,14 @@ use opentelemetry_application_insights::{attrs as ai, new_pipeline_from_connecti
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tick::{AsyncStdTick, NoTick, TokioTick};
 
 // Fake instrumentation key (this is a random uuid)
 const CONNECTION_STRING: &str = "InstrumentationKey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66";
 
 #[test]
-fn traces_simple() {
+fn traces() {
     let requests = record(NoTick, |client| {
         // Fake instrumentation key (this is a random uuid)
         let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
@@ -133,8 +133,8 @@ fn traces_simple() {
             std::thread::sleep(Duration::from_secs(1));
         }
     });
-    let traces_simple = requests_to_string(requests);
-    insta::assert_snapshot!(traces_simple);
+    let traces = requests_to_string(requests);
+    insta::assert_snapshot!(traces);
 }
 
 #[async_std::test]
@@ -165,6 +165,43 @@ async fn traces_batch_tokio() {
     });
     let traces_batch_tokio = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_tokio);
+}
+
+#[tokio::test]
+async fn logs() {
+    let requests = record(TokioTick, |client| {
+        let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+            CONNECTION_STRING,
+            client,
+        )
+        .expect("connection string is valid");
+        let logger_provider = opentelemetry_sdk::logs::LoggerProvider::builder()
+            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::TokioCurrentThread)
+            .with_config(
+                opentelemetry_sdk::logs::config().with_resource(Resource::new(vec![
+                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                    KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                ])),
+            )
+            .build();
+
+        let otel_log_appender =
+            opentelemetry_appender_log::OpenTelemetryLogBridge::new(&logger_provider);
+        log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
+        log::set_max_level(log::Level::Info.to_level_filter());
+
+        let fruit = "apple";
+        let price = 2.99;
+        let colors = ("red", "green");
+        let stock = HashMap::from([("red", 4), ("green", 6)]);
+        log::error!("error!");
+        log::warn!("warn!");
+        log::info!(fruit, price, colors:sval, stock:sval; "info! {fruit} is {price}");
+
+        logger_provider.shutdown().unwrap();
+    });
+    let logs = requests_to_string(requests);
+    insta::assert_snapshot!(logs);
 }
 
 #[tokio::test]

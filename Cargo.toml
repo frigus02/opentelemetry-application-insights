@@ -57,9 +57,11 @@ doc-comment = "0.3.3"
 env_logger = "0.11.2"
 insta = "1.13.0"
 isahc = "1.7.2"
-opentelemetry_sdk = { version = "0.23", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread"] }
+log = { version = "0.4", features = ["kv", "kv_sval"] }
+opentelemetry_sdk = { version = "0.23", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "logs_level_enabled"] }
 opentelemetry-http = { version = "0.12", features = ["reqwest"] }
-opentelemetry-application-insights = { path = ".", features = ["live-metrics"] }
+opentelemetry-appender-log = { version = "0.4", features = ["with-serde"] }
+opentelemetry-application-insights = { path = ".", features = ["logs", "live-metrics"] }
 rand = "0.8.5"
 regex = "1.5.5"
 reqwest = { version = "0.11", features = ["blocking"] }
