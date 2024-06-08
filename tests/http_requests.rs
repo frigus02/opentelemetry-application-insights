@@ -193,7 +193,7 @@ async fn logs() {
         let fruit = "apple";
         let price = 2.99;
         let colors = ("red", "green");
-        let stock = HashMap::from([("red", 4), ("green", 6)]);
+        let stock = HashMap::from([("red", 4)]);
         log::error!("error!");
         log::warn!("warn!");
         log::info!(fruit, price, colors:sval, stock:sval; "info! {fruit} is {price}");

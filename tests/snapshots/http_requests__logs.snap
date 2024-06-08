@@ -50,7 +50,7 @@ content-encoding: gzip
           "colors": "[red,green]",
           "fruit": "apple",
           "price": "2.99",
-          "stock": "{green:6,red:4}"
+          "stock": "{red:4}"
         },
         "severityLevel": 1,
         "ver": 2
