@@ -88,7 +88,7 @@ pub(crate) fn value_to_severity_level(value: &dyn AttrValue) -> Option<SeverityL
         // Convert from `tracing` Level.
         // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#526-533
         "TRACE" => Some(SeverityLevel::Verbose),
-        "DEBUG" => Some(SeverityLevel::Information),
+        "DEBUG" => Some(SeverityLevel::Verbose),
         "INFO" => Some(SeverityLevel::Information),
         "WARN" => Some(SeverityLevel::Warning),
         "ERROR" => Some(SeverityLevel::Error),
