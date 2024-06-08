@@ -75,15 +75,48 @@
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 //!
 #![cfg_attr(
+    feature = "logs",
+    doc = r#"
+## Logs
+
+This requires the **logs** feature.
+
+```no_run
+use log::{Level, info};
+use opentelemetry_appender_log::OpenTelemetryLogBridge;
+use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
+
+#[tokio::main]
+async fn main() {
+    // Setup exporter
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::Client::new(),
+    )
+    .expect("valid connection string");
+    let logger_provider = LoggerProvider::builder()
+        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .build();
+    let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
+    log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
+    log::set_max_level(Level::Info.to_level_filter());
+
+    // Log
+    let fruit = "apple";
+    let price = 2.99;
+    info!("{fruit} costs {price}");
+
+    // Export remaining logs before exiting
+    let _ = logger_provider.shutdown();
+}
+```
+"#
+)]
+#![cfg_attr(
     feature = "metrics",
     doc = r#"
 ## Metrics
-
-Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
-Rust implementation.
-
-Please note: The metrics export configuration is still a bit rough in this crate. But once
-configured it should work as expected.
 
 This requires the **metrics** feature.
 
@@ -595,7 +628,7 @@ where
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             #[cfg(feature = "logs")]
-            resource: Default::default(),
+            resource: Resource::empty(),
         }
     }
 
@@ -713,7 +746,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             #[cfg(feature = "logs")]
-            resource: Default::default(),
+            resource: Resource::empty(),
         }
     }
 
@@ -734,7 +767,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             #[cfg(feature = "logs")]
-            resource: Default::default(),
+            resource: Resource::empty(),
         })
     }
 
@@ -769,14 +802,6 @@ impl<C> Exporter<C> {
         aggregation_selector: impl AggregationSelector + 'static,
     ) -> Self {
         self.aggregation_selector = Box::new(aggregation_selector);
-        self
-    }
-
-    /// Set resource for log exporter.
-    #[cfg(feature = "logs")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "logs")))]
-    pub fn with_resource(mut self, resource: Resource) -> Self {
-        self.resource = resource;
         self
     }
 }
