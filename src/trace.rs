@@ -455,7 +455,7 @@ const LEVEL: &str = "level";
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
         let mut attrs = attrs_to_map(&event.attributes);
-        let severity_level = attrs.get(LEVEL).and_then(|x| value_to_severity_level(x));
+        let severity_level = attrs.get(LEVEL).and_then(|&x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);
         }

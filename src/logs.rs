@@ -1,5 +1,5 @@
 use crate::{
-    convert::{log_attrs_map_to_properties, log_attrs_to_map, time_to_string, AttrValue},
+    convert::{attrs_map_to_properties, attrs_to_map, time_to_string, AttrValue},
     models::{Data, Envelope, ExceptionData, ExceptionDetails, MessageData, SeverityLevel},
     tags::get_tags_for_log,
     Exporter,
@@ -17,7 +17,7 @@ use std::{sync::Arc, time::SystemTime};
 impl<C> Exporter<C> {
     fn create_envelope_for_log(&self, log: LogData) -> Envelope {
         let attrs_map = if let Some(attrs) = log.record.attributes.as_ref() {
-            log_attrs_to_map(attrs)
+            attrs_to_map(attrs)
         } else {
             Default::default()
         };
@@ -38,7 +38,7 @@ impl<C> Exporter<C> {
                     ver: 2,
                     exceptions: vec![exception],
                     severity_level: log.record.severity_number.map(Into::into),
-                    properties: log_attrs_map_to_properties(attrs_map),
+                    properties: attrs_map_to_properties(attrs_map),
                 });
                 break 'convert (data, "Microsoft.ApplicationInsights.Exception");
             }
@@ -53,7 +53,7 @@ impl<C> Exporter<C> {
                     .map(|v| (v as &dyn AttrValue).as_str().into_owned())
                     .unwrap_or_else(|| "".into())
                     .into(),
-                properties: log_attrs_map_to_properties(attrs_map),
+                properties: attrs_map_to_properties(attrs_map),
             });
             (data, "Microsoft.ApplicationInsights.Message")
         };

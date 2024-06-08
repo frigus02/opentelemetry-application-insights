@@ -1,3 +1,4 @@
+use crate::convert::AttrValue;
 use serde::Serialize;
 use std::{borrow::Cow, collections::BTreeMap};
 
@@ -34,6 +35,12 @@ impl<const N: usize> From<&opentelemetry::Key> for LimitedLenString<N> {
 
 impl<const N: usize> From<&opentelemetry::Value> for LimitedLenString<N> {
     fn from(v: &opentelemetry::Value) -> Self {
+        v.as_str().into()
+    }
+}
+
+impl<const N: usize> From<&dyn AttrValue> for LimitedLenString<N> {
+    fn from(v: &dyn AttrValue) -> Self {
         v.as_str().into()
     }
 }

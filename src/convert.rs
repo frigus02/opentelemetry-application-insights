@@ -49,33 +49,18 @@ pub(crate) fn attrs_to_properties(
     Some(properties).filter(|x| !x.is_empty())
 }
 
-pub(crate) fn attrs_to_map(attributes: &[KeyValue]) -> HashMap<&str, &Value> {
+pub(crate) fn attrs_to_map<'a, T>(attributes: &'a [T]) -> HashMap<&str, &dyn AttrValue>
+where
+    &'a T: Into<AttrKeyValue<'a>>,
+{
     attributes
         .iter()
-        .map(|kv| (kv.key.as_str(), &kv.value))
+        .map(|kv| kv.into())
+        .map(|kv| (kv.0, kv.1))
         .collect()
 }
 
-#[cfg(feature = "logs")]
-pub(crate) fn log_attrs_to_map(attributes: &[(Key, AnyValue)]) -> HashMap<&str, &dyn AttrValue> {
-    attributes
-        .iter()
-        .map(|(k, v)| (k.as_str(), v as &dyn AttrValue))
-        .collect()
-}
-
-pub(crate) fn attrs_map_to_properties(attributes: HashMap<&str, &Value>) -> Option<Properties> {
-    let properties: Properties = attributes
-        .iter()
-        .filter(|(&k, _)| !k.starts_with("_MS."))
-        .map(|(&k, &v)| (k.into(), v.into()))
-        .collect();
-
-    Some(properties).filter(|x| !x.is_empty())
-}
-
-#[cfg(feature = "logs")]
-pub(crate) fn log_attrs_map_to_properties(
+pub(crate) fn attrs_map_to_properties(
     attributes: HashMap<&str, &dyn AttrValue>,
 ) -> Option<Properties> {
     let properties: Properties = attributes
@@ -98,7 +83,7 @@ pub(crate) fn status_to_result_code(status: &Status) -> i32 {
     }
 }
 
-pub(crate) fn value_to_severity_level(value: &Value) -> Option<SeverityLevel> {
+pub(crate) fn value_to_severity_level(value: &dyn AttrValue) -> Option<SeverityLevel> {
     match value.as_str().as_ref() {
         // Convert from `tracing` Level.
         // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#526-533
@@ -108,6 +93,21 @@ pub(crate) fn value_to_severity_level(value: &Value) -> Option<SeverityLevel> {
         "WARN" => Some(SeverityLevel::Warning),
         "ERROR" => Some(SeverityLevel::Error),
         _ => None,
+    }
+}
+
+pub(crate) struct AttrKeyValue<'a>(&'a str, &'a dyn AttrValue);
+
+impl<'a> From<&'a KeyValue> for AttrKeyValue<'a> {
+    fn from(kv: &'a KeyValue) -> Self {
+        AttrKeyValue(kv.key.as_str(), &kv.value as &dyn AttrValue)
+    }
+}
+
+#[cfg(feature = "logs")]
+impl<'a> From<&'a (Key, AnyValue)> for AttrKeyValue<'a> {
+    fn from(kv: &'a (Key, AnyValue)) -> Self {
+        AttrKeyValue(kv.0.as_str(), &kv.1)
     }
 }
 
