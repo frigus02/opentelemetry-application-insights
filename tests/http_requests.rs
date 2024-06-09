@@ -15,7 +15,9 @@ use opentelemetry::{
     },
     Context, KeyValue,
 };
-use opentelemetry_application_insights::{attrs as ai, new_pipeline_from_connection_string};
+use opentelemetry_application_insights::{
+    attrs as ai, new_exporter_from_connection_string, new_pipeline,
+};
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
@@ -29,10 +31,11 @@ const CONNECTION_STRING: &str = "InstrumentationKey=0fdcec70-0ce5-4085-89d9-9ae8
 fn traces() {
     let requests = record(NoTick, |client| {
         // Fake instrumentation key (this is a random uuid)
-        let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client.clone())
-            .with_trace_config(
+        let exporter = new_exporter_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let client_provider = new_pipeline(exporter.clone())
+            .traces()
+            .with_config(
                 opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
@@ -43,10 +46,9 @@ fn traces() {
             .build_simple();
         let client_tracer = client_provider.tracer("test");
 
-        let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
-            .with_trace_config(
+        let server_provider = new_pipeline(exporter)
+            .traces()
+            .with_config(
                 opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
@@ -141,9 +143,10 @@ fn traces() {
 #[async_std::test]
 async fn traces_batch_async_std() {
     let requests = record(AsyncStdTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
+        let exporter = new_exporter_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = new_pipeline(exporter)
+            .traces()
             .build_batch(opentelemetry_sdk::runtime::AsyncStd);
         let tracer = tracer_provider.tracer("test");
 
@@ -156,9 +159,10 @@ async fn traces_batch_async_std() {
 #[tokio::test]
 async fn traces_batch_tokio() {
     let requests = record(TokioTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
+        let exporter = new_exporter_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = new_pipeline(exporter)
+            .traces()
             .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
 
@@ -172,27 +176,23 @@ async fn traces_batch_tokio() {
 async fn logs() {
     let requests = record(TokioTick, |client| {
         // Setup tracing
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client.clone())
+        let exporter = new_exporter_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = new_pipeline(exporter.clone())
+            .traces()
             .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");
 
         // Setup logging
-        let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-            CONNECTION_STRING,
-            client,
-        )
-        .expect("connection string is valid");
-        let logger_provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::TokioCurrentThread)
+        let logger_provider = new_pipeline(exporter)
+            .logs()
             .with_config(
                 opentelemetry_sdk::logs::config().with_resource(Resource::new(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
                 ])),
             )
-            .build();
+            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
 
         let otel_log_appender =
             opentelemetry_appender_log::OpenTelemetryLogBridge::new(&logger_provider);
@@ -228,9 +228,10 @@ async fn logs() {
 #[tokio::test]
 async fn live_metrics() {
     let requests = record(TokioTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
+        let exporter = new_exporter_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = new_pipeline(exporter)
+            .traces()
             .with_live_metrics(true)
             .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
         let tracer = tracer_provider.tracer("test");

@@ -11,26 +11,21 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>> {
     let client = reqwest::Client::new();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(client.clone())
+    let exporter = opentelemetry_application_insights::new_exporter_from_env(client)
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist");
+    let tracer = opentelemetry_application_insights::new_pipeline(exporter.clone())
+        .traces()
         .install_batch(opentelemetry_sdk::runtime::Tokio);
 
-    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        client,
-    )
-    .expect("connection string is valid");
-    let logger_provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+    let logger_provider = opentelemetry_application_insights::new_pipeline(exporter)
+        .logs()
         .with_config(
             opentelemetry_sdk::logs::config().with_resource(Resource::new(vec![
                 KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
                 KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
             ])),
         )
-        .build();
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
     let otel_log_appender =
         opentelemetry_appender_log::OpenTelemetryLogBridge::new(&logger_provider);
     log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();

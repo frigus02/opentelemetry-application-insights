@@ -1,5 +1,4 @@
-use opentelemetry::{global, metrics::Unit, KeyValue};
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry::{metrics::Unit, KeyValue};
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
 
@@ -7,19 +6,13 @@ use std::{error::Error, time::Duration};
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
-    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
+    let exporter =
+        opentelemetry_application_insights::new_exporter_from_env(reqwest::Client::new())
+            .expect("valid connection string");
+    let meter = opentelemetry_application_insights::new_pipeline(exporter)
+        .metrics()
         .with_interval(Duration::from_secs(1))
-        .build();
-    let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-    global::set_meter_provider(meter_provider);
-
-    let meter = global::meter("custom.instrumentation");
+        .install(opentelemetry_sdk::runtime::Tokio);
 
     // Observable
     let _cpu_utilization_gauge = meter

@@ -14,7 +14,7 @@ use opentelemetry_sdk::{
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::{sync::Arc, time::SystemTime};
+use std::time::SystemTime;
 
 fn is_exception(log: &LogData) -> bool {
     if let Some(attrs) = &log.record.attributes {
@@ -65,14 +65,12 @@ where
     C: HttpClient + 'static,
 {
     async fn export(&mut self, batch: Vec<LogData>) -> LogResult<()> {
-        let client = Arc::clone(&self.client);
-        let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
             .into_iter()
             .map(|log| self.create_envelope_for_log(log))
             .collect();
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
+        crate::uploader::send(self.client.as_ref(), &self.endpoint, envelopes).await?;
         Ok(())
     }
 

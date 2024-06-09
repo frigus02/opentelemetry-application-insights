@@ -19,7 +19,7 @@ use opentelemetry_sdk::{
     },
     AttributeSet,
 };
-use std::{convert::TryInto, sync::Arc, time::SystemTime};
+use std::{convert::TryInto, time::SystemTime};
 
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 impl<C> TemporalitySelector for Exporter<C>
@@ -58,9 +58,6 @@ where
     C: HttpClient + 'static,
 {
     async fn export(&self, metrics: &mut ResourceMetrics) -> MetricsResult<()> {
-        let client = Arc::clone(&self.client);
-        let endpoint = Arc::clone(&self.endpoint);
-
         let mut envelopes = Vec::new();
         for scope_metrics in metrics.scope_metrics.iter() {
             for metric in scope_metrics.metrics.iter() {
@@ -97,7 +94,7 @@ where
             }
         }
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
+        crate::uploader::send(self.client.as_ref(), &self.endpoint, envelopes).await?;
         Ok(())
     }
 
