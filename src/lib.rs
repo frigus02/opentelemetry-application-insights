@@ -321,11 +321,19 @@ async fn main() {
 //!
 //! All other attributes are directly converted to custom properties.
 //!
-//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
+//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/exceptions.md
 //! [Exception]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-exception-telemetry
 //! [Event]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-event-telemetry
 //! [Trace]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-trace-telemetry
 //! [`tracing::Level`]: https://docs.rs/tracing/0.1.37/tracing/struct.Level.html
+//!
+//! ## Logs
+//!
+//! Logs are reported similar to events:
+//!
+//! - If they contain an `exception.type` or `exception.message` attribute, they're converted to
+//!   [Exception] telemetry with the same attribute mapping as events.
+//! - Otherwise they're converted to [Trace] telemetry.
 //!
 //! ## Metrics
 //!
