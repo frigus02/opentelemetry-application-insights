@@ -93,6 +93,10 @@ name = "live_metrics"
 required-features = ["live-metrics", "opentelemetry_sdk/rt-tokio", "opentelemetry-http/reqwest"]
 
 [[example]]
+name = "logs"
+required-features = ["logs", "opentelemetry_sdk/rt-tokio"]
+
+[[example]]
 name = "metrics"
 required-features = ["metrics", "opentelemetry_sdk/rt-tokio"]
 
