@@ -171,6 +171,14 @@ async fn traces_batch_tokio() {
 #[tokio::test]
 async fn logs() {
     let requests = record(TokioTick, |client| {
+        // Setup tracing
+        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("connection string is valid")
+            .with_client(client.clone())
+            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
+        let tracer = tracer_provider.tracer("test");
+
+        // Setup logging
         let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
             CONNECTION_STRING,
             client,
@@ -206,6 +214,10 @@ async fn logs() {
         record.add_attribute(semcov::trace::EXCEPTION_MESSAGE, "Foo broke");
         record.add_attribute(semcov::trace::EXCEPTION_STACKTRACE, "A stack trace");
         logger.emit(record);
+
+        tracer.in_span("span_with_logs", |_cx| {
+            log::info!("with span");
+        });
 
         logger_provider.shutdown().unwrap();
     });
