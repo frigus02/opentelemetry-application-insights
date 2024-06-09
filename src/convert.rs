@@ -244,4 +244,18 @@ mod tests {
         assert_eq!(props.len(), 1);
         assert_eq!(props.get(&"a".into()), Some(&"b".into()));
     }
+
+    #[test_case(AnyValue::Int(1), "1" ; "int")]
+    #[test_case(AnyValue::Double(1.2), "1.2" ; "double")]
+    #[test_case(AnyValue::String("test".into()), "test" ; "string")]
+    #[test_case(AnyValue::Boolean(true), "true" ; "boolean")]
+    #[test_case(AnyValue::Bytes(vec![]), "[]" ; "empty bytes")]
+    #[test_case(AnyValue::Bytes(vec![1, 2, 3]), "[1,2,3]" ; "bytes")]
+    #[test_case(AnyValue::ListAny(vec![]), "[]" ; "empty list")]
+    #[test_case(AnyValue::ListAny(vec![1.into(), "test".into()]), "[1,test]" ; "list")]
+    #[test_case(AnyValue::Map([].into()), "{}" ; "empty map")]
+    #[test_case(AnyValue::Map([("k1".into(), "test".into())].into()), "{k1:test}" ; "map")]
+    fn any_value_as_str(v: AnyValue, expected: &'static str) {
+        assert_eq!(expected.to_string(), (&v as &dyn AttrValue).as_str());
+    }
 }
