@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Add support for exporting logs, e.g. using one of the `opentelemetry-appender-*` crates.
+- Events with the `level` attribute set to `DEBUG`, not convert to a severity level "Verbose" (previously "Information"). This was done to align with Application Insights exporters in other languages.
+
 ## [0.32.0] - 2024-05-15
 
 - Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.23`.

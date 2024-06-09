@@ -1,4 +1,4 @@
-use crate::models::{ExceptionDetails, Properties};
+use crate::models::{ExceptionDetails, Properties, SeverityLevel};
 use serde::Serialize;
 
 /// An instance of Exception represents a handled or unhandled exception that occurred during
@@ -11,6 +11,11 @@ pub(crate) struct ExceptionData {
 
     /// Exception chain - list of inner exceptions.
     pub(crate) exceptions: Vec<ExceptionDetails>,
+
+    /// Severity level. Mostly used to indicate exception severity level when it is reported by
+    /// logging library.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) severity_level: Option<SeverityLevel>,
 
     /// Collection of custom properties.
     #[serde(skip_serializing_if = "Option::is_none")]

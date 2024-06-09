@@ -1,8 +1,13 @@
-use crate::models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP};
+use crate::{
+    convert::AttrValue,
+    models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP},
+};
 use opentelemetry::{
     trace::{SpanId, SpanKind},
-    InstrumentationLibrary, Key, Value,
+    InstrumentationLibrary, Key,
 };
+#[cfg(feature = "logs")]
+use opentelemetry_sdk::export::logs::LogData;
 #[cfg(feature = "metrics")]
 use opentelemetry_sdk::AttributeSet;
 use opentelemetry_sdk::{export::trace::SpanData, Resource};
@@ -15,7 +20,9 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
 
     let attrs_map = build_tags_from_attrs(
         &mut tags,
-        span.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+        span.attributes
+            .iter()
+            .map(|kv| (&kv.key, &kv.value as &dyn AttrValue)),
     );
 
     // Set the operation id and operation parent id.
@@ -70,7 +77,30 @@ pub(crate) fn get_tags_for_metric(
 ) -> Tags {
     let mut tags = Tags::new();
     build_tags_from_resource_attrs(&mut tags, resource, scope);
-    build_tags_from_attrs(&mut tags, attrs.iter());
+    build_tags_from_attrs(
+        &mut tags,
+        attrs.iter().map(|(k, v)| (k, v as &dyn AttrValue)),
+    );
+    tags
+}
+
+#[cfg(feature = "logs")]
+pub(crate) fn get_tags_for_log(log: &LogData, resource: &Resource) -> Tags {
+    let mut tags = Tags::new();
+    build_tags_from_resource_attrs(&mut tags, resource, &log.instrumentation);
+
+    if let Some(attrs) = &log.record.attributes {
+        build_tags_from_attrs(
+            &mut tags,
+            attrs.iter().map(|(k, v)| (k, v as &dyn AttrValue)),
+        );
+    }
+
+    if let Some(trace_context) = &log.record.trace_context {
+        tags.insert(tags::OPERATION_ID, trace_context.trace_id.to_string());
+        tags.insert(tags::OPERATION_PARENT_ID, trace_context.span_id.to_string());
+    }
+
     tags
 }
 
@@ -81,9 +111,9 @@ pub(crate) fn get_tags_for_resource(resource: &Resource) -> Tags {
     tags
 }
 
-fn build_tags_from_attrs<'a, T>(tags: &mut Tags, attrs: T) -> HashMap<&'a str, &'a Value>
+fn build_tags_from_attrs<'a, T>(tags: &mut Tags, attrs: T) -> HashMap<&'a str, &'a dyn AttrValue>
 where
-    T: IntoIterator<Item = (&'a Key, &'a Value)>,
+    T: IntoIterator<Item = (&'a Key, &'a dyn AttrValue)>,
 {
     let mut attrs_map: HashMap<_, _> = HashMap::new();
     for (k, v) in attrs.into_iter() {
@@ -94,7 +124,7 @@ where
         let k = k.as_str();
         if k.starts_with("ai.") {
             if let Some(ctk) = TAG_KEY_LOOKUP.get(k) {
-                tags.insert(ctk.clone(), v.to_string());
+                tags.insert(ctk.clone(), v.as_str().into_owned());
             }
         }
 
@@ -109,12 +139,15 @@ fn build_tags_from_resource_attrs(
     resource: &Resource,
     instrumentation_lib: &InstrumentationLibrary,
 ) {
-    let attrs = resource.iter().chain(
-        instrumentation_lib
-            .attributes
-            .iter()
-            .map(|kv| (&kv.key, &kv.value)),
-    );
+    let attrs = resource
+        .iter()
+        .map(|(k, v)| (k, v as &dyn AttrValue))
+        .chain(
+            instrumentation_lib
+                .attributes
+                .iter()
+                .map(|kv| (&kv.key, &kv.value as &dyn AttrValue)),
+        );
     let attrs_map = build_tags_from_attrs(tags, attrs);
 
     if let Some(service_name) = attrs_map.get(semcov::resource::SERVICE_NAME) {

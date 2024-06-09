@@ -216,7 +216,11 @@ impl From<&SpanData> for RequestData {
             success: is_request_success(span),
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
+            properties: attrs_to_properties(
+                &span.attributes,
+                Some(&span.resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -306,7 +310,11 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
+            properties: attrs_to_properties(
+                &span.attributes,
+                Some(&span.resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -427,6 +435,7 @@ impl From<&Event> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
+            severity_level: None,
             properties: attrs_map_to_properties(attrs),
         }
     }
@@ -454,7 +463,7 @@ const LEVEL: &str = "level";
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
         let mut attrs = attrs_to_map(&event.attributes);
-        let severity_level = attrs.get(LEVEL).and_then(|x| value_to_severity_level(x));
+        let severity_level = attrs.get(LEVEL).and_then(|&x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);
         }

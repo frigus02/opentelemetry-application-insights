@@ -1,0 +1,147 @@
+---
+source: tests/http_requests.rs
+expression: logs
+---
+POST /v2/track HTTP/1.1
+host: dc.services.visualstudio.com
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "data": {
+      "baseData": {
+        "message": "info! apple is 2.99",
+        "properties": {
+          "colors": "[red,green]",
+          "fruit": "apple",
+          "price": "2.99",
+          "stock": "{red:4}"
+        },
+        "severityLevel": 1,
+        "ver": 2
+      },
+      "baseType": "MessageData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Message",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "test.client"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "message": "warn!",
+        "severityLevel": 2,
+        "ver": 2
+      },
+      "baseType": "MessageData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Message",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "test.client"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "message": "error!",
+        "severityLevel": 3,
+        "ver": 2
+      },
+      "baseType": "MessageData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Message",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "test.client"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "exceptions": [
+          {
+            "message": "Foo broke",
+            "stack": "A stack trace",
+            "typeName": "Foo"
+          }
+        ],
+        "severityLevel": 4,
+        "ver": 2
+      },
+      "baseType": "ExceptionData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Exception",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "test.client"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "message": "with span",
+        "severityLevel": 1,
+        "ver": 2
+      },
+      "baseType": "MessageData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Message",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "test.client",
+      "ai.operation.id": "STRIPPED",
+      "ai.operation.parentId": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  }
+]
+
+
+POST /v2/track HTTP/1.1
+host: dc.services.visualstudio.com
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "data": {
+      "baseData": {
+        "duration": "STRIPPED",
+        "id": "STRIPPED",
+        "name": "span_with_logs",
+        "properties": {
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "0.23.0"
+        },
+        "resultCode": "0",
+        "type": "InProc",
+        "ver": 2
+      },
+      "baseType": "RemoteDependencyData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.RemoteDependency",
+    "sampleRate": 100.0,
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "opentelemetry:0.23.0",
+      "ai.operation.id": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  }
+]

@@ -75,15 +75,48 @@
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
 //!
 #![cfg_attr(
+    feature = "logs",
+    doc = r#"
+## Logs
+
+This requires the **logs** feature.
+
+```no_run
+use log::{Level, info};
+use opentelemetry_appender_log::OpenTelemetryLogBridge;
+use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
+
+#[tokio::main]
+async fn main() {
+    // Setup exporter
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::Client::new(),
+    )
+    .expect("valid connection string");
+    let logger_provider = LoggerProvider::builder()
+        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .build();
+    let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
+    log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
+    log::set_max_level(Level::Info.to_level_filter());
+
+    // Log
+    let fruit = "apple";
+    let price = 2.99;
+    info!("{fruit} costs {price}");
+
+    // Export remaining logs before exiting
+    let _ = logger_provider.shutdown();
+}
+```
+"#
+)]
+#![cfg_attr(
     feature = "metrics",
     doc = r#"
 ## Metrics
-
-Please note: Metrics are still experimental both in the OpenTelemetry specification as well as
-Rust implementation.
-
-Please note: The metrics export configuration is still a bit rough in this crate. But once
-configured it should work as expected.
 
 This requires the **metrics** feature.
 
@@ -288,11 +321,19 @@ async fn main() {
 //!
 //! All other attributes are directly converted to custom properties.
 //!
-//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/exceptions.md
+//! [exceptions]: https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/exceptions.md
 //! [Exception]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-exception-telemetry
 //! [Event]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-event-telemetry
 //! [Trace]: https://learn.microsoft.com/en-us/azure/azure-monitor/app/data-model-trace-telemetry
 //! [`tracing::Level`]: https://docs.rs/tracing/0.1.37/tracing/struct.Level.html
+//!
+//! ## Logs
+//!
+//! Logs are reported similar to events:
+//!
+//! - If they contain an `exception.type` or `exception.message` attribute, they're converted to
+//!   [Exception] telemetry with the same attribute mapping as events.
+//! - Otherwise they're converted to [Trace] telemetry.
 //!
 //! ## Metrics
 //!
@@ -314,6 +355,8 @@ async fn main() {
 
 mod connection_string;
 mod convert;
+#[cfg(feature = "logs")]
+mod logs;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod models;
@@ -592,6 +635,8 @@ where
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Resource::empty(),
         }
     }
 
@@ -678,6 +723,8 @@ pub struct Exporter<C> {
     sample_rate: f64,
     #[cfg(feature = "metrics")]
     aggregation_selector: Box<dyn AggregationSelector>,
+    #[cfg(feature = "logs")]
+    resource: Resource,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -706,6 +753,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Resource::empty(),
         }
     }
 
@@ -725,6 +774,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
+            #[cfg(feature = "logs")]
+            resource: Resource::empty(),
         })
     }
 
