@@ -216,7 +216,11 @@ impl From<&SpanData> for RequestData {
             success: is_request_success(span),
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
+            properties: attrs_to_properties(
+                &span.attributes,
+                Some(&span.resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -306,7 +310,11 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, &span.resource, &span.links.links),
+            properties: attrs_to_properties(
+                &span.attributes,
+                Some(&span.resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span

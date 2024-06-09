@@ -8,6 +8,7 @@
 
 use format::requests_to_string;
 use opentelemetry::{
+    logs::{LogRecord as _, Logger as _, LoggerProvider as _, Severity},
     trace::{
         get_active_span, mark_span_as_active, Link, Span, SpanKind, Status, TraceContextExt,
         Tracer, TracerProvider,
@@ -194,9 +195,17 @@ async fn logs() {
         let price = 2.99;
         let colors = ("red", "green");
         let stock = HashMap::from([("red", 4)]);
-        log::error!("error!");
-        log::warn!("warn!");
         log::info!(fruit, price, colors:sval, stock:sval; "info! {fruit} is {price}");
+        log::warn!("warn!");
+        log::error!("error!");
+
+        let logger = logger_provider.logger("test");
+        let mut record = logger.create_log_record();
+        record.set_severity_number(Severity::Fatal);
+        record.add_attribute(semcov::trace::EXCEPTION_TYPE, "Foo");
+        record.add_attribute(semcov::trace::EXCEPTION_MESSAGE, "Foo broke");
+        record.add_attribute(semcov::trace::EXCEPTION_STACKTRACE, "A stack trace");
+        logger.emit(record);
 
         logger_provider.shutdown().unwrap();
     });

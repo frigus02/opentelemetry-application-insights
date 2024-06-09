@@ -1,5 +1,7 @@
 use crate::{
-    convert::{attrs_map_to_properties, attrs_to_map, time_to_string, AttrValue},
+    convert::{
+        attrs_map_to_properties, attrs_to_map, attrs_to_properties, time_to_string, AttrValue,
+    },
     models::{Data, Envelope, ExceptionData, ExceptionDetails, MessageData, SeverityLevel},
     tags::get_tags_for_log,
     Exporter,
@@ -14,48 +16,29 @@ use opentelemetry_sdk::{
 use opentelemetry_semantic_conventions as semcov;
 use std::{sync::Arc, time::SystemTime};
 
+fn is_exception(log: &LogData) -> bool {
+    if let Some(attrs) = &log.record.attributes {
+        attrs.iter().any(|(k, _)| {
+            k.as_str() == semcov::trace::EXCEPTION_TYPE
+                || k.as_str() == semcov::trace::EXCEPTION_MESSAGE
+        })
+    } else {
+        false
+    }
+}
+
 impl<C> Exporter<C> {
     fn create_envelope_for_log(&self, log: LogData) -> Envelope {
-        let attrs_map = if let Some(attrs) = log.record.attributes.as_ref() {
-            attrs_to_map(attrs)
+        let (data, name) = if is_exception(&log) {
+            (
+                Data::Exception((&log).into()),
+                "Microsoft.ApplicationInsights.Exception",
+            )
         } else {
-            Default::default()
-        };
-        let (data, name) = 'convert: {
-            if let Some(&exc_type) = attrs_map.get(semcov::trace::EXCEPTION_TYPE) {
-                let exception = ExceptionDetails {
-                    type_name: exc_type.as_str().into_owned().into(),
-                    message: attrs_map
-                        .get(semcov::trace::EXCEPTION_MESSAGE)
-                        .map(|&v| v.as_str().into_owned())
-                        .unwrap_or_else(|| "".into())
-                        .into(),
-                    stack: attrs_map
-                        .get(semcov::trace::EXCEPTION_STACKTRACE)
-                        .map(|&v| v.as_str().into_owned().into()),
-                };
-                let data = Data::Exception(ExceptionData {
-                    ver: 2,
-                    exceptions: vec![exception],
-                    severity_level: log.record.severity_number.map(Into::into),
-                    properties: attrs_map_to_properties(attrs_map),
-                });
-                break 'convert (data, "Microsoft.ApplicationInsights.Exception");
-            }
-
-            let data = Data::Message(MessageData {
-                ver: 2,
-                severity_level: log.record.severity_number.map(Into::into),
-                message: log
-                    .record
-                    .body
-                    .as_ref()
-                    .map(|v| (v as &dyn AttrValue).as_str().into_owned())
-                    .unwrap_or_else(|| "".into())
-                    .into(),
-                properties: attrs_map_to_properties(attrs_map),
-            });
-            (data, "Microsoft.ApplicationInsights.Message")
+            (
+                Data::Message((&log).into()),
+                "Microsoft.ApplicationInsights.Message",
+            )
         };
 
         Envelope {
@@ -121,6 +104,56 @@ impl From<Severity> for SeverityLevel {
             Severity::Fatal | Severity::Fatal2 | Severity::Fatal3 | Severity::Fatal4 => {
                 SeverityLevel::Critical
             }
+        }
+    }
+}
+
+impl From<&LogData> for ExceptionData {
+    fn from(log: &LogData) -> ExceptionData {
+        let mut attrs = if let Some(attrs) = log.record.attributes.as_ref() {
+            attrs_to_map(attrs)
+        } else {
+            Default::default()
+        };
+        let exception = ExceptionDetails {
+            type_name: attrs
+                .remove(semcov::trace::EXCEPTION_TYPE)
+                .map(Into::into)
+                .unwrap_or_else(|| "".into()),
+            message: attrs
+                .remove(semcov::trace::EXCEPTION_MESSAGE)
+                .map(Into::into)
+                .unwrap_or_else(|| "".into()),
+            stack: attrs
+                .remove(semcov::trace::EXCEPTION_STACKTRACE)
+                .map(Into::into),
+        };
+        ExceptionData {
+            ver: 2,
+            exceptions: vec![exception],
+            severity_level: log.record.severity_number.map(Into::into),
+            properties: attrs_map_to_properties(attrs),
+        }
+    }
+}
+
+impl From<&LogData> for MessageData {
+    fn from(log: &LogData) -> MessageData {
+        MessageData {
+            ver: 2,
+            severity_level: log.record.severity_number.map(Into::into),
+            message: log
+                .record
+                .body
+                .as_ref()
+                .map(|v| v.as_str().into_owned())
+                .unwrap_or_else(|| "".into())
+                .into(),
+            properties: log
+                .record
+                .attributes
+                .as_ref()
+                .and_then(|attrs| attrs_to_properties(attrs, None, &[])),
         }
     }
 }

@@ -30,16 +30,25 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
     DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-pub(crate) fn attrs_to_properties(
-    attributes: &[KeyValue],
-    resource: &Resource,
+pub(crate) fn attrs_to_properties<'a, T>(
+    attributes: &'a [T],
+    resource: Option<&Resource>,
     links: &[Link],
-) -> Option<Properties> {
+) -> Option<Properties>
+where
+    &'a T: Into<AttrKeyValue<'a>>,
+{
     let mut properties: Properties = attributes
         .iter()
-        .filter(|kv| !kv.key.as_str().starts_with("_MS."))
-        .map(|kv| ((&kv.key).into(), (&kv.value).into()))
-        .chain(resource.iter().map(|(k, v)| (k.into(), v.into())))
+        .map(|kv| kv.into())
+        .map(|kv| (kv.0, kv.1))
+        .chain(
+            resource
+                .iter()
+                .flat_map(|r| r.iter().map(|(k, v)| (k.as_str(), v as &dyn AttrValue))),
+        )
+        .filter(|(k, _)| !k.starts_with("_MS."))
+        .map(|(k, v)| (k.into(), v.as_str().into()))
         .collect();
 
     if !links.is_empty() {
@@ -189,15 +198,18 @@ mod tests {
     #[test]
     fn attrs_to_properties_filters_ms() {
         let attrs = vec![KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
-        let props = attrs_to_properties(&attrs, &Resource::empty(), &[]).unwrap();
-        assert_eq!(props.len(), 1);
+        let resource = Resource::new([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")]);
+        let props = attrs_to_properties(&attrs, Some(&resource), &[]).unwrap();
+        assert_eq!(props.len(), 2);
         assert_eq!(props.get(&"a".into()).unwrap().as_ref(), "b");
+        assert_eq!(props.get(&"c".into()).unwrap().as_ref(), "d");
     }
 
     #[test]
     fn attrs_to_properties_encodes_links() {
+        let attrs: Vec<KeyValue> = Vec::new();
         let links = vec![Link::new(SpanContext::empty_context(), Vec::new(), 0)];
-        let props = attrs_to_properties(&[], &Resource::empty(), &links).unwrap();
+        let props = attrs_to_properties(&attrs, None, &links).unwrap();
         assert_eq!(props.len(), 1);
         assert_eq!(
             props.get(&"_MS.links".into()).unwrap().as_ref(),
@@ -207,12 +219,13 @@ mod tests {
 
     #[test]
     fn attrs_to_properties_encodes_many_links() {
+        let attrs: Vec<KeyValue> = Vec::new();
         let input_len = MS_LINKS_MAX_LEN + 10;
         let mut links = Vec::with_capacity(input_len);
         for _ in 0..input_len {
             links.push(Link::new(SpanContext::empty_context(), Vec::new(), 0));
         }
-        let props = attrs_to_properties(&[], &Resource::empty(), &links).unwrap();
+        let props = attrs_to_properties(&attrs, None, &links).unwrap();
         assert_eq!(props.len(), 1);
         let encoded_links = props.get(&"_MS.links".into()).unwrap();
         let deserialized: serde_json::Value = serde_json::from_str(encoded_links.as_ref()).unwrap();
