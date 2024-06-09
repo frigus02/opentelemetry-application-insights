@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.33.0] - 2024-06-09
+
 - Add support for exporting logs, e.g. using one of the `opentelemetry-appender-*` crates.
 - Events with the `level` attribute set to `DEBUG`, not convert to a severity level "Verbose" (previously "Information"). This was done to align with Application Insights exporters in other languages.
 
@@ -261,7 +263,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.32.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.33.0...HEAD
+[0.33.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.32.0...0.33.0
 [0.32.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.31.0...0.32.0
 [0.31.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.30.0...0.31.0
 [0.30.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.29.0...0.30.0
