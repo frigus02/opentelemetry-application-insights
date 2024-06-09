@@ -77,10 +77,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let timer = Instant::now();
 
-    opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
+    let exporter =
+        opentelemetry_application_insights::new_exporter_from_env(reqwest::Client::new())
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist");
+    opentelemetry_application_insights::new_pipeline(exporter)
+        .traces()
         .with_service_name("stress-test")
-        .with_client(reqwest::Client::new())
         .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     for i in 1..num_root_spans + 1 {

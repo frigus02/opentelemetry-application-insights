@@ -69,9 +69,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::Client::new())
+    let exporter =
+        opentelemetry_application_insights::new_exporter_from_env(reqwest::Client::new())
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist");
+    let tracer = opentelemetry_application_insights::new_pipeline(exporter)
+        .traces()
         .install_batch(opentelemetry_sdk::runtime::Tokio);
 
     match traceparent {
