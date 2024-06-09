@@ -50,7 +50,7 @@ impl<C> Exporter<C> {
                     .unwrap_or_else(SystemTime::now),
             )
             .into(),
-            sample_rate: Some(self.sample_rate),
+            sample_rate: None,
             i_key: Some(self.instrumentation_key.clone().into()),
             tags: Some(get_tags_for_log(&log, &self.resource)),
             data: Some(data),
