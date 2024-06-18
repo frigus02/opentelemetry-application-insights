@@ -52,10 +52,10 @@ thiserror = "1"
 sysinfo = { version = "0.30", optional = true }
 
 [dev-dependencies]
-async-std = { version = "1.10.0", features = ["attributes"] }
+async-std = { version = "1.12.0", features = ["attributes"] }
 doc-comment = "0.3.3"
-env_logger = "0.11.2"
-insta = "1.13.0"
+env_logger = "0.11.3"
+insta = "1.39.0"
 isahc = "1.7.2"
 log = { version = "0.4", features = ["kv", "kv_sval"] }
 opentelemetry_sdk = { version = "0.23", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "logs_level_enabled"] }
@@ -63,11 +63,11 @@ opentelemetry-http = { version = "0.12", features = ["reqwest"] }
 opentelemetry-appender-log = { version = "0.4", features = ["with-serde"] }
 opentelemetry-application-insights = { path = ".", features = ["logs", "live-metrics"] }
 rand = "0.8.5"
-regex = "1.5.5"
+regex = "1.10.5"
 reqwest = { version = "0.11", features = ["blocking"] }
-test-case = "3.0.0"
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "process", "time"] }
-version-sync = { version = "0.9.4", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
+test-case = "3.3.1"
+tokio = { version = "1.38.0", features = ["rt-multi-thread", "macros", "process", "time"] }
+version-sync = { version = "0.9.5", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
 
 [badges]
 github = { repository = "frigus02/opentelemetry-application-insights", workflow = "CI" }
