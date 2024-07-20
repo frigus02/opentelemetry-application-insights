@@ -2,21 +2,23 @@ use crate::{
     convert::AttrValue,
     models::context_tag_keys::{self as tags, Tags, TAG_KEY_LOOKUP},
 };
-use opentelemetry::{
-    trace::{SpanId, SpanKind},
-    InstrumentationLibrary, Key,
-};
+#[cfg(feature = "trace")]
+use opentelemetry::trace::{SpanId, SpanKind};
+#[cfg(feature = "metrics")]
+use opentelemetry::KeyValue;
+use opentelemetry::{InstrumentationLibrary, Key};
 #[cfg(feature = "logs")]
 use opentelemetry_sdk::export::logs::LogData;
-#[cfg(feature = "metrics")]
-use opentelemetry_sdk::AttributeSet;
-use opentelemetry_sdk::{export::trace::SpanData, Resource};
+#[cfg(feature = "trace")]
+use opentelemetry_sdk::export::trace::SpanData;
+use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
 
-pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
+#[cfg(feature = "trace")]
+pub(crate) fn get_tags_for_span(span: &SpanData, resource: &Resource) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, &span.resource, &span.instrumentation_lib);
+    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_lib);
 
     let attrs_map = build_tags_from_attrs(
         &mut tags,
@@ -43,7 +45,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
             .get(semcov::trace::HTTP_REQUEST_METHOD)
             .or_else(|| {
                 #[allow(deprecated)]
-                attrs_map.get(semcov::trace::HTTP_METHOD)
+                attrs_map.get(semcov::attribute::HTTP_METHOD)
             });
         let route = attrs_map.get(semcov::trace::HTTP_ROUTE);
         if let (Some(method), Some(route)) = (method, route) {
@@ -57,9 +59,10 @@ pub(crate) fn get_tags_for_span(span: &SpanData) -> Tags {
     tags
 }
 
-pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
+#[cfg(feature = "trace")]
+pub(crate) fn get_tags_for_event(span: &SpanData, resource: &Resource) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, &span.resource, &span.instrumentation_lib);
+    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_lib);
 
     tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
     tags.insert(
@@ -73,13 +76,15 @@ pub(crate) fn get_tags_for_event(span: &SpanData) -> Tags {
 pub(crate) fn get_tags_for_metric(
     resource: &Resource,
     scope: &InstrumentationLibrary,
-    attrs: &AttributeSet,
+    attrs: &Vec<KeyValue>,
 ) -> Tags {
     let mut tags = Tags::new();
     build_tags_from_resource_attrs(&mut tags, resource, scope);
     build_tags_from_attrs(
         &mut tags,
-        attrs.iter().map(|(k, v)| (k, v as &dyn AttrValue)),
+        attrs
+            .iter()
+            .map(|kv| (&kv.key, &kv.value as &dyn AttrValue)),
     );
     tags
 }

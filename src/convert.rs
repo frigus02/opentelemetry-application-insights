@@ -1,18 +1,24 @@
-use crate::models::{serialize_ms_links, Properties, SeverityLevel, MS_LINKS_KEY};
+#[cfg(any(feature = "trace", feature = "logs"))]
+use crate::models::Properties;
+#[cfg(feature = "trace")]
+use crate::models::{serialize_ms_links, SeverityLevel, MS_LINKS_KEY};
 use chrono::{DateTime, SecondsFormat, Utc};
+#[cfg(feature = "trace")]
+use opentelemetry::trace::{Link, Status};
+#[cfg(any(feature = "trace", feature = "logs"))]
+use opentelemetry::KeyValue;
+use opentelemetry::Value;
 #[cfg(feature = "logs")]
 use opentelemetry::{logs::AnyValue, Key};
-use opentelemetry::{
-    trace::{Link, Status},
-    KeyValue, Value,
-};
+#[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+#[cfg(any(feature = "trace", feature = "logs"))]
+use std::collections::HashMap;
+#[cfg(feature = "trace")]
+use std::time::Duration;
+use std::{borrow::Cow, time::SystemTime};
 
+#[cfg(feature = "trace")]
 pub(crate) fn duration_to_string(duration: Duration) -> String {
     let micros = duration.as_micros();
     let s = micros / 1_000_000 % 60;
@@ -30,14 +36,16 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
     DateTime::<Utc>::from(time).to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) fn attrs_to_properties<'a, T>(
     attributes: &'a [T],
     resource: Option<&Resource>,
-    links: &[Link],
+    #[cfg(feature = "trace")] links: &[Link],
 ) -> Option<Properties>
 where
     &'a T: Into<AttrKeyValue<'a>>,
 {
+    #[allow(unused_mut)]
     let mut properties: Properties = attributes
         .iter()
         .map(|kv| kv.into())
@@ -51,6 +59,7 @@ where
         .map(|(k, v)| (k.into(), v.as_str().into()))
         .collect();
 
+    #[cfg(feature = "trace")]
     if !links.is_empty() {
         properties.insert(MS_LINKS_KEY.into(), serialize_ms_links(links).into());
     }
@@ -58,6 +67,7 @@ where
     Some(properties).filter(|x| !x.is_empty())
 }
 
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) fn attrs_to_map<'a, T>(attributes: &'a [T]) -> HashMap<&str, &dyn AttrValue>
 where
     &'a T: Into<AttrKeyValue<'a>>,
@@ -69,6 +79,7 @@ where
         .collect()
 }
 
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) fn attrs_map_to_properties(
     attributes: HashMap<&str, &dyn AttrValue>,
 ) -> Option<Properties> {
@@ -81,6 +92,7 @@ pub(crate) fn attrs_map_to_properties(
     Some(properties).filter(|x| !x.is_empty())
 }
 
+#[cfg(feature = "trace")]
 pub(crate) fn status_to_result_code(status: &Status) -> i32 {
     // Since responseCode is a required field for RequestData, we map the span status to come kind
     // of result code representation. Numbers 1-3 were chosen because in opentelemetry@0.17.0
@@ -92,6 +104,7 @@ pub(crate) fn status_to_result_code(status: &Status) -> i32 {
     }
 }
 
+#[cfg(feature = "trace")]
 pub(crate) fn value_to_severity_level(value: &dyn AttrValue) -> Option<SeverityLevel> {
     match value.as_str().as_ref() {
         // Convert from `tracing` Level.
@@ -105,8 +118,10 @@ pub(crate) fn value_to_severity_level(value: &dyn AttrValue) -> Option<SeverityL
     }
 }
 
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) struct AttrKeyValue<'a>(&'a str, &'a dyn AttrValue);
 
+#[cfg(any(feature = "trace", feature = "logs"))]
 impl<'a> From<&'a KeyValue> for AttrKeyValue<'a> {
     fn from(kv: &'a KeyValue) -> Self {
         AttrKeyValue(kv.key.as_str(), &kv.value as &dyn AttrValue)

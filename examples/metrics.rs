@@ -1,4 +1,4 @@
-use opentelemetry::{global, metrics::Unit, KeyValue};
+use opentelemetry::{global, KeyValue};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Observable
     let _cpu_utilization_gauge = meter
         .f64_observable_gauge("system.cpu.utilization")
-        .with_unit(Unit::new("1"))
+        .with_unit("1")
         .with_callback(|instrument| {
             let mut rng = thread_rng();
             instrument.observe(
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Recorder
     let server_duration = meter
         .u64_histogram("http.server.duration")
-        .with_unit(Unit::new("milliseconds"))
+        .with_unit("milliseconds")
         .init();
     let mut rng = thread_rng();
     for _ in 1..10 {

@@ -7,6 +7,10 @@
 //!
 //! # Usage
 //!
+//! ## Trace
+//!
+//! This requires the **trace** feature (enabled by default).
+//!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
 //! spans (this example requires the **opentelemetry-http/reqwest** feature):
 //!
@@ -21,6 +25,104 @@
 //!         .install_simple();
 //!
 //!     tracer.in_span("main", |_cx| {});
+//! }
+//! ```
+//!
+//! ## Logs
+//!
+//! This requires the **logs** feature (enabled by default).
+//!
+//! ```no_run
+//! use log::{Level, info};
+//! use opentelemetry_appender_log::OpenTelemetryLogBridge;
+//! use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     // Setup exporter
+//!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+//!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+//!         connection_string,
+//!         reqwest::Client::new(),
+//!     )
+//!     .expect("valid connection string");
+//!     let logger_provider = LoggerProvider::builder()
+//!         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+//!         .build();
+//!     let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
+//!     log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
+//!     log::set_max_level(Level::Info.to_level_filter());
+//!
+//!     // Log
+//!     let fruit = "apple";
+//!     let price = 2.99;
+//!     info!("{fruit} costs {price}");
+//!
+//!     // Export remaining logs before exiting
+//!     let _ = logger_provider.shutdown();
+//! }
+//! ```
+//!
+//! ## Metrics
+//!
+//! This requires the **metrics** feature (enabled by default).
+//!
+//! ```no_run
+//! use opentelemetry::global;
+//! use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+//! use std::time::Duration;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     // Setup exporter
+//!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+//!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+//!         connection_string,
+//!         reqwest::Client::new(),
+//!     )
+//!     .expect("valid connection string");
+//!     let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
+//!     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
+//!     global::set_meter_provider(meter_provider);
+//!
+//!     // Record value
+//!     let meter = global::meter("example");
+//!     let histogram = meter.f64_histogram("pi").init();
+//!     histogram.record(3.14, &[]);
+//!
+//!     // Simulate work, during which metrics will periodically be reported.
+//!     tokio::time::sleep(Duration::from_secs(300)).await;
+//! }
+//! ```
+//!
+//! ## Live Metrics
+//!
+//! This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
+//!
+//! Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
+//!
+//! Metrics are based on traces. See attribute mapping below for how traces are mapped to requests,
+//! dependencies and exceptions and how they are deemed "successful" or not.
+//!
+//! To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
+//! `host.name` resource attributes respectively in the trace config.
+//!
+//! Sample telemetry is not supported, yet.
+//!
+//! ```no_run
+//! use opentelemetry::trace::Tracer as _;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
+//!         .with_client(reqwest::Client::new())
+//!         .with_live_metrics(true)
+//!         .install_batch(opentelemetry_sdk::runtime::Tokio);
+//!
+//!     // ... send traces ...
+//!
+//!     opentelemetry::global::shutdown_tracer_provider();
 //! }
 //! ```
 //!
@@ -59,8 +161,6 @@
 //! client that works with your chosen runtime. The [`opentelemetry-http`] crate comes with support
 //! for:
 //!
-//! - [`isahc`]: enable the **opentelemetry-http/isahc** feature and configure the exporter with
-//!   `with_client(isahc::HttpClient::new()?)`.
 //! - [`reqwest`]: enable the **opentelemetry-http/reqwest** feature and configure the exporter
 //!   with either `with_client(reqwest::Client::new())` or
 //!   `with_client(reqwest::blocking::Client::new())`.
@@ -69,121 +169,9 @@
 //! [`async-std`]: https://crates.io/crates/async-std
 //! [`opentelemetry-http`]: https://crates.io/crates/opentelemetry-http
 //! [`reqwest`]: https://crates.io/crates/reqwest
-//! [`isahc`]: https://crates.io/crates/isahc
 //! [`tokio`]: https://crates.io/crates/tokio
 //!
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
-//!
-#![cfg_attr(
-    feature = "logs",
-    doc = r#"
-## Logs
-
-This requires the **logs** feature.
-
-```no_run
-use log::{Level, info};
-use opentelemetry_appender_log::OpenTelemetryLogBridge;
-use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
-
-#[tokio::main]
-async fn main() {
-    // Setup exporter
-    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
-    let logger_provider = LoggerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .build();
-    let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
-    log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
-    log::set_max_level(Level::Info.to_level_filter());
-
-    // Log
-    let fruit = "apple";
-    let price = 2.99;
-    info!("{fruit} costs {price}");
-
-    // Export remaining logs before exiting
-    let _ = logger_provider.shutdown();
-}
-```
-"#
-)]
-#![cfg_attr(
-    feature = "metrics",
-    doc = r#"
-## Metrics
-
-This requires the **metrics** feature.
-
-```no_run
-use opentelemetry::global;
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
-use std::time::Duration;
-
-#[tokio::main]
-async fn main() {
-    // Setup exporter
-    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
-    let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-    global::set_meter_provider(meter_provider);
-
-    // Record value
-    let meter = global::meter("example");
-    let histogram = meter.f64_histogram("pi").init();
-    histogram.record(3.14, &[]);
-
-    // Simulate work, during which metrics will periodically be reported.
-    tokio::time::sleep(Duration::from_secs(300)).await;
-}
-```
-"#
-)]
-#![cfg_attr(
-    feature = "live-metrics",
-    doc = r#"
-## Live Metrics
-
-Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
-
-Metrics are based on traces. See attribute mapping below for how traces are mapped to requests,
-dependencies and exceptions and how they are deemed "successful" or not.
-
-To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
-`host.name` resource attributes respectively in the trace config.
-
-Sample telemetry is not supported, yet.
-
-This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
-
-```no_run
-use opentelemetry::trace::Tracer as _;
-
-#[tokio::main]
-async fn main() {
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
-        .with_client(reqwest::Client::new())
-        .with_live_metrics(true)
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
-
-    // ... send traces ...
-
-    opentelemetry::global::shutdown_tracer_provider();
-}
-```
-"#
-)]
 //!
 //! # Attribute mapping
 //!
@@ -247,11 +235,11 @@ async fn main() {
 //! | `SpanKind::Server` + `http.request.method` + `http.route`                  | Context: Operation Name (`ai.operation.name`)            |
 //! | `ai.*`                                                                     | Context: AppInsights Tag (`ai.*`)                        |
 //! | `url.full`                                                                 | Dependency Data                                          |
-//! | `db.statement`                                                             | Dependency Data                                          |
+//! | `db.query.text`                                                            | Dependency Data                                          |
 //! | `http.request.header.host`                                                 | Dependency Target                                        |
 //! | `server.address` + `server.port`                                           | Dependency Target                                        |
 //! | `network.peer.address` + `network.peer.port`                               | Dependency Target                                        |
-//! | `db.name`                                                                  | Dependency Target                                        |
+//! | `db.namespace`                                                             | Dependency Target                                        |
 //! | `http.response.status_code`                                                | Dependency Result code                                   |
 //! | `db.system`                                                                | Dependency Type                                          |
 //! | `messaging.system`                                                         | Dependency Type                                          |
@@ -275,6 +263,8 @@ async fn main() {
 //!
 //! | Attribute                   | Deprecated attribute                       |
 //! | --------------------------- | ------------------------------------------ |
+//! | `db.namespace`              | `db.name`                                  |
+//! | `db.query.text`             | `db.statement`                             |
 //! | `http.request.method`       | `http.method`                              |
 //! | `http.request.header.host`  | `http.host`                                |
 //! | `http.response.status_code` | `http.status_code`                         |
@@ -349,6 +339,7 @@ async fn main() {
 //!
 //! [`Aggregation`]: https://docs.rs/opentelemetry/0.20.0/opentelemetry/sdk/metrics/data/trait.Aggregation.html
 #![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.33.0")]
+#![allow(clippy::needless_doctest_main)]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]
@@ -365,6 +356,7 @@ mod quick_pulse;
 #[cfg(doctest)]
 mod readme_test;
 mod tags;
+#[cfg(feature = "trace")]
 mod trace;
 mod uploader;
 #[cfg(feature = "live-metrics")]
@@ -374,22 +366,30 @@ mod uploader_quick_pulse;
 use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
+#[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
+use opentelemetry_sdk::export::ExportError;
 #[cfg(feature = "metrics")]
 use opentelemetry_sdk::metrics::reader::{AggregationSelector, DefaultAggregationSelector};
+#[cfg(any(feature = "trace", feature = "logs"))]
+use opentelemetry_sdk::Resource;
+#[cfg(feature = "trace")]
 use opentelemetry_sdk::{
-    export::ExportError,
     runtime::RuntimeChannel,
     trace::{Config, Tracer, TracerProvider},
-    Resource,
 };
+#[cfg(feature = "trace")]
 use opentelemetry_semantic_conventions as semcov;
 #[cfg(feature = "live-metrics")]
 use quick_pulse::QuickPulseManager;
-use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
+#[cfg(feature = "trace")]
+use std::convert::TryInto;
+use std::{error::Error as StdError, fmt::Debug, sync::Arc};
 
 /// Create a new Application Insights exporter pipeline builder
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 #[deprecated(
     since = "0.27.0",
     note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
@@ -420,6 +420,8 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 pub fn new_pipeline_from_connection_string(
     connection_string: impl AsRef<str>,
 ) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
@@ -449,6 +451,8 @@ pub fn new_pipeline_from_connection_string(
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 pub fn new_pipeline_from_env(
 ) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
     let connection_string: ConnectionString =
@@ -467,6 +471,8 @@ pub fn new_pipeline_from_env(
 }
 
 /// Application Insights exporter pipeline builder
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 #[derive(Debug)]
 pub struct PipelineBuilder<C> {
     client: C,
@@ -480,6 +486,8 @@ pub struct PipelineBuilder<C> {
     sample_rate: Option<f64>,
 }
 
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 impl<C> PipelineBuilder<C> {
     /// Set HTTP client, which the exporter will use to send telemetry to Application Insights.
     ///
@@ -621,6 +629,8 @@ impl<C> PipelineBuilder<C> {
     }
 }
 
+#[cfg(feature = "trace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 impl<C> PipelineBuilder<C>
 where
     C: HttpClient + 'static,
@@ -635,7 +645,6 @@ where
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
-            #[cfg(feature = "logs")]
             resource: Resource::empty(),
         }
     }
@@ -720,10 +729,11 @@ pub struct Exporter<C> {
     client: Arc<C>,
     endpoint: Arc<http::Uri>,
     instrumentation_key: String,
+    #[cfg(feature = "trace")]
     sample_rate: f64,
     #[cfg(feature = "metrics")]
     aggregation_selector: Box<dyn AggregationSelector>,
-    #[cfg(feature = "logs")]
+    #[cfg(any(feature = "trace", feature = "logs"))]
     resource: Resource,
 }
 
@@ -733,8 +743,9 @@ impl<C: Debug> Debug for Exporter<C> {
         debug
             .field("client", &self.client)
             .field("endpoint", &self.endpoint)
-            .field("instrumentation_key", &self.instrumentation_key)
-            .field("sample_rate", &self.sample_rate);
+            .field("instrumentation_key", &self.instrumentation_key);
+        #[cfg(feature = "trace")]
+        debug.field("sample_rate", &self.sample_rate);
         debug.finish()
     }
 }
@@ -750,10 +761,11 @@ impl<C> Exporter<C> {
                     .expect("appending /v2/track should always work"),
             ),
             instrumentation_key,
+            #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
-            #[cfg(feature = "logs")]
+            #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::empty(),
         }
     }
@@ -771,10 +783,11 @@ impl<C> Exporter<C> {
                     .expect("appending /v2/track should always work"),
             ),
             instrumentation_key: connection_string.instrumentation_key,
+            #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(feature = "metrics")]
             aggregation_selector: Box::new(DefaultAggregationSelector::new()),
-            #[cfg(feature = "logs")]
+            #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::empty(),
         })
     }
@@ -796,6 +809,8 @@ impl<C> Exporter<C> {
     /// between 0 and 1 and match the rate given to the sampler.
     ///
     /// Default: 1.0
+    #[cfg(feature = "trace")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;

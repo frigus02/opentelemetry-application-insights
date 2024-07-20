@@ -8,16 +8,14 @@ use async_trait::async_trait;
 use opentelemetry::{
     global,
     metrics::{MetricsError, Result as MetricsResult},
+    KeyValue,
 };
 use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::{
-    metrics::{
-        data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
-        exporter::PushMetricsExporter,
-        reader::{AggregationSelector, TemporalitySelector},
-        Aggregation, InstrumentKind,
-    },
-    AttributeSet,
+use opentelemetry_sdk::metrics::{
+    data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
+    exporter::PushMetricsExporter,
+    reader::{AggregationSelector, TemporalitySelector},
+    Aggregation, InstrumentKind,
 };
 use std::{convert::TryInto, sync::Arc, time::SystemTime};
 
@@ -78,7 +76,7 @@ where
                                 .iter()
                                 .map(|kv| (&kv.key, &kv.value)),
                         )
-                        .chain(data.attrs.iter())
+                        .chain(data.attrs.iter().map(|kv| (&kv.key, &kv.value)))
                         .map(|(k, v)| (k.as_str().into(), v.into()))
                         .collect();
                     envelopes.push(Envelope {
@@ -113,7 +111,7 @@ where
 struct EnvelopeData {
     time: SystemTime,
     data: DataPoint,
-    attrs: AttributeSet,
+    attrs: Vec<KeyValue>,
 }
 
 trait ToF64Lossy {

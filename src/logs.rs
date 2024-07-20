@@ -14,7 +14,7 @@ use opentelemetry_sdk::{
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::{sync::Arc, time::SystemTime};
+use std::{borrow::Cow, sync::Arc, time::SystemTime};
 
 fn is_exception(log: &LogData) -> bool {
     if let Some(attrs) = &log.record.attributes {
@@ -28,15 +28,15 @@ fn is_exception(log: &LogData) -> bool {
 }
 
 impl<C> Exporter<C> {
-    fn create_envelope_for_log(&self, log: LogData) -> Envelope {
+    fn create_envelope_for_log(&self, log: &LogData) -> Envelope {
         let (data, name) = if is_exception(&log) {
             (
-                Data::Exception((&log).into()),
+                Data::Exception(log.into()),
                 "Microsoft.ApplicationInsights.Exception",
             )
         } else {
             (
-                Data::Message((&log).into()),
+                Data::Message(log.into()),
                 "Microsoft.ApplicationInsights.Message",
             )
         };
@@ -64,12 +64,12 @@ impl<C> LogExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export(&mut self, batch: Vec<LogData>) -> LogResult<()> {
+    async fn export<'a>(&mut self, batch: Vec<Cow<'a, LogData>>) -> LogResult<()> {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
             .into_iter()
-            .map(|log| self.create_envelope_for_log(log))
+            .map(|log| self.create_envelope_for_log(&log))
             .collect();
 
         crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
@@ -149,11 +149,14 @@ impl From<&LogData> for MessageData {
                 .map(|v| v.as_str().into_owned())
                 .unwrap_or_else(|| "".into())
                 .into(),
-            properties: log
-                .record
-                .attributes
-                .as_ref()
-                .and_then(|attrs| attrs_to_properties(attrs, None, &[])),
+            properties: log.record.attributes.as_ref().and_then(|attrs| {
+                attrs_to_properties(
+                    attrs,
+                    None,
+                    #[cfg(feature = "trace")]
+                    &[],
+                )
+            }),
         }
     }
 }

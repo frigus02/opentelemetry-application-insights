@@ -134,7 +134,7 @@ impl<R: RuntimeChannel> SpanProcessor for QuickPulseManager<R> {
         Ok(())
     }
 
-    fn shutdown(&mut self) -> TraceResult<()> {
+    fn shutdown(&self) -> TraceResult<()> {
         self.message_sender
             .try_send(Message::Stop)
             .map_err(Error::QuickPulseShutdown)?;

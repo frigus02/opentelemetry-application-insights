@@ -16,6 +16,21 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - name: Run cargo build (trace only)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features trace
+      - name: Run cargo build (logs only)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features logs
+      - name: Run cargo build (metrics only)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features metrics
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
