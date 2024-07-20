@@ -127,6 +127,7 @@ impl<C> Exporter<C> {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 impl<C> SpanExporter for Exporter<C>
 where
     C: HttpClient + 'static,

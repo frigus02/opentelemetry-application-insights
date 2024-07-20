@@ -9,6 +9,8 @@
 //!
 //! ## Trace
 //!
+//! This requires the **trace** feature (enabled by default).
+//!
 //! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
 //! spans (this example requires the **opentelemetry-http/reqwest** feature):
 //!
@@ -27,6 +29,8 @@
 //! ```
 //!
 //! ## Logs
+//!
+//! This requires the **logs** feature (enabled by default).
 //!
 //! ```no_run
 //! use log::{Level, info};
@@ -60,6 +64,8 @@
 //! ```
 //!
 //! ## Metrics
+//!
+//! This requires the **metrics** feature (enabled by default).
 //!
 //! ```no_run
 //! use opentelemetry::global;
