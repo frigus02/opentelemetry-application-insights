@@ -44,7 +44,7 @@ opentelemetry = "0.23"
 opentelemetry_sdk = "0.23"
 opentelemetry-http = "0.12"
 opentelemetry-semantic-conventions = "0.15"
-reqwest = { version = "0.11", default-features = false, features = ["blocking"], optional = true }
+reqwest = { version = ">=0.11", default-features = false, features = ["blocking"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
@@ -64,7 +64,7 @@ opentelemetry-appender-log = { version = "0.4", features = ["with-serde"] }
 opentelemetry-application-insights = { path = ".", features = ["logs", "live-metrics"] }
 rand = "0.8.5"
 regex = "1.10.5"
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = ">=0.11", features = ["blocking"] }
 test-case = "3.3.1"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "macros", "process", "time"] }
 version-sync = { version = "0.9.5", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
