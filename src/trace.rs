@@ -15,7 +15,10 @@ use opentelemetry::{
     Value,
 };
 use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
+use opentelemetry_sdk::{
+    export::trace::{ExportResult, SpanData, SpanExporter},
+    Resource,
+};
 use opentelemetry_semantic_conventions as semcov;
 use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Duration};
 
@@ -63,13 +66,13 @@ pub(crate) const EVENT_NAME_CUSTOM: &str = "ai.custom";
 pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
 
 impl<C> Exporter<C> {
-    fn create_envelopes_for_span(&self, span: SpanData) -> Vec<Envelope> {
+    fn create_envelopes_for_span(&self, span: SpanData, resource: &Resource) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.events.len());
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
-                let data: RequestData = (&span).into();
-                let tags = get_tags_for_span(&span);
+                let data: RequestData = SpanAndResource(&span, resource).into();
+                let tags = get_tags_for_span(&span, resource);
                 (
                     Data::Request(data),
                     tags,
@@ -77,8 +80,8 @@ impl<C> Exporter<C> {
                 )
             }
             SpanKind::Client | SpanKind::Producer | SpanKind::Internal => {
-                let data: RemoteDependencyData = (&span).into();
-                let tags = get_tags_for_span(&span);
+                let data: RemoteDependencyData = SpanAndResource(&span, resource).into();
+                let tags = get_tags_for_span(&span, resource);
                 (
                     Data::RemoteDependency(data),
                     tags,
@@ -115,7 +118,7 @@ impl<C> Exporter<C> {
                 time: time_to_string(event.timestamp).into(),
                 sample_rate: Some(self.sample_rate),
                 i_key: Some(self.instrumentation_key.clone().into()),
-                tags: Some(get_tags_for_event(&span)),
+                tags: Some(get_tags_for_event(&span, resource)),
                 data: Some(data),
             });
         }
@@ -134,13 +137,17 @@ where
         let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
             .into_iter()
-            .flat_map(|span| self.create_envelopes_for_span(span))
+            .flat_map(|span| self.create_envelopes_for_span(span, &self.resource))
             .collect();
 
         Box::pin(async move {
             crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
             Ok(())
         })
+    }
+
+    fn set_resource(&mut self, resource: &Resource) {
+        self.resource = resource.clone();
     }
 }
 
@@ -155,7 +162,7 @@ fn get_url_path_and_query<'v>(attrs: &HashMap<&str, &'v Value>) -> Option<Cow<'v
         attrs
             .get(
                 #[allow(deprecated)]
-                semcov::trace::HTTP_TARGET,
+                semcov::attribute::HTTP_TARGET,
             )
             .map(|target| target.as_str())
     }
@@ -170,13 +177,13 @@ fn get_server_host<'v>(attrs: &HashMap<&str, &'v Value>) -> Option<Cow<'v, str>>
         attrs.get(semcov::trace::SERVER_ADDRESS).or_else(|| {
             attrs.get(
                 #[allow(deprecated)]
-                semcov::trace::NET_HOST_NAME,
+                semcov::attribute::NET_HOST_NAME,
             )
         }),
         attrs.get(semcov::trace::SERVER_PORT).or_else(|| {
             attrs.get(
                 #[allow(deprecated)]
-                semcov::trace::NET_HOST_PORT,
+                semcov::attribute::NET_HOST_PORT,
             )
         }),
     ) {
@@ -204,8 +211,12 @@ pub(crate) fn is_remote_dependency_success(span: &SpanData) -> Option<bool> {
     }
 }
 
-impl From<&SpanData> for RequestData {
-    fn from(span: &SpanData) -> RequestData {
+struct SpanAndResource<'a>(&'a SpanData, &'a Resource);
+
+impl<'a> From<SpanAndResource<'a>> for RequestData {
+    fn from(s: SpanAndResource<'a>) -> RequestData {
+        let span = s.0;
+        let resource = s.1;
         let mut data = RequestData {
             ver: 2,
             id: span.span_context.span_id().to_string().into(),
@@ -216,11 +227,7 @@ impl From<&SpanData> for RequestData {
             success: is_request_success(span),
             source: None,
             url: None,
-            properties: attrs_to_properties(
-                &span.attributes,
-                Some(&span.resource),
-                &span.links.links,
-            ),
+            properties: attrs_to_properties(&span.attributes, Some(resource), &span.links.links),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -231,7 +238,7 @@ impl From<&SpanData> for RequestData {
 
         if let Some(&method) = attrs.get(semcov::trace::HTTP_REQUEST_METHOD).or_else(|| {
             #[allow(deprecated)]
-            attrs.get(semcov::trace::HTTP_METHOD)
+            attrs.get(semcov::attribute::HTTP_METHOD)
         }) {
             data.name = Some(if let Some(route) = attrs.get(semcov::trace::HTTP_ROUTE) {
                 format!("{} {}", method.as_str(), route.as_str()).into()
@@ -244,7 +251,7 @@ impl From<&SpanData> for RequestData {
             data.response_code = status_code.into();
         } else if let Some(&status_code) = attrs.get(
             #[allow(deprecated)]
-            semcov::trace::HTTP_STATUS_CODE,
+            semcov::attribute::HTTP_STATUS_CODE,
         ) {
             data.response_code = status_code.into();
         }
@@ -253,7 +260,7 @@ impl From<&SpanData> for RequestData {
             data.url = Some(url.into());
         } else if let Some(&url) = attrs.get(
             #[allow(deprecated)]
-            semcov::trace::HTTP_URL,
+            semcov::attribute::HTTP_URL,
         ) {
             data.url = Some(url.into());
         } else if let Some(target) = get_url_path_and_query(&attrs) {
@@ -266,7 +273,7 @@ impl From<&SpanData> for RequestData {
                 attrs.get(semcov::trace::URL_SCHEME).or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        semcov::trace::HTTP_SCHEME,
+                        semcov::attribute::HTTP_SCHEME,
                     )
                 }),
                 get_server_host(&attrs),
@@ -287,7 +294,7 @@ impl From<&SpanData> for RequestData {
             data.source = Some(peer_addr.into());
         } else if let Some(&peer_addr) = attrs.get(
             #[allow(deprecated)]
-            semcov::trace::NET_SOCK_PEER_ADDR,
+            semcov::attribute::NET_SOCK_PEER_ADDR,
         ) {
             data.source = Some(peer_addr.into());
         } else if let Some(&peer_ip) = attrs.get(DEPRECATED_NET_PEER_IP) {
@@ -298,8 +305,10 @@ impl From<&SpanData> for RequestData {
     }
 }
 
-impl From<&SpanData> for RemoteDependencyData {
-    fn from(span: &SpanData) -> RemoteDependencyData {
+impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
+    fn from(s: SpanAndResource<'a>) -> RemoteDependencyData {
+        let span = s.0;
+        let resource = s.1;
         let mut data = RemoteDependencyData {
             ver: 2,
             id: Some(span.span_context.span_id().to_string().into()),
@@ -310,11 +319,7 @@ impl From<&SpanData> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(
-                &span.attributes,
-                Some(&span.resource),
-                &span.links.links,
-            ),
+            properties: attrs_to_properties(&span.attributes, Some(resource), &span.links.links),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -327,7 +332,7 @@ impl From<&SpanData> for RemoteDependencyData {
             data.result_code = Some(status_code.into());
         } else if let Some(&status_code) = attrs.get(
             #[allow(deprecated)]
-            semcov::trace::HTTP_STATUS_CODE,
+            semcov::attribute::HTTP_STATUS_CODE,
         ) {
             data.result_code = Some(status_code.into());
         }
@@ -336,10 +341,15 @@ impl From<&SpanData> for RemoteDependencyData {
             data.data = Some(url.into());
         } else if let Some(&url) = attrs.get(
             #[allow(deprecated)]
-            semcov::trace::HTTP_URL,
+            semcov::attribute::HTTP_URL,
         ) {
             data.data = Some(url.into());
-        } else if let Some(&statement) = attrs.get(semcov::trace::DB_STATEMENT) {
+        } else if let Some(&statement) = attrs.get(semcov::attribute::DB_QUERY_TEXT).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                semcov::attribute::DB_STATEMENT,
+            )
+        }) {
             data.data = Some(statement.into());
         }
 
@@ -354,19 +364,19 @@ impl From<&SpanData> for RemoteDependencyData {
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    semcov::trace::NET_SOCK_PEER_NAME,
+                    semcov::attribute::NET_SOCK_PEER_NAME,
                 )
             })
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    semcov::trace::NET_PEER_NAME,
+                    semcov::attribute::NET_PEER_NAME,
                 )
             })
             .or_else(|| {
                 attrs.get(
                     #[allow(deprecated)]
-                    semcov::trace::NET_SOCK_PEER_ADDR,
+                    semcov::attribute::NET_SOCK_PEER_ADDR,
                 )
             })
             .or_else(|| attrs.get(DEPRECATED_NET_PEER_IP))
@@ -378,13 +388,13 @@ impl From<&SpanData> for RemoteDependencyData {
                 .or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        semcov::trace::NET_SOCK_PEER_PORT,
+                        semcov::attribute::NET_SOCK_PEER_PORT,
                     )
                 })
                 .or_else(|| {
                     attrs.get(
                         #[allow(deprecated)]
-                        semcov::trace::NET_PEER_PORT,
+                        semcov::attribute::NET_PEER_PORT,
                     )
                 })
             {
@@ -392,7 +402,12 @@ impl From<&SpanData> for RemoteDependencyData {
             } else {
                 data.target = Some(peer_name.into());
             }
-        } else if let Some(&db_name) = attrs.get(semcov::trace::DB_NAME) {
+        } else if let Some(&db_name) = attrs.get(semcov::attribute::DB_NAMESPACE).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                semcov::attribute::DB_NAME,
+            )
+        }) {
             data.target = Some(db_name.into());
         }
 

@@ -23,28 +23,33 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
+default = ["trace", "metrics", "logs"]
+trace = ["opentelemetry_sdk/trace"]
+metrics = ["opentelemetry_sdk/metrics"]
+logs = ["opentelemetry_sdk/logs"]
+live-metrics = ["trace", "futures-util", "sysinfo"]
+# Deprecated features: These don't enable anything in
+# opentelemetry-application-insights. They only enable features in dependency
+# crates.
 reqwest-blocking-client = ["reqwest-client"]
 reqwest-blocking-client-rustls = ["reqwest-client-rustls"]
 reqwest-client = ["opentelemetry-http/reqwest", "reqwest/native-tls"]
 reqwest-client-vendored-tls = ["opentelemetry-http/reqwest", "reqwest/native-tls-vendored"]
 reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
-metrics = ["opentelemetry_sdk/metrics"]
-logs = ["opentelemetry_sdk/logs"]
-live-metrics = ["futures-util", "sysinfo"]
 
 [dependencies]
 async-trait = "0.1"
 bytes = "1"
 chrono = "0.4"
 flate2 = "1"
-http = "0.2"
+http = "1"
 once_cell = "1"
 futures-util = { version = "0.3", default-features = false, optional = true }
-opentelemetry = "0.23"
-opentelemetry_sdk = "0.23"
-opentelemetry-http = "0.12"
-opentelemetry-semantic-conventions = "0.15"
-reqwest = { version = "0.11", default-features = false, features = ["blocking"], optional = true }
+opentelemetry = "0.24"
+opentelemetry_sdk = "0.24"
+opentelemetry-http = "0.13"
+opentelemetry-semantic-conventions = "0.16"
+reqwest = { version = "0.12", default-features = false, features = ["blocking"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
@@ -56,15 +61,13 @@ async-std = { version = "1.12.0", features = ["attributes"] }
 doc-comment = "0.3.3"
 env_logger = "0.11.3"
 insta = "1.39.0"
-isahc = "1.7.2"
 log = { version = "0.4", features = ["kv", "kv_sval"] }
-opentelemetry_sdk = { version = "0.23", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "logs_level_enabled"] }
-opentelemetry-http = { version = "0.12", features = ["reqwest"] }
-opentelemetry-appender-log = { version = "0.4", features = ["with-serde"] }
-opentelemetry-application-insights = { path = ".", features = ["logs", "live-metrics"] }
+opentelemetry_sdk = { version = "0.24", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "logs_level_enabled"] }
+opentelemetry-http = { version = "0.13", features = ["reqwest"] }
+opentelemetry-appender-log = { version = "0.5", features = ["with-serde"] }
 rand = "0.8.5"
 regex = "1.10.5"
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking"] }
 test-case = "3.3.1"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "macros", "process", "time"] }
 version-sync = { version = "0.9.5", default-features = false, features = ["html_root_url_updated", "contains_regex"] }
@@ -75,10 +78,6 @@ github = { repository = "frigus02/opentelemetry-application-insights", workflow 
 [[example]]
 name = "attributes"
 required-features = ["opentelemetry-http/reqwest"]
-
-[[example]]
-name = "http_client_isahc"
-required-features = ["opentelemetry_sdk/rt-async-std", "opentelemetry-http/isahc"]
 
 [[example]]
 name = "http_client_reqwest"

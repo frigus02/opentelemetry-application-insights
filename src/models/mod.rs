@@ -3,36 +3,52 @@ mod data;
 #[cfg(feature = "metrics")]
 mod data_point;
 mod envelope;
+#[cfg(feature = "trace")]
 mod event_data;
+#[cfg(any(feature = "trace", feature = "logs"))]
 mod exception_data;
+#[cfg(any(feature = "trace", feature = "logs"))]
 mod exception_details;
+#[cfg(any(feature = "trace", feature = "logs"))]
 mod message_data;
 #[cfg(feature = "metrics")]
 mod metric_data;
+#[cfg(feature = "trace")]
 mod ms_link;
 #[cfg(feature = "live-metrics")]
 mod quick_pulse;
+#[cfg(feature = "trace")]
 mod remote_dependency_data;
+#[cfg(feature = "trace")]
 mod request_data;
 mod sanitize;
+#[cfg(any(feature = "trace", feature = "logs"))]
 mod severity_level;
 
 pub(crate) use data::*;
 #[cfg(feature = "metrics")]
 pub(crate) use data_point::*;
 pub(crate) use envelope::*;
+#[cfg(feature = "trace")]
 pub(crate) use event_data::*;
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) use exception_data::*;
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) use exception_details::*;
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) use message_data::*;
 #[cfg(feature = "metrics")]
 pub(crate) use metric_data::*;
+#[cfg(feature = "trace")]
 pub(crate) use ms_link::*;
 #[cfg(feature = "live-metrics")]
 pub(crate) use quick_pulse::*;
+#[cfg(feature = "trace")]
 pub(crate) use remote_dependency_data::*;
+#[cfg(feature = "trace")]
 pub(crate) use request_data::*;
 pub(crate) use sanitize::*;
+#[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) use severity_level::*;
 
 #[cfg(test)]

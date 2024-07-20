@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` and `opentelemetry_sdk` to `v0.24`.
+- Upgrade `opentelemetry-http` to `v0.13`.
+- Upgrade `opentelemetry-semantic-conventions` to `v0.16`.
+- Upgrade `http` to `1` and `reqwest` to `0.12`.
+- Add `trace` feature and enable `trace`, `logs` and `metrics` by default. This mimicks opentelemetry.
+
 ## [0.33.0] - 2024-06-09
 
 - Add support for exporting logs, e.g. using one of the `opentelemetry-appender-*` crates.
