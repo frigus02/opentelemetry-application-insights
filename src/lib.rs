@@ -338,7 +338,7 @@
 //! | Sum                  | aggregation with only a value                                        |
 //!
 //! [`Aggregation`]: https://docs.rs/opentelemetry/0.20.0/opentelemetry/sdk/metrics/data/trait.Aggregation.html
-#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.33.0")]
+#![doc(html_root_url = "https://docs.rs/opentelemetry-application-insights/0.34.0")]
 #![allow(clippy::needless_doctest_main)]
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

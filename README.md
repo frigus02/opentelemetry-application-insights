@@ -28,9 +28,10 @@ fn main() {
 
 See documentation for more:
 
+- [Logs](https://docs.rs/opentelemetry-application-insights/latest/opentelemetry_application_insights/#logs)
+- [Metrics](https://docs.rs/opentelemetry-application-insights/latest/opentelemetry_application_insights/#metrics)
 - [Simple or Batch](https://docs.rs/opentelemetry-application-insights/latest/opentelemetry_application_insights/#simple-or-batch)
 - [Async runtimes and HTTP clients](https://docs.rs/opentelemetry-application-insights/latest/opentelemetry_application_insights/#async-runtimes-and-http-clients)
-- [Metrics](https://docs.rs/opentelemetry-application-insights/latest/opentelemetry_application_insights/#metrics)
 
 ## Application Insights integration
 
