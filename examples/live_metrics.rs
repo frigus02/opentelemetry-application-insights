@@ -10,8 +10,10 @@ use std::{error::Error, time::Duration};
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     env_logger::init();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()?
-        .with_client(reqwest::Client::new())
+    let exporter =
+        opentelemetry_application_insights::new_exporter_from_env(reqwest::Client::new())?;
+    let tracer = opentelemetry_application_insights::new_pipeline(exporter)
+        .traces()
         .with_live_metrics(true)
         .install_batch(opentelemetry_sdk::runtime::Tokio);
 

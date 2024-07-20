@@ -37,10 +37,12 @@ fn exception() {
 fn main() {
     env_logger::init();
 
-    let client_provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::blocking::Client::new())
-        .with_trace_config(
+    let exporter =
+        opentelemetry_application_insights::new_exporter_from_env(reqwest::blocking::Client::new())
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist");
+    let client_provider = opentelemetry_application_insights::new_pipeline(exporter.clone())
+        .traces()
+        .with_config(
             opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                 KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
                 KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
@@ -51,10 +53,9 @@ fn main() {
         .build_simple();
     let client_tracer = client_provider.tracer("example-attributes");
 
-    let server_provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::blocking::Client::new())
-        .with_trace_config(
+    let server_provider = opentelemetry_application_insights::new_pipeline(exporter)
+        .traces()
+        .with_config(
             opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![
                 KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
                 KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
