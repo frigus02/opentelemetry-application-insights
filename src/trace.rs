@@ -228,7 +228,11 @@ impl<'a> From<SpanAndResource<'a>> for RequestData {
             success: is_request_success(span),
             source: None,
             url: None,
-            properties: attrs_to_properties(&span.attributes, Some(resource), &span.links.links),
+            properties: attrs_to_properties(
+                span.attributes.iter(),
+                Some(resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -320,7 +324,11 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
             data: None,
             target: None,
             type_: None,
-            properties: attrs_to_properties(&span.attributes, Some(resource), &span.links.links),
+            properties: attrs_to_properties(
+                span.attributes.iter(),
+                Some(resource),
+                &span.links.links,
+            ),
         };
 
         let attrs: HashMap<&str, &Value> = span
@@ -434,7 +442,7 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
 
 impl From<&Event> for ExceptionData {
     fn from(event: &Event) -> ExceptionData {
-        let mut attrs = attrs_to_map(&event.attributes);
+        let mut attrs = attrs_to_map(event.attributes.iter());
         let exception = ExceptionDetails {
             type_name: attrs
                 .remove(semcov::trace::EXCEPTION_TYPE)
@@ -459,7 +467,7 @@ impl From<&Event> for ExceptionData {
 
 impl From<&Event> for EventData {
     fn from(event: &Event) -> EventData {
-        let mut attrs = attrs_to_map(&event.attributes);
+        let mut attrs = attrs_to_map(event.attributes.iter());
         EventData {
             ver: 2,
             name: attrs
@@ -478,7 +486,7 @@ const LEVEL: &str = "level";
 
 impl From<&Event> for MessageData {
     fn from(event: &Event) -> MessageData {
-        let mut attrs = attrs_to_map(&event.attributes);
+        let mut attrs = attrs_to_map(event.attributes.iter());
         let severity_level = attrs.get(LEVEL).and_then(|&x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);

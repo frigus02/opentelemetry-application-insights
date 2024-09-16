@@ -79,7 +79,7 @@ fn main() {
             KeyValue::new(semcov::trace::SERVER_PORT, 8080),
             KeyValue::new(semcov::trace::NETWORK_PEER_ADDRESS, "10.1.2.4"),
             KeyValue::new(semcov::trace::HTTP_RESPONSE_STATUS_CODE, 200),
-            KeyValue::new(semcov::trace::ENDUSER_ID, "marry"),
+            KeyValue::new(semcov::attribute::USER_ID, "marry"),
         ])
         .start(&client_tracer);
     {
@@ -103,7 +103,7 @@ fn main() {
                 KeyValue::new(semcov::trace::CLIENT_ADDRESS, "10.1.2.3"),
                 KeyValue::new(semcov::trace::NETWORK_PEER_ADDRESS, "10.1.2.2"),
                 KeyValue::new(semcov::trace::USER_AGENT_ORIGINAL, "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"),
-                KeyValue::new(semcov::trace::ENDUSER_ID, "marry"),
+                KeyValue::new(semcov::attribute::USER_ID, "marry"),
             ]);
         let span = server_tracer.build_with_context(builder, &cx);
         {

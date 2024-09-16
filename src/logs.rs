@@ -7,36 +7,39 @@ use crate::{
     Exporter,
 };
 use async_trait::async_trait;
-use opentelemetry::logs::{LogResult, Severity};
+use opentelemetry::{
+    logs::{LogResult, Severity},
+    InstrumentationLibrary,
+};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    export::logs::{LogData, LogExporter},
+    export::logs::{LogBatch, LogExporter},
+    logs::LogRecord,
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, sync::Arc, time::SystemTime};
+use std::{sync::Arc, time::SystemTime};
 
-fn is_exception(log: &LogData) -> bool {
-    if let Some(attrs) = &log.record.attributes {
-        attrs.iter().any(|(k, _)| {
-            k.as_str() == semcov::trace::EXCEPTION_TYPE
-                || k.as_str() == semcov::trace::EXCEPTION_MESSAGE
-        })
-    } else {
-        false
-    }
+fn is_exception(record: &LogRecord) -> bool {
+    record.attributes_iter().any(|(k, _)| {
+        k.as_str() == semcov::trace::EXCEPTION_TYPE
+            || k.as_str() == semcov::trace::EXCEPTION_MESSAGE
+    })
 }
 
 impl<C> Exporter<C> {
-    fn create_envelope_for_log(&self, log: &LogData) -> Envelope {
-        let (data, name) = if is_exception(&log) {
+    fn create_envelope_for_log(
+        &self,
+        (record, instrumentation_lib): (&LogRecord, &InstrumentationLibrary),
+    ) -> Envelope {
+        let (data, name) = if is_exception(record) {
             (
-                Data::Exception(log.into()),
+                Data::Exception(record.into()),
                 "Microsoft.ApplicationInsights.Exception",
             )
         } else {
             (
-                Data::Message(log.into()),
+                Data::Message(record.into()),
                 "Microsoft.ApplicationInsights.Message",
             )
         };
@@ -44,15 +47,19 @@ impl<C> Exporter<C> {
         Envelope {
             name,
             time: time_to_string(
-                log.record
+                record
                     .timestamp
-                    .or(log.record.observed_timestamp)
+                    .or(record.observed_timestamp)
                     .unwrap_or_else(SystemTime::now),
             )
             .into(),
             sample_rate: None,
             i_key: Some(self.instrumentation_key.clone().into()),
-            tags: Some(get_tags_for_log(&log, &self.resource)),
+            tags: Some(get_tags_for_log(
+                record,
+                instrumentation_lib,
+                &self.resource,
+            )),
             data: Some(data),
         }
     }
@@ -64,12 +71,12 @@ impl<C> LogExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export<'a>(&mut self, batch: Vec<Cow<'a, LogData>>) -> LogResult<()> {
+    async fn export(&mut self, batch: LogBatch<'_>) -> LogResult<()> {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
-            .into_iter()
-            .map(|log| self.create_envelope_for_log(&log))
+            .iter()
+            .map(|log| self.create_envelope_for_log(log))
             .collect();
 
         crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
@@ -108,13 +115,9 @@ impl From<Severity> for SeverityLevel {
     }
 }
 
-impl From<&LogData> for ExceptionData {
-    fn from(log: &LogData) -> ExceptionData {
-        let mut attrs = if let Some(attrs) = log.record.attributes.as_ref() {
-            attrs_to_map(attrs)
-        } else {
-            Default::default()
-        };
+impl From<&LogRecord> for ExceptionData {
+    fn from(record: &LogRecord) -> ExceptionData {
+        let mut attrs = attrs_to_map(record.attributes_iter());
         let exception = ExceptionDetails {
             type_name: attrs
                 .remove(semcov::trace::EXCEPTION_TYPE)
@@ -131,32 +134,29 @@ impl From<&LogData> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            severity_level: log.record.severity_number.map(Into::into),
+            severity_level: record.severity_number.map(Into::into),
             properties: attrs_map_to_properties(attrs),
         }
     }
 }
 
-impl From<&LogData> for MessageData {
-    fn from(log: &LogData) -> MessageData {
+impl From<&LogRecord> for MessageData {
+    fn from(record: &LogRecord) -> MessageData {
         MessageData {
             ver: 2,
-            severity_level: log.record.severity_number.map(Into::into),
-            message: log
-                .record
+            severity_level: record.severity_number.map(Into::into),
+            message: record
                 .body
                 .as_ref()
                 .map(|v| v.as_str().into_owned())
                 .unwrap_or_else(|| "".into())
                 .into(),
-            properties: log.record.attributes.as_ref().and_then(|attrs| {
-                attrs_to_properties(
-                    attrs,
-                    None,
-                    #[cfg(feature = "trace")]
-                    &[],
-                )
-            }),
+            properties: attrs_to_properties(
+                record.attributes_iter(),
+                None,
+                #[cfg(feature = "trace")]
+                &[],
+            ),
         }
     }
 }

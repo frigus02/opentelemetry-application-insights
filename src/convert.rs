@@ -37,17 +37,17 @@ pub(crate) fn time_to_string(time: SystemTime) -> String {
 }
 
 #[cfg(any(feature = "trace", feature = "logs"))]
-pub(crate) fn attrs_to_properties<'a, T>(
-    attributes: &'a [T],
+pub(crate) fn attrs_to_properties<'a, A, T: 'a>(
+    attributes: A,
     resource: Option<&Resource>,
     #[cfg(feature = "trace")] links: &[Link],
 ) -> Option<Properties>
 where
+    A: Iterator<Item = &'a T> + 'a,
     &'a T: Into<AttrKeyValue<'a>>,
 {
     #[allow(unused_mut)]
     let mut properties: Properties = attributes
-        .iter()
         .map(|kv| kv.into())
         .map(|kv| (kv.0, kv.1))
         .chain(
@@ -68,12 +68,12 @@ where
 }
 
 #[cfg(any(feature = "trace", feature = "logs"))]
-pub(crate) fn attrs_to_map<'a, T>(attributes: &'a [T]) -> HashMap<&str, &dyn AttrValue>
+pub(crate) fn attrs_to_map<'a, A, T: 'a>(attributes: A) -> HashMap<&'a str, &'a dyn AttrValue>
 where
+    A: Iterator<Item = &'a T> + 'a,
     &'a T: Into<AttrKeyValue<'a>>,
 {
     attributes
-        .iter()
         .map(|kv| kv.into())
         .map(|kv| (kv.0, kv.1))
         .collect()
@@ -156,7 +156,7 @@ impl AttrValue for AnyValue {
             AnyValue::Bytes(bytes) => {
                 let mut s = String::new();
                 s.push('[');
-                for &b in bytes {
+                for &b in bytes.as_ref() {
                     s.push_str(&format!("{}", b));
                     s.push(',');
                 }
@@ -169,7 +169,7 @@ impl AttrValue for AnyValue {
             AnyValue::ListAny(list) => {
                 let mut s = String::new();
                 s.push('[');
-                for v in list {
+                for v in list.as_ref() {
                     s.push_str(v.as_str().as_ref());
                     s.push(',');
                 }
@@ -182,7 +182,7 @@ impl AttrValue for AnyValue {
             AnyValue::Map(map) => {
                 let mut s = String::new();
                 s.push('{');
-                for (k, v) in map {
+                for (k, v) in map.as_ref() {
                     s.push_str(k.as_str());
                     s.push(':');
                     s.push_str(v.as_str().as_ref());
@@ -214,7 +214,7 @@ mod tests {
     fn attrs_to_properties_filters_ms() {
         let attrs = vec![KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
         let resource = Resource::new([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")]);
-        let props = attrs_to_properties(&attrs, Some(&resource), &[]).unwrap();
+        let props = attrs_to_properties(attrs.iter(), Some(&resource), &[]).unwrap();
         assert_eq!(props.len(), 2);
         assert_eq!(props.get(&"a".into()).unwrap().as_ref(), "b");
         assert_eq!(props.get(&"c".into()).unwrap().as_ref(), "d");
@@ -224,7 +224,7 @@ mod tests {
     fn attrs_to_properties_encodes_links() {
         let attrs: Vec<KeyValue> = Vec::new();
         let links = vec![Link::new(SpanContext::empty_context(), Vec::new(), 0)];
-        let props = attrs_to_properties(&attrs, None, &links).unwrap();
+        let props = attrs_to_properties(attrs.iter(), None, &links).unwrap();
         assert_eq!(props.len(), 1);
         assert_eq!(
             props.get(&"_MS.links".into()).unwrap().as_ref(),
@@ -240,7 +240,7 @@ mod tests {
         for _ in 0..input_len {
             links.push(Link::new(SpanContext::empty_context(), Vec::new(), 0));
         }
-        let props = attrs_to_properties(&attrs, None, &links).unwrap();
+        let props = attrs_to_properties(attrs.iter(), None, &links).unwrap();
         assert_eq!(props.len(), 1);
         let encoded_links = props.get(&"_MS.links".into()).unwrap();
         let deserialized: serde_json::Value = serde_json::from_str(encoded_links.as_ref()).unwrap();
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn attrs_map_to_properties_filters_ms() {
         let attrs = vec![KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
-        let attrs_map = attrs_to_map(&attrs);
+        let attrs_map = attrs_to_map(attrs.iter());
         assert_eq!(attrs_map.len(), 2);
         let props = attrs_map_to_properties(attrs_map).unwrap();
         assert_eq!(props.len(), 1);
@@ -264,12 +264,12 @@ mod tests {
     #[test_case(AnyValue::Double(1.2), "1.2" ; "double")]
     #[test_case(AnyValue::String("test".into()), "test" ; "string")]
     #[test_case(AnyValue::Boolean(true), "true" ; "boolean")]
-    #[test_case(AnyValue::Bytes(vec![]), "[]" ; "empty bytes")]
-    #[test_case(AnyValue::Bytes(vec![1, 2, 3]), "[1,2,3]" ; "bytes")]
-    #[test_case(AnyValue::ListAny(vec![]), "[]" ; "empty list")]
-    #[test_case(AnyValue::ListAny(vec![1.into(), "test".into()]), "[1,test]" ; "list")]
-    #[test_case(AnyValue::Map([].into()), "{}" ; "empty map")]
-    #[test_case(AnyValue::Map([("k1".into(), "test".into())].into()), "{k1:test}" ; "map")]
+    #[test_case(AnyValue::Bytes(Box::new(vec![])), "[]" ; "empty bytes")]
+    #[test_case(AnyValue::Bytes(Box::new(vec![1, 2, 3])), "[1,2,3]" ; "bytes")]
+    #[test_case(AnyValue::ListAny(Box::new(vec![])), "[]" ; "empty list")]
+    #[test_case(AnyValue::ListAny(Box::new(vec![1.into(), "test".into()])), "[1,test]" ; "list")]
+    #[test_case(AnyValue::Map(Box::new([].into())), "{}" ; "empty map")]
+    #[test_case(AnyValue::Map(Box::new([("k1".into(), "test".into())].into())), "{k1:test}" ; "map")]
     fn any_value_as_str(v: AnyValue, expected: &'static str) {
         assert_eq!(expected.to_string(), (&v as &dyn AttrValue).as_str());
     }
