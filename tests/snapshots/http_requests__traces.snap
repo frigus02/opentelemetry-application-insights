@@ -1,6 +1,6 @@
 ---
 source: tests/http_requests.rs
-expression: traces_simple
+expression: traces
 ---
 POST /v2/track HTTP/1.1
 host: dc.services.visualstudio.com
@@ -51,7 +51,6 @@ content-encoding: gzip
         "name": "GET /hello/world",
         "properties": {
           "client.address": "10.1.2.3",
-          "enduser.id": "marry",
           "http.request.method": "GET",
           "http.response.status_code": "200",
           "http.route": "/hello/world",
@@ -65,6 +64,7 @@ content-encoding: gzip
           "url.path": "/hello/world",
           "url.query": "name=marry",
           "url.scheme": "https",
+          "user.id": "marry",
           "user_agent.original": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0"
         },
         "responseCode": "200",
@@ -172,7 +172,6 @@ content-encoding: gzip
         "properties": {
           "device.id": "123",
           "device.model.name": "device",
-          "enduser.id": "marry",
           "http.request.method": "GET",
           "http.response.status_code": "200",
           "network.peer.address": "10.1.2.4",
@@ -182,7 +181,8 @@ content-encoding: gzip
           "server.port": "8080",
           "service.name": "client",
           "service.namespace": "test",
-          "url.full": "https://example.com:8080/hello/world?name=marry"
+          "url.full": "https://example.com:8080/hello/world?name=marry",
+          "user.id": "marry"
         },
         "resultCode": "200",
         "target": "example.com:8080",

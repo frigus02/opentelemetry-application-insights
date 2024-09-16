@@ -7,10 +7,10 @@ use opentelemetry::trace::{SpanId, SpanKind};
 #[cfg(feature = "metrics")]
 use opentelemetry::KeyValue;
 use opentelemetry::{InstrumentationLibrary, Key};
-#[cfg(feature = "logs")]
-use opentelemetry_sdk::export::logs::LogData;
 #[cfg(feature = "trace")]
 use opentelemetry_sdk::export::trace::SpanData;
+#[cfg(feature = "logs")]
+use opentelemetry_sdk::logs::LogRecord;
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -33,7 +33,12 @@ pub(crate) fn get_tags_for_span(span: &SpanData, resource: &Resource) -> Tags {
         tags.insert(tags::OPERATION_PARENT_ID, span.parent_span_id.to_string());
     }
 
-    if let Some(user_id) = attrs_map.get(semcov::trace::ENDUSER_ID) {
+    if let Some(user_id) = attrs_map.get(semcov::attribute::USER_ID).or_else(|| {
+        attrs_map.get(
+            #[allow(deprecated)]
+            semcov::attribute::ENDUSER_ID,
+        )
+    }) {
         // Using authenticated user id here to be safe. Or would ai.user.id (anonymous user id)
         // fit better?
         tags.insert(tags::USER_AUTH_USER_ID, user_id.as_str().into_owned());
@@ -76,7 +81,7 @@ pub(crate) fn get_tags_for_event(span: &SpanData, resource: &Resource) -> Tags {
 pub(crate) fn get_tags_for_metric(
     resource: &Resource,
     scope: &InstrumentationLibrary,
-    attrs: &Vec<KeyValue>,
+    attrs: &[KeyValue],
 ) -> Tags {
     let mut tags = Tags::new();
     build_tags_from_resource_attrs(&mut tags, resource, scope);
@@ -90,18 +95,22 @@ pub(crate) fn get_tags_for_metric(
 }
 
 #[cfg(feature = "logs")]
-pub(crate) fn get_tags_for_log(log: &LogData, resource: &Resource) -> Tags {
+pub(crate) fn get_tags_for_log(
+    record: &LogRecord,
+    instrumentation_lib: &InstrumentationLibrary,
+    resource: &Resource,
+) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, resource, &log.instrumentation);
+    build_tags_from_resource_attrs(&mut tags, resource, instrumentation_lib);
 
-    if let Some(attrs) = &log.record.attributes {
-        build_tags_from_attrs(
-            &mut tags,
-            attrs.iter().map(|(k, v)| (k, v as &dyn AttrValue)),
-        );
-    }
+    build_tags_from_attrs(
+        &mut tags,
+        record
+            .attributes_iter()
+            .map(|(k, v)| (k, v as &dyn AttrValue)),
+    );
 
-    if let Some(trace_context) = &log.record.trace_context {
+    if let Some(trace_context) = &record.trace_context {
         tags.insert(tags::OPERATION_ID, trace_context.trace_id.to_string());
         tags.insert(tags::OPERATION_PARENT_ID, trace_context.span_id.to_string());
     }

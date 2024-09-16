@@ -95,36 +95,41 @@
 //! }
 //! ```
 //!
-//! ## Live Metrics
-//!
-//! This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
-//!
-//! Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
-//!
-//! Metrics are based on traces. See attribute mapping below for how traces are mapped to requests,
-//! dependencies and exceptions and how they are deemed "successful" or not.
-//!
-//! To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
-//! `host.name` resource attributes respectively in the trace config.
-//!
-//! Sample telemetry is not supported, yet.
-//!
-//! ```no_run
-//! use opentelemetry::trace::Tracer as _;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
-//!         .with_client(reqwest::Client::new())
-//!         .with_live_metrics(true)
-//!         .install_batch(opentelemetry_sdk::runtime::Tokio);
-//!
-//!     // ... send traces ...
-//!
-//!     opentelemetry::global::shutdown_tracer_provider();
-//! }
-//! ```
+#![cfg_attr(
+    feature = "live-metrics",
+    doc = r#"
+## Live Metrics
+
+This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
+
+Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
+
+Metrics are based on traces. See attribute mapping below for how traces are mapped to requests,
+dependencies and exceptions and how they are deemed "successful" or not.
+
+To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
+`host.name` resource attributes respectively in the trace config.
+
+Sample telemetry is not supported, yet.
+
+```no_run
+use opentelemetry::trace::Tracer as _;
+
+#[tokio::main]
+async fn main() {
+    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
+        .with_client(reqwest::Client::new())
+        .with_live_metrics(true)
+        .install_batch(opentelemetry_sdk::runtime::Tokio);
+
+    // ... send traces ...
+
+    opentelemetry::global::shutdown_tracer_provider();
+}
+```
+"#
+)]
 //!
 //! ## Simple or Batch
 //!
@@ -231,7 +236,7 @@
 //!
 //! | OpenTelemetry attribute key                                                | Application Insights field                               |
 //! | -------------------------------------------------------------------------- | -------------------------------------------------------- |
-//! | `enduser.id`                                                               | Context: Authenticated user id (`ai.user.authUserId`)    |
+//! | `user.id`                                                                  | Context: Authenticated user id (`ai.user.authUserId`)    |
 //! | `SpanKind::Server` + `http.request.method` + `http.route`                  | Context: Operation Name (`ai.operation.name`)            |
 //! | `ai.*`                                                                     | Context: AppInsights Tag (`ai.*`)                        |
 //! | `url.full`                                                                 | Dependency Data                                          |
@@ -263,6 +268,7 @@
 //!
 //! | Attribute                   | Deprecated attribute                       |
 //! | --------------------------- | ------------------------------------------ |
+//! | `user.id`                   | `enduser.id`                               |
 //! | `db.namespace`              | `db.name`                                  |
 //! | `db.query.text`             | `db.statement`                             |
 //! | `http.request.method`       | `http.method`                              |
