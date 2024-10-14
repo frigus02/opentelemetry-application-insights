@@ -376,8 +376,6 @@ pub use models::context_tag_keys::attrs;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::export::ExportError;
-#[cfg(feature = "metrics")]
-use opentelemetry_sdk::metrics::reader::{AggregationSelector, DefaultAggregationSelector};
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "trace")]
@@ -650,7 +648,6 @@ where
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
             #[cfg(feature = "metrics")]
-            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             resource: Resource::empty(),
         }
     }
@@ -737,8 +734,6 @@ pub struct Exporter<C> {
     instrumentation_key: String,
     #[cfg(feature = "trace")]
     sample_rate: f64,
-    #[cfg(feature = "metrics")]
-    aggregation_selector: Box<dyn AggregationSelector>,
     #[cfg(any(feature = "trace", feature = "logs"))]
     resource: Resource,
 }
@@ -769,8 +764,6 @@ impl<C> Exporter<C> {
             instrumentation_key,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
-            #[cfg(feature = "metrics")]
-            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::empty(),
         }
@@ -791,8 +784,6 @@ impl<C> Exporter<C> {
             instrumentation_key: connection_string.instrumentation_key,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
-            #[cfg(feature = "metrics")]
-            aggregation_selector: Box::new(DefaultAggregationSelector::new()),
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::empty(),
         })
@@ -820,17 +811,6 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
-        self
-    }
-
-    /// Set aggregation selector.
-    #[cfg(feature = "metrics")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
-    pub fn with_aggregation_selector(
-        mut self,
-        aggregation_selector: impl AggregationSelector + 'static,
-    ) -> Self {
-        self.aggregation_selector = Box::new(aggregation_selector);
         self
     }
 }

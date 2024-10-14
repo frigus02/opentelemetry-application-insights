@@ -2,7 +2,7 @@ use opentelemetry::{
     global,
     propagation::TextMapPropagator,
     trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
-    Context, Key,
+    Context, KeyValue,
 };
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
@@ -16,8 +16,8 @@ async fn spawn_children(n: u32, process_name: String) {
     let tracer = global::tracer("spawn_children");
     let mut span = tracer.start("spawn_children");
     span.set_attributes([
-        Key::new("n").i64(n.into()),
-        Key::new("process_name").string(process_name.clone()),
+        KeyValue::new("n", Into::<i64>::into(n)),
+        KeyValue::new("process_name", process_name.clone()),
     ]);
     let cx = Context::current_with_span(span);
     for _ in 0..n {
@@ -33,7 +33,7 @@ async fn spawn_child_process(process_name: &str) {
         .span_builder("spawn_child_process")
         .with_kind(SpanKind::Client)
         .start(&tracer);
-    span.set_attribute(Key::new("process_name").string(process_name.to_string()));
+    span.set_attribute(KeyValue::new("process_name", process_name.to_string()));
     let cx = Context::current_with_span(span);
 
     let mut injector = HashMap::new();
