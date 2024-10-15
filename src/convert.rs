@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn attrs_to_properties_filters_ms() {
-        let attrs = vec![KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
+        let attrs = [KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
         let resource = Resource::new([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")]);
         let props = attrs_to_properties(attrs.iter(), Some(&resource), &[]).unwrap();
         assert_eq!(props.len(), 2);
@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn attrs_map_to_properties_filters_ms() {
-        let attrs = vec![KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
+        let attrs = [KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
         let attrs_map = attrs_to_map(attrs.iter());
         assert_eq!(attrs_map.len(), 2);
         let props = attrs_map_to_properties(attrs_map).unwrap();
@@ -264,9 +264,9 @@ mod tests {
     #[test_case(AnyValue::Double(1.2), "1.2" ; "double")]
     #[test_case(AnyValue::String("test".into()), "test" ; "string")]
     #[test_case(AnyValue::Boolean(true), "true" ; "boolean")]
-    #[test_case(AnyValue::Bytes(Box::new(vec![])), "[]" ; "empty bytes")]
+    #[test_case(AnyValue::Bytes(Box::default()), "[]" ; "empty bytes")]
     #[test_case(AnyValue::Bytes(Box::new(vec![1, 2, 3])), "[1,2,3]" ; "bytes")]
-    #[test_case(AnyValue::ListAny(Box::new(vec![])), "[]" ; "empty list")]
+    #[test_case(AnyValue::ListAny(Box::default()), "[]" ; "empty list")]
     #[test_case(AnyValue::ListAny(Box::new(vec![1.into(), "test".into()])), "[1,test]" ; "list")]
     #[test_case(AnyValue::Map(Box::new([].into())), "{}" ; "empty map")]
     #[test_case(AnyValue::Map(Box::new([("k1".into(), "test".into())].into())), "{k1:test}" ; "map")]
