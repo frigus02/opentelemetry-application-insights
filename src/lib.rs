@@ -647,7 +647,6 @@ where
             ),
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
-            #[cfg(feature = "metrics")]
             resource: Resource::empty(),
         }
     }
