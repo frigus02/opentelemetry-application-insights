@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.37.0] - 2024-11-12
+
 - Upgrade `opentelemetry` dependencies to `v0.27`.
 - Upgrade `thiserror` dependency to `v2`.
 
@@ -282,7 +284,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.36.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.37.0...HEAD
+[0.37.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.35.0...0.36.0
 [0.35.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.34.0...0.35.0
 [0.34.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.33.0...0.34.0
