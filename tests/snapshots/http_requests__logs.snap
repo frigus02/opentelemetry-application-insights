@@ -121,7 +121,7 @@ content-encoding: gzip
           "service.name": "unknown_service",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
-          "telemetry.sdk.version": "0.26.0"
+          "telemetry.sdk.version": "0.27.0"
         },
         "resultCode": "0",
         "type": "InProc",
@@ -134,7 +134,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
-      "ai.internal.sdkVersion": "opentelemetry:0.26.0",
+      "ai.internal.sdkVersion": "opentelemetry:0.27.0",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"

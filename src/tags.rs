@@ -6,7 +6,7 @@ use crate::{
 use opentelemetry::trace::{SpanId, SpanKind};
 #[cfg(feature = "metrics")]
 use opentelemetry::KeyValue;
-use opentelemetry::{InstrumentationLibrary, Key};
+use opentelemetry::{InstrumentationScope, Key};
 #[cfg(feature = "trace")]
 use opentelemetry_sdk::export::trace::SpanData;
 #[cfg(feature = "logs")]
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 #[cfg(feature = "trace")]
 pub(crate) fn get_tags_for_span(span: &SpanData, resource: &Resource) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_lib);
+    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_scope);
 
     let attrs_map = build_tags_from_attrs(
         &mut tags,
@@ -67,7 +67,7 @@ pub(crate) fn get_tags_for_span(span: &SpanData, resource: &Resource) -> Tags {
 #[cfg(feature = "trace")]
 pub(crate) fn get_tags_for_event(span: &SpanData, resource: &Resource) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_lib);
+    build_tags_from_resource_attrs(&mut tags, resource, &span.instrumentation_scope);
 
     tags.insert(tags::OPERATION_ID, span.span_context.trace_id().to_string());
     tags.insert(
@@ -80,7 +80,7 @@ pub(crate) fn get_tags_for_event(span: &SpanData, resource: &Resource) -> Tags {
 #[cfg(feature = "metrics")]
 pub(crate) fn get_tags_for_metric(
     resource: &Resource,
-    scope: &InstrumentationLibrary,
+    scope: &InstrumentationScope,
     attrs: &[KeyValue],
 ) -> Tags {
     let mut tags = Tags::new();
@@ -97,11 +97,11 @@ pub(crate) fn get_tags_for_metric(
 #[cfg(feature = "logs")]
 pub(crate) fn get_tags_for_log(
     record: &LogRecord,
-    instrumentation_lib: &InstrumentationLibrary,
+    instrumentation_scope: &InstrumentationScope,
     resource: &Resource,
 ) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, resource, instrumentation_lib);
+    build_tags_from_resource_attrs(&mut tags, resource, instrumentation_scope);
 
     build_tags_from_attrs(
         &mut tags,
@@ -151,15 +151,14 @@ where
 fn build_tags_from_resource_attrs(
     tags: &mut Tags,
     resource: &Resource,
-    instrumentation_lib: &InstrumentationLibrary,
+    instrumentation_scope: &InstrumentationScope,
 ) {
     let attrs = resource
         .iter()
         .map(|(k, v)| (k, v as &dyn AttrValue))
         .chain(
-            instrumentation_lib
-                .attributes
-                .iter()
+            instrumentation_scope
+                .attributes()
                 .map(|kv| (&kv.key, &kv.value as &dyn AttrValue)),
         );
     let attrs_map = build_tags_from_attrs(tags, attrs);

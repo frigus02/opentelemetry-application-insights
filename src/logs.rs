@@ -7,14 +7,11 @@ use crate::{
     Exporter,
 };
 use async_trait::async_trait;
-use opentelemetry::{
-    logs::{LogResult, Severity},
-    InstrumentationLibrary,
-};
+use opentelemetry::{logs::Severity, InstrumentationScope};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
     export::logs::{LogBatch, LogExporter},
-    logs::LogRecord,
+    logs::{LogRecord, LogResult},
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
@@ -30,7 +27,7 @@ fn is_exception(record: &LogRecord) -> bool {
 impl<C> Exporter<C> {
     fn create_envelope_for_log(
         &self,
-        (record, instrumentation_lib): (&LogRecord, &InstrumentationLibrary),
+        (record, instrumentation_scope): (&LogRecord, &InstrumentationScope),
     ) -> Envelope {
         let (data, name) = if is_exception(record) {
             (
@@ -57,7 +54,7 @@ impl<C> Exporter<C> {
             i_key: Some(self.instrumentation_key.clone().into()),
             tags: Some(get_tags_for_log(
                 record,
-                instrumentation_lib,
+                instrumentation_scope,
                 &self.resource,
             )),
             data: Some(data),

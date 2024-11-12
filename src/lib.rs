@@ -87,7 +87,7 @@
 //!
 //!     // Record value
 //!     let meter = global::meter("example");
-//!     let histogram = meter.f64_histogram("pi").init();
+//!     let histogram = meter.f64_histogram("pi").build();
 //!     histogram.record(3.14, &[]);
 //!
 //!     // Simulate work, during which metrics will periodically be reported.
@@ -372,10 +372,13 @@ mod uploader_quick_pulse;
 use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
+use opentelemetry::trace::ExportError as TraceExportError;
+#[cfg(feature = "trace")]
+use opentelemetry::InstrumentationScope;
 #[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::export::ExportError;
+use opentelemetry_sdk::export::ExportError as SdkExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "trace")]
@@ -701,11 +704,7 @@ where
     /// that.
     pub fn install_simple(self) -> Tracer {
         let trace_provider = self.build_simple();
-        let tracer = trace_provider
-            .tracer_builder("opentelemetry-application-insights")
-            .with_version(env!("CARGO_PKG_VERSION"))
-            .with_schema_url(semcov::SCHEMA_URL)
-            .build();
+        let tracer = trace_provider.tracer_with_scope(scope());
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer
     }
@@ -716,11 +715,7 @@ where
     /// that.
     pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
         let trace_provider = self.build_batch(runtime);
-        let tracer = trace_provider
-            .tracer_builder("opentelemetry-application-insights")
-            .with_version(env!("CARGO_PKG_VERSION"))
-            .with_schema_url(semcov::SCHEMA_URL)
-            .build();
+        let tracer = trace_provider.tracer_with_scope(scope());
         let _previous_provider = global::set_tracer_provider(trace_provider);
         tracer
     }
@@ -818,6 +813,14 @@ fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUr
     uploader::append_path(uri, "v2/track")
 }
 
+#[cfg(feature = "trace")]
+fn scope() -> InstrumentationScope {
+    InstrumentationScope::builder("opentelemetry-application-insights")
+        .with_version(env!("CARGO_PKG_VERSION"))
+        .with_schema_url(semcov::SCHEMA_URL)
+        .build()
+}
+
 /// Errors that occurred during span export.
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
@@ -867,7 +870,13 @@ pub enum Error {
     QuickPulseShutdown(opentelemetry_sdk::runtime::TrySendError),
 }
 
-impl ExportError for Error {
+impl SdkExportError for Error {
+    fn exporter_name(&self) -> &'static str {
+        "application-insights"
+    }
+}
+
+impl TraceExportError for Error {
     fn exporter_name(&self) -> &'static str {
         "application-insights"
     }

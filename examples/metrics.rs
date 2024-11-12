@@ -32,13 +32,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 &[KeyValue::new("state", "idle"), KeyValue::new("cpu", 0)],
             )
         })
-        .init();
+        .build();
 
     // Recorder
     let server_duration = meter
         .u64_histogram("http.server.duration")
         .with_unit("milliseconds")
-        .init();
+        .build();
     let mut rng = thread_rng();
     for _ in 1..10 {
         server_duration.record(

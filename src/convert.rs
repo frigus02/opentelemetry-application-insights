@@ -194,6 +194,7 @@ impl AttrValue for AnyValue {
                 s.push('}');
                 s.into()
             }
+            _ => format!("{:?}", self).into(),
         }
     }
 }
