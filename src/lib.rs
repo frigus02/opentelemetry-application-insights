@@ -373,6 +373,7 @@ use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 use opentelemetry::trace::ExportError as TraceExportError;
+#[cfg(feature = "trace")]
 use opentelemetry::InstrumentationScope;
 #[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
@@ -812,6 +813,7 @@ fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUr
     uploader::append_path(uri, "v2/track")
 }
 
+#[cfg(feature = "trace")]
 fn scope() -> InstrumentationScope {
     InstrumentationScope::builder("opentelemetry-application-insights")
         .with_version(env!("CARGO_PKG_VERSION"))
