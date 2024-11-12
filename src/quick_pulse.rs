@@ -145,7 +145,7 @@ impl<R: RuntimeChannel> SpanProcessor for QuickPulseManager<R> {
 impl<R: RuntimeChannel> Drop for QuickPulseManager<R> {
     fn drop(&mut self) {
         if let Err(err) = self.shutdown() {
-            opentelemetry::global::handle_error(err);
+            opentelemetry::otel_warn!(name: "ApplicationInsights.LiveMetrics.ShutdownFailed", error = err);
         }
     }
 }

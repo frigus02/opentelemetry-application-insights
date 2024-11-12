@@ -5,47 +5,22 @@ use crate::{
     Exporter,
 };
 use async_trait::async_trait;
-use opentelemetry::{
-    global,
-    metrics::{MetricsError, Result as MetricsResult},
-    KeyValue,
-};
+use opentelemetry::{otel_warn, KeyValue};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::metrics::{
-    data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum, Temporality},
-    exporter::PushMetricsExporter,
-    reader::TemporalitySelector,
-    InstrumentKind,
+    data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
+    exporter::PushMetricExporter,
+    MetricResult, Temporality,
 };
 use std::{convert::TryInto, sync::Arc, time::SystemTime};
 
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
-impl<C> TemporalitySelector for Exporter<C>
-where
-    C: Send + Sync,
-{
-    fn temporality(&self, kind: InstrumentKind) -> Temporality {
-        // See https://github.com/frigus02/opentelemetry-application-insights/issues/74#issuecomment-2108488385
-        match kind {
-            InstrumentKind::Counter
-            | InstrumentKind::Histogram
-            | InstrumentKind::ObservableCounter
-            | InstrumentKind::Gauge
-            | InstrumentKind::ObservableGauge => Temporality::Delta,
-            InstrumentKind::UpDownCounter | InstrumentKind::ObservableUpDownCounter => {
-                Temporality::Cumulative
-            }
-        }
-    }
-}
-
-#[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 #[async_trait]
-impl<C> PushMetricsExporter for Exporter<C>
+impl<C> PushMetricExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export(&self, metrics: &mut ResourceMetrics) -> MetricsResult<()> {
+    async fn export(&self, metrics: &mut ResourceMetrics) -> MetricResult<()> {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
 
@@ -62,8 +37,7 @@ where
                         .chain(
                             scope_metrics
                                 .scope
-                                .attributes
-                                .iter()
+                                .attributes()
                                 .map(|kv| (&kv.key, &kv.value)),
                         )
                         .chain(data.attrs.iter().map(|kv| (&kv.key, &kv.value)))
@@ -89,12 +63,25 @@ where
         Ok(())
     }
 
-    async fn force_flush(&self) -> MetricsResult<()> {
+    async fn force_flush(&self) -> MetricResult<()> {
         Ok(())
     }
 
-    fn shutdown(&self) -> MetricsResult<()> {
+    fn shutdown(&self) -> MetricResult<()> {
         Ok(())
+    }
+
+    fn temporality(&self) -> Temporality {
+        // Application Insights only supports Delta temporality as defined in the spec:
+        //
+        // > Choose Delta aggregation temporality for Counter, Asynchronous Counter and Histogram
+        // > instrument kinds, choose Cumulative aggregation for UpDownCounter and Asynchronous
+        // > UpDownCounter instrument kinds.
+        //
+        // See:
+        // - https://github.com/open-telemetry/opentelemetry-specification/blob/58bfe48eabe887545198d66c43f44071b822373f/specification/metrics/sdk_exporters/otlp.md?plain=1#L46-L47
+        // - https://github.com/frigus02/opentelemetry-application-insights/issues/74#issuecomment-2108488385
+        Temporality::Delta
     }
 }
 
@@ -153,7 +140,7 @@ fn map_metric(metric: &Metric) -> Vec<EnvelopeData> {
     } else if let Some(sum) = data.downcast_ref::<Sum<f64>>() {
         map_sum(metric, sum)
     } else {
-        global::handle_error(MetricsError::Other("unknown aggregator".into()));
+        otel_warn!(name: "ApplicationInsights.ExportMetrics.UnknownAggregator");
         Vec::new()
     }
 }

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` dependencies to `v0.27`.
+
 ## [0.36.0] - 2024-10-15
 
 - Upgrade `opentelemetry` dependencies to `v0.26`. Thanks, [sezna@](https://github.com/sezna).
