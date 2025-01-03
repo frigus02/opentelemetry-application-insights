@@ -349,6 +349,7 @@ async fn main() {
 #![deny(missing_docs, unreachable_pub, missing_debug_implementations)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]
+#![cfg_attr(test, allow(deprecated))]
 
 mod connection_string;
 mod convert;

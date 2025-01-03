@@ -34,9 +34,9 @@ async fn spawn_child_process(process_name: &str) {
     child.wait().await.expect("awaiting process failed");
 }
 
-#[instrument]
+#[instrument(fields(test.in_attr="in attr"))]
 async fn run_in_child_process() {
-    tracing::info!("leaf fn");
+    tracing::info!(test.in_event="in event", "leaf fn");
     sleep(Duration::from_millis(50)).await
 }
 
