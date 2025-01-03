@@ -1,4 +1,4 @@
-use opentelemetry::propagation::TextMapPropagator;
+use opentelemetry::{propagation::TextMapPropagator, trace::TracerProvider as _};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use std::collections::HashMap;
 use std::env;
@@ -46,11 +46,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+    let provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    let telemetry = tracing_opentelemetry::layer().with_tracer(provider.tracer("tracing-example"));
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
 
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    opentelemetry::global::shutdown_tracer_provider();
+    provider.shutdown()?;
 
     Ok(())
 }
