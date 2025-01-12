@@ -21,7 +21,7 @@ x-ms-qps-role-name: unknown_service
   "RoleName": "unknown_service",
   "StreamId": "STRIPPED",
   "Timestamp": "STRIPPED",
-  "Version": "opentelemetry:0.27.0"
+  "Version": "opentelemetry:0.27.1"
 }
 
 
@@ -87,7 +87,7 @@ content-encoding: gzip
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
-    "Version": "opentelemetry:0.27.0"
+    "Version": "opentelemetry:0.27.1"
   }
 ]
 
@@ -144,7 +144,7 @@ content-encoding: gzip
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
-    "Version": "opentelemetry:0.27.0"
+    "Version": "opentelemetry:0.27.1"
   }
 ]
 
@@ -165,7 +165,7 @@ content-encoding: gzip
           "service.name": "unknown_service",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
-          "telemetry.sdk.version": "0.27.0"
+          "telemetry.sdk.version": "STRIPPED"
         },
         "resultCode": "2",
         "success": false,
@@ -178,7 +178,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
-      "ai.internal.sdkVersion": "opentelemetry:0.27.0",
+      "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"
@@ -201,7 +201,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
-      "ai.internal.sdkVersion": "opentelemetry:0.27.0",
+      "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
     },
@@ -217,7 +217,7 @@ content-encoding: gzip
           "service.name": "unknown_service",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
-          "telemetry.sdk.version": "0.27.0"
+          "telemetry.sdk.version": "STRIPPED"
         },
         "responseCode": "2",
         "success": false,
@@ -230,7 +230,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
-      "ai.internal.sdkVersion": "opentelemetry:0.27.0",
+      "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"
@@ -245,7 +245,7 @@ content-encoding: gzip
           "service.name": "unknown_service",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
-          "telemetry.sdk.version": "0.27.0"
+          "telemetry.sdk.version": "STRIPPED"
         },
         "responseCode": "0",
         "success": true,
@@ -258,7 +258,7 @@ content-encoding: gzip
     "sampleRate": 100.0,
     "tags": {
       "ai.cloud.role": "unknown_service",
-      "ai.internal.sdkVersion": "opentelemetry:0.27.0",
+      "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },
     "time": "STRIPPED"

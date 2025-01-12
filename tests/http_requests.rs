@@ -374,10 +374,12 @@ mod tick {
 }
 
 mod format {
-    use std::sync::OnceLock;
+    use std::{sync::OnceLock, time::Duration};
 
     use flate2::read::GzDecoder;
     use http::{HeaderName, Request};
+    use opentelemetry_sdk::resource::{ResourceDetector, TelemetryResourceDetector};
+    use opentelemetry_semantic_conventions as semcov;
     use regex::Regex;
 
     pub fn requests_to_string(requests: Vec<Request<Vec<u8>>>) -> String {
@@ -436,6 +438,11 @@ mod format {
                 self.re.replace_all(s, self.replacement).into()
             }
         }
+        let otel_version = TelemetryResourceDetector
+            .detect(Duration::ZERO)
+            .get(semcov::resource::TELEMETRY_SDK_VERSION.into())
+            .expect("TelemetryResourceDetector provides TELEMETRY_SDK_VERSION")
+            .to_string();
         static STRIP_CONFIGS: OnceLock<Vec<Strip>> = OnceLock::new();
         let configs = STRIP_CONFIGS.get_or_init(|| {
             vec![
@@ -449,6 +456,8 @@ mod format {
                 Strip::new(r#""(?P<field>Timestamp)": "/Date\(\d+\)/""#),
                 Strip::new(r#"(?P<prefix>"\\\\Processor\(_Total\)\\\\% Processor Time",\s*)"(?P<field>Value)": \d+\.\d+"#),
                 Strip::new(r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#),
+                Strip::new(&format!(r#""(?P<field>telemetry\.sdk\.version)": "{otel_version}""#)),
+                Strip::new(&format!(r#""(?P<field>ai\.internal\.sdkVersion)": "opentelemetry:{otel_version}""#)),
             ]
         });
 
