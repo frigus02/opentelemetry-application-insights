@@ -20,20 +20,21 @@ async fn spawn_children(n: u32, process_name: String) {
         KeyValue::new("process_name", process_name.clone()),
     ]);
     let cx = Context::current_with_span(span);
-    for _ in 0..n {
-        spawn_child_process(&process_name)
+    for child_no in 0..n {
+        spawn_child_process(&process_name, child_no)
             .with_context(cx.clone())
             .await;
     }
 }
 
-async fn spawn_child_process(process_name: &str) {
+async fn spawn_child_process(process_name: &str, child_no: u32) {
     let tracer = global::tracer("spawn_child_process");
     let mut span = tracer
         .span_builder("spawn_child_process")
         .with_kind(SpanKind::Client)
         .start(&tracer);
     span.set_attribute(KeyValue::new("process_name", process_name.to_string()));
+    span.set_attribute(KeyValue::new("child_no", child_no as i64));
     let cx = Context::current_with_span(span);
 
     let mut injector = HashMap::new();
@@ -45,6 +46,7 @@ async fn spawn_child_process(process_name: &str) {
                 .remove("traceparent")
                 .expect("propagator should inject traceparent"),
         )
+        .arg(child_no.to_string())
         .spawn()
         .expect("failed to spawn");
     child
@@ -54,11 +56,16 @@ async fn spawn_child_process(process_name: &str) {
         .expect("awaiting process failed");
 }
 
-async fn run_in_child_process() {
+async fn run_in_child_process(child_no: u32) {
     let tracer = global::tracer("run_in_child_process");
     let mut span = tracer.start("run_in_child_process");
+    span.set_attribute(KeyValue::new("child_no", child_no as i64));
     span.add_event("leaf fn", vec![]);
-    sleep(Duration::from_millis(50)).await
+    sleep(Duration::from_millis(50)).await;
+    if (child_no + 1) % 4 == 0 {
+        let error: Box<dyn std::error::Error> = "An error".into();
+        span.record_error(error.as_ref());
+    }
 }
 
 #[tokio::main]
@@ -68,6 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut iter = env::args();
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
+    let child_no = iter.next();
 
     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
@@ -85,7 +93,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .with_kind(SpanKind::Server)
                 .start(&tracer);
             let cx = Context::current_with_span(span);
-            run_in_child_process().with_context(cx).await;
+            run_in_child_process(
+                child_no
+                    .expect("child process has child_no arg")
+                    .parse()
+                    .expect("child_no arg is u32"),
+            )
+            .with_context(cx)
+            .await;
         }
         _ => {
             let span = tracer.start("root");

@@ -13,13 +13,13 @@ use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 #[instrument]
 async fn spawn_children(n: u32, process_name: String) {
-    for _ in 0..n {
-        spawn_child_process(&process_name).await;
+    for child_no in 0..n {
+        spawn_child_process(&process_name, child_no).await;
     }
 }
 
 #[instrument(fields(otel.kind = "client"))]
-async fn spawn_child_process(process_name: &str) {
+async fn spawn_child_process(process_name: &str, child_no: u32) {
     let mut injector = HashMap::new();
     let propagator = TraceContextPropagator::new();
     propagator.inject_context(&Span::current().context(), &mut injector);
@@ -29,15 +29,21 @@ async fn spawn_child_process(process_name: &str) {
                 .remove("traceparent")
                 .expect("propagator should inject traceparent"),
         )
+        .arg(child_no.to_string())
         .spawn()
         .expect("failed to spawn");
     child.wait().await.expect("awaiting process failed");
 }
 
-#[instrument(fields(test.in_attr="in attr"))]
-async fn run_in_child_process() {
-    tracing::info!(test.in_event="in event", "leaf fn");
-    sleep(Duration::from_millis(50)).await
+#[instrument]
+async fn run_in_child_process(child_no: u32) {
+    tracing::info!("leaf fn");
+    sleep(Duration::from_millis(50)).await;
+    if (child_no + 1) % 4 == 0 {
+        let error: Box<dyn std::error::Error> = "An error".into();
+        tracing::error!(error = error, "exception");
+        // or: tracing::error!(error = "An error");
+    }
 }
 
 #[tokio::main]
@@ -45,6 +51,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut iter = env::args();
     let process_name = iter.next().expect("0th argument should exist");
     let traceparent = iter.next();
+    let child_no = iter.next();
 
     let provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
@@ -63,7 +70,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let span = tracing::info_span!("child", otel.kind = "server");
             span.set_parent(cx);
             let _guard = span.enter();
-            run_in_child_process().await;
+            run_in_child_process(
+                child_no
+                    .expect("child process has child_no arg")
+                    .parse()
+                    .expect("child_no arg is u32"),
+            )
+            .await;
         }
         _ => {
             let span = tracing::info_span!("root");
