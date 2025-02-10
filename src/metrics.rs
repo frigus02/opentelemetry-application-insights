@@ -7,10 +7,13 @@ use crate::{
 use async_trait::async_trait;
 use opentelemetry::{otel_warn, KeyValue};
 use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::metrics::{
-    data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
-    exporter::PushMetricExporter,
-    MetricResult, Temporality,
+use opentelemetry_sdk::{
+    error::OTelSdkResult,
+    metrics::{
+        data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
+        exporter::PushMetricExporter,
+        Temporality,
+    },
 };
 use std::{convert::TryInto, sync::Arc, time::SystemTime};
 
@@ -20,7 +23,7 @@ impl<C> PushMetricExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export(&self, metrics: &mut ResourceMetrics) -> MetricResult<()> {
+    async fn export(&self, metrics: &mut ResourceMetrics) -> OTelSdkResult {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
 
@@ -63,11 +66,11 @@ where
         Ok(())
     }
 
-    async fn force_flush(&self) -> MetricResult<()> {
+    async fn force_flush(&self) -> OTelSdkResult {
         Ok(())
     }
 
-    fn shutdown(&self) -> MetricResult<()> {
+    fn shutdown(&self) -> OTelSdkResult {
         Ok(())
     }
 

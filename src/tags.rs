@@ -8,9 +8,9 @@ use opentelemetry::trace::{SpanId, SpanKind};
 use opentelemetry::KeyValue;
 use opentelemetry::{InstrumentationScope, Key};
 #[cfg(feature = "trace")]
-use opentelemetry_sdk::export::trace::SpanData;
+use opentelemetry_sdk::trace::SpanData;
 #[cfg(feature = "logs")]
-use opentelemetry_sdk::logs::LogRecord;
+use opentelemetry_sdk::logs::SdkLogRecord;
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -96,7 +96,7 @@ pub(crate) fn get_tags_for_metric(
 
 #[cfg(feature = "logs")]
 pub(crate) fn get_tags_for_log(
-    record: &LogRecord,
+    record: &SdkLogRecord,
     instrumentation_scope: &InstrumentationScope,
     resource: &Resource,
 ) -> Tags {

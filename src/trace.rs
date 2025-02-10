@@ -16,7 +16,8 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    export::trace::{ExportResult, SpanData, SpanExporter},
+    error::OTelSdkResult,
+    trace::{SpanData, SpanExporter},
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
@@ -133,7 +134,7 @@ where
     C: HttpClient + 'static,
 {
     /// Export spans to Application Insights
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
@@ -422,7 +423,12 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
 
         if span.span_kind == SpanKind::Internal {
             data.type_ = Some("InProc".into());
-        } else if let Some(&db_system) = attrs.get(semcov::trace::DB_SYSTEM) {
+        } else if let Some(&db_system) = attrs.get(semcov::trace::DB_SYSTEM_NAME).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                semcov::attribute::DB_SYSTEM,
+            )
+        }) {
             data.type_ = Some(db_system.into());
         } else if let Some(&messaging_system) = attrs.get(semcov::trace::MESSAGING_SYSTEM) {
             data.type_ = Some(messaging_system.into());

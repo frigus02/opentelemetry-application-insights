@@ -246,7 +246,7 @@ async fn main() {
 //! | `network.peer.address` + `network.peer.port`                               | Dependency Target                                        |
 //! | `db.namespace`                                                             | Dependency Target                                        |
 //! | `http.response.status_code`                                                | Dependency Result code                                   |
-//! | `db.system`                                                                | Dependency Type                                          |
+//! | `db.system.name`                                                           | Dependency Type                                          |
 //! | `messaging.system`                                                         | Dependency Type                                          |
 //! | `rpc.system`                                                               | Dependency Type                                          |
 //! | `"HTTP"` if any `http.` attribute exists                                   | Dependency Type                                          |
@@ -271,6 +271,7 @@ async fn main() {
 //! | `user.id`                   | `enduser.id`                               |
 //! | `db.namespace`              | `db.name`                                  |
 //! | `db.query.text`             | `db.statement`                             |
+//! | `db.system.name`            | `db.system`                                |
 //! | `http.request.method`       | `http.method`                              |
 //! | `http.request.header.host`  | `http.host`                                |
 //! | `http.response.status_code` | `http.status_code`                         |
@@ -379,7 +380,7 @@ use opentelemetry::InstrumentationScope;
 #[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::export::ExportError as SdkExportError;
+use opentelemetry_sdk::ExportError as SdkExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "trace")]
@@ -651,7 +652,7 @@ where
             ),
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         }
     }
 
@@ -760,7 +761,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         }
     }
 
@@ -780,7 +781,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         })
     }
 
