@@ -6,7 +6,6 @@ use crate::{
     tags::get_tags_for_log,
     Exporter,
 };
-use async_trait::async_trait;
 use opentelemetry::{logs::Severity, InstrumentationScope};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
@@ -45,8 +44,8 @@ impl<C> Exporter<C> {
             name,
             time: time_to_string(
                 record
-                    .timestamp
-                    .or(record.observed_timestamp)
+                    .timestamp()
+                    .or(record.observed_timestamp())
                     .unwrap_or_else(SystemTime::now),
             )
             .into(),
@@ -136,7 +135,7 @@ impl From<&SdkLogRecord> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            severity_level: record.severity_number.map(Into::into),
+            severity_level: record.severity_number().map(Into::into),
             properties: attrs_map_to_properties(attrs),
         }
     }
@@ -146,9 +145,9 @@ impl From<&SdkLogRecord> for MessageData {
     fn from(record: &SdkLogRecord) -> MessageData {
         MessageData {
             ver: 2,
-            severity_level: record.severity_number.map(Into::into),
+            severity_level: record.severity_number().map(Into::into),
             message: record
-                .body
+                .body()
                 .as_ref()
                 .map(|v| v.as_str().into_owned())
                 .unwrap_or_else(|| "".into())

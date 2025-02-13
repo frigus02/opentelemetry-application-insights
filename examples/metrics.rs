@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         reqwest::Client::new(),
     )
     .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
+    let reader = PeriodicReader::builder(exporter)
         .with_interval(Duration::from_secs(1))
         .build();
     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();

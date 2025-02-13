@@ -40,26 +40,34 @@ fn main() {
     let client_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::blocking::Client::new())
-        .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
-            Resource::new(vec![
-                KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
-                KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
-                KeyValue::new(semcov::resource::DEVICE_ID, "123"),
-                KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "Foo Phone"),
-            ]),
-        ))
+        .with_trace_config(
+            opentelemetry_sdk::trace::Config::default().with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![
+                        KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
+                        KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                        KeyValue::new(semcov::resource::DEVICE_ID, "123"),
+                        KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "Foo Phone"),
+                    ])
+                    .build(),
+            ),
+        )
         .build_simple();
     let client_tracer = client_provider.tracer("example-attributes");
 
     let server_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::blocking::Client::new())
-        .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
-            Resource::new(vec![
-                KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
-                KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
-            ]),
-        ))
+        .with_trace_config(
+            opentelemetry_sdk::trace::Config::default().with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![
+                        KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
+                        KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
+                    ])
+                    .build(),
+            ),
+        )
         .build_simple();
     let server_tracer = server_provider.tracer("example-attributes");
 

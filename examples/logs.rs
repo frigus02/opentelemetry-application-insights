@@ -22,12 +22,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         client,
     )
     .expect("connection string is valid");
-    let logger_provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_resource(Resource::new(vec![
-            KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-            KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
-        ]))
+    let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(
+            Resource::builder_empty()
+                .with_attributes(vec![
+                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                    KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                ])
+                .build(),
+        )
         .build();
     let otel_log_appender =
         opentelemetry_appender_log::OpenTelemetryLogBridge::new(&logger_provider);

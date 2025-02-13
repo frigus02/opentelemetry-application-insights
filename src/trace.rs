@@ -16,7 +16,7 @@ use opentelemetry::{
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    error::OTelSdkResult,
+    error::{OTelSdkError, OTelSdkResult},
     trace::{SpanData, SpanExporter},
     Resource,
 };
@@ -143,8 +143,9 @@ where
             .collect();
 
         Box::pin(async move {
-            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
-            Ok(())
+            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
+                .await
+                .map_err(|err| OTelSdkError::InternalFailure(err.to_string()))
         })
     }
 

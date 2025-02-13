@@ -386,7 +386,7 @@ use opentelemetry_sdk::Resource;
 #[cfg(feature = "trace")]
 use opentelemetry_sdk::{
     runtime::RuntimeChannel,
-    trace::{Config, Tracer, TracerProvider},
+    trace::{Config, SdkTracerProvider, Tracer},
 };
 #[cfg(feature = "trace")]
 use opentelemetry_semantic_conventions as semcov;
@@ -589,8 +589,22 @@ impl<C> PipelineBuilder<C> {
     /// ```
     pub fn with_trace_config(self, mut config: Config) -> Self {
         if let Some(old_config) = self.config {
-            let merged_resource = old_config.resource.merge(config.resource.clone());
-            config = config.with_resource(merged_resource);
+            let old_attrs: Vec<KeyValue> = old_config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            let new_attrs: Vec<KeyValue> = config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            config = config.with_resource(
+                Resource::builder_empty()
+                    .with_attributes(old_attrs)
+                    .with_attributes(new_attrs)
+                    .build(),
+            );
         }
 
         PipelineBuilder {
@@ -613,12 +627,21 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<Value>>(self, name: T) -> Self {
-        let new_resource = Resource::new(vec![KeyValue::new(semcov::resource::SERVICE_NAME, name)]);
         let config = if let Some(old_config) = self.config {
-            let merged_resource = old_config.resource.merge(&new_resource);
-            old_config.with_resource(merged_resource)
+            let attrs: Vec<KeyValue> = old_config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            old_config.with_resource(
+                Resource::builder_empty()
+                    .with_attributes(attrs)
+                    .with_service_name(name)
+                    .build(),
+            )
         } else {
-            Config::default().with_resource(new_resource)
+            Config::default()
+                .with_resource(Resource::builder_empty().with_service_name(name).build())
         };
 
         PipelineBuilder {
@@ -656,11 +679,11 @@ where
         }
     }
 
-    /// Build a configured `TracerProvider` with a simple span processor.
-    pub fn build_simple(mut self) -> TracerProvider {
+    /// Build a configured `SdkTracerProvider` with a simple span processor.
+    pub fn build_simple(mut self) -> SdkTracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
-        let mut builder = TracerProvider::builder().with_simple_exporter(exporter);
+        let mut builder = SdkTracerProvider::builder().with_simple_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -668,31 +691,36 @@ where
         builder.build()
     }
 
-    /// Build a configured `TracerProvider` with a batch span processor using the specified
+    /// Build a configured `SdkTracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> TracerProvider {
+    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> SdkTracerProvider {
         let config = self.config.take();
         #[cfg(feature = "live-metrics")]
         let live_metrics = self.live_metrics;
         #[cfg(feature = "live-metrics")]
         let live_metrics_endpoint = self.live_metrics_endpoint.clone();
         let exporter = self.init_exporter();
-        let mut builder = TracerProvider::builder();
+        let mut builder = SdkTracerProvider::builder();
         #[cfg(feature = "live-metrics")]
         if live_metrics {
-            let mut resource = Resource::default();
+            let mut resource = Resource::builder();
             if let Some(ref config) = config {
-                resource = resource.merge(config.resource.as_ref());
+                resource = resource.with_attributes(
+                    config
+                        .resource
+                        .iter()
+                        .map(|(k, v)| KeyValue::new(k.clone(), v.clone())),
+                );
             };
             builder = builder.with_span_processor(QuickPulseManager::new(
                 exporter.client.clone(),
                 live_metrics_endpoint,
                 exporter.instrumentation_key.clone(),
-                resource,
+                resource.build(),
                 runtime.clone(),
             ));
         }
-        builder = builder.with_batch_exporter(exporter, runtime);
+        builder = builder.with_batch_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -702,7 +730,7 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
     /// that.
     pub fn install_simple(self) -> Tracer {
         let trace_provider = self.build_simple();
@@ -713,7 +741,7 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
     /// that.
     pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
         let trace_provider = self.build_batch(runtime);
