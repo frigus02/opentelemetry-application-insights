@@ -143,6 +143,9 @@ fn traces() {
             // other way around.
             std::thread::sleep(Duration::from_secs(1));
         }
+
+        client_provider.shutdown().unwrap();
+        server_provider.shutdown().unwrap();
     });
     let traces = requests_to_string(requests);
     insta::assert_snapshot!(traces);
@@ -158,6 +161,8 @@ async fn traces_batch_async_std() {
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("async-std", |_cx| {});
+
+        tracer_provider.shutdown().unwrap();
     });
     let traces_batch_async_std = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_async_std);
@@ -173,19 +178,21 @@ async fn traces_batch_tokio() {
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("tokio", |_cx| {});
+
+        tracer_provider.shutdown().unwrap();
     });
     let traces_batch_tokio = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_tokio);
 }
 
-#[tokio::test]
-async fn logs() {
-    let requests = record(TokioTick, |client| {
+#[test]
+fn logs() {
+    let requests = record(NoTick, |client| {
         // Setup tracing
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client.clone())
-            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
+            .build_simple();
         let tracer = tracer_provider.tracer("test");
 
         // Setup logging
@@ -232,6 +239,7 @@ async fn logs() {
         });
 
         logger_provider.shutdown().unwrap();
+        tracer_provider.shutdown().unwrap();
     });
     let logs = requests_to_string(requests);
     insta::assert_snapshot!(logs);
@@ -272,6 +280,8 @@ async fn live_metrics() {
 
         // Wait for two pong requests.
         std::thread::sleep(Duration::from_secs(2));
+
+        tracer_provider.shutdown().unwrap();
     });
     let live_metrics = requests_to_string(requests);
     insta::assert_snapshot!(live_metrics);
@@ -473,6 +483,7 @@ mod format {
                 Strip::new(r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#),
                 Strip::new(&format!(r#""(?P<field>telemetry\.sdk\.version)": "{otel_version}""#)),
                 Strip::new(&format!(r#""(?P<field>ai\.internal\.sdkVersion)": "opentelemetry:{otel_version}""#)),
+                Strip::new(&format!(r#""(?P<field>Version)": "opentelemetry:{otel_version}""#)),
             ]
         });
 

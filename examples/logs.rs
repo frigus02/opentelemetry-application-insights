@@ -1,6 +1,6 @@
 use opentelemetry::{
     logs::{LogRecord, Logger, LoggerProvider, Severity},
-    trace::Tracer,
+    trace::{Tracer, TracerProvider},
     KeyValue,
 };
 use opentelemetry_sdk::Resource;
@@ -11,10 +11,11 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>> {
     let client = reqwest::Client::new();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(client.clone())
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    let tracer = tracer_provider.tracer("test");
 
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
@@ -61,8 +62,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     // Force export before exit.
-    logger_provider.shutdown().unwrap();
-    opentelemetry::global::shutdown_tracer_provider();
+    logger_provider.shutdown()?;
+    tracer_provider.shutdown()?;
 
     Ok(())
 }

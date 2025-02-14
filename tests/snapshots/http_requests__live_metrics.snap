@@ -21,7 +21,7 @@ x-ms-qps-role-name: unknown_service
   "RoleName": "unknown_service",
   "StreamId": "STRIPPED",
   "Timestamp": "STRIPPED",
-  "Version": "opentelemetry:0.27.1"
+  "Version": "STRIPPED"
 }
 
 
@@ -87,7 +87,7 @@ content-encoding: gzip
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
-    "Version": "opentelemetry:0.27.1"
+    "Version": "STRIPPED"
   }
 ]
 
@@ -144,7 +144,7 @@ content-encoding: gzip
     "RoleName": "unknown_service",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
-    "Version": "opentelemetry:0.27.1"
+    "Version": "STRIPPED"
   }
 ]
 

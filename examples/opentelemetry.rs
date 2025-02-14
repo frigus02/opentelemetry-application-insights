@@ -1,7 +1,7 @@
 use opentelemetry::{
     global,
     propagation::TextMapPropagator,
-    trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
+    trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer, TracerProvider},
     Context, KeyValue,
 };
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -77,10 +77,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let traceparent = iter.next();
     let child_no = iter.next();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    let tracer = tracer_provider.tracer("test");
 
     match traceparent {
         Some(traceparent) => {
@@ -109,7 +110,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    opentelemetry::global::shutdown_tracer_provider();
+    tracer_provider.shutdown()?;
 
     Ok(())
 }

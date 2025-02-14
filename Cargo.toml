@@ -24,7 +24,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["trace", "metrics", "logs"]
-trace = ["opentelemetry_sdk/trace"]
+trace = ["opentelemetry_sdk/trace", "opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime"]
 metrics = ["opentelemetry_sdk/metrics"]
 logs = ["opentelemetry_sdk/logs"]
 live-metrics = ["trace", "futures-util", "sysinfo"]

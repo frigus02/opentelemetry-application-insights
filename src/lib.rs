@@ -581,9 +581,9 @@ impl<C> PipelineBuilder<C> {
     /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
-    ///         Resource::new(vec![
+    ///         Resource::builder_empty().with_attributes(vec![
     ///             KeyValue::new("service.name", "my-application"),
-    ///         ]),
+    ///         ]).build(),
     ///     ))
     ///     .install_simple();
     /// ```
@@ -720,7 +720,7 @@ where
                 runtime.clone(),
             ));
         }
-        builder = builder.with_batch_exporter(exporter);
+        builder = builder.with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter, runtime).build());
         if let Some(config) = config {
             builder = builder.with_config(config);
         }

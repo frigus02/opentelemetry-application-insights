@@ -77,11 +77,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let timer = Instant::now();
 
-    opentelemetry_application_insights::new_pipeline_from_env()
+    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
         .with_service_name("stress-test")
         .with_client(reqwest::Client::new())
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    global::set_tracer_provider(tracer_provider.clone());
 
     for i in 1..num_root_spans + 1 {
         mock_serve_http_request(i).await;
@@ -90,7 +91,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    opentelemetry::global::shutdown_tracer_provider();
+    tracer_provider.shutdown()?;
 
     let duration = timer.elapsed();
 
