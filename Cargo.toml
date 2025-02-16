@@ -64,7 +64,7 @@ doc-comment = "0.3.3"
 env_logger = "0.11.3"
 insta = "1.39.0"
 log = { version = "0.4", features = ["kv", "kv_sval"] }
-opentelemetry_sdk = { version = "0.28", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "spec_unstable_logs_enabled"] }
+opentelemetry_sdk = { version = "0.28", features = ["rt-async-std", "rt-tokio", "rt-tokio-current-thread", "spec_unstable_logs_enabled", "experimental_logs_batch_log_processor_with_async_runtime"] }
 opentelemetry-http = { version = "0.28", features = ["reqwest"] }
 opentelemetry-appender-log = { version = "0.28", features = ["with-serde"] }
 rand = "0.8.5"
@@ -95,7 +95,7 @@ required-features = ["live-metrics", "opentelemetry_sdk/rt-tokio", "opentelemetr
 
 [[example]]
 name = "logs"
-required-features = ["logs", "opentelemetry_sdk/rt-tokio"]
+required-features = ["logs", "opentelemetry_sdk/rt-tokio", "opentelemetry_sdk/experimental_logs_batch_log_processor_with_async_runtime"]
 
 [[example]]
 name = "metrics"

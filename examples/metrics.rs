@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_interval(Duration::from_secs(1))
         .build();
     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-    global::set_meter_provider(meter_provider);
+    global::set_meter_provider(meter_provider.clone());
 
     let meter = global::meter("custom.instrumentation");
 
@@ -53,6 +53,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
+
+    meter_provider.shutdown()?;
 
     Ok(())
 }

@@ -43,7 +43,7 @@
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
 //!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
 //!         connection_string,
-//!         reqwest::Client::new(),
+//!         reqwest::blocking::Client::new(),
 //!     )
 //!     .expect("valid connection string");
 //!     let logger_provider = SdkLoggerProvider::builder()

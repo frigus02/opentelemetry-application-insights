@@ -129,4 +129,7 @@ fn main() {
             })
         }
     }
+
+    server_provider.shutdown().unwrap();
+    client_provider.shutdown().unwrap();
 }

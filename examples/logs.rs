@@ -24,7 +24,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )
     .expect("connection string is valid");
     let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
-        .with_batch_exporter(exporter)
+        .with_log_processor(
+            opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor::builder(
+                exporter,
+                opentelemetry_sdk::runtime::Tokio,
+            )
+            .build(),
+        )
         .with_resource(
             Resource::builder_empty()
                 .with_attributes(vec![
