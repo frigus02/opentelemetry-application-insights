@@ -757,6 +757,7 @@ where
 }
 
 /// Application Insights span exporter
+#[derive(Clone)]
 pub struct Exporter<C> {
     client: Arc<C>,
     endpoint: Arc<http::Uri>,

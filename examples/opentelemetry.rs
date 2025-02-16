@@ -77,10 +77,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let traceparent = iter.next();
     let child_no = iter.next();
 
-    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::Client::new())
-        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    // Must create blocking client outside the tokio runtime. Batch exporter will spawn a new
+    // thread for exporting spans, so client usages will also happen outside the tokio runtime.
+    let client = std::thread::spawn(reqwest::blocking::Client::new)
+        .join()
+        .unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
+        client,
+    )
+    .expect("valid connection string");
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .build();
     let tracer = tracer_provider.tracer("test");
 
     match traceparent {

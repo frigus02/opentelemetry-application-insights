@@ -3,6 +3,7 @@ use opentelemetry::{
     trace::{FutureExt, SpanKind, TraceContextExt, Tracer},
     Context, KeyValue,
 };
+use opentelemetry_sdk::Resource;
 use std::env;
 use std::error::Error;
 use std::ops::Add;
@@ -60,7 +61,7 @@ async fn mock_serve_http_request(n: u64) {
 // The amount of traces generated is controlled by the NUM_ROOT_SPANS environment variable.
 // WARNING: Please notice at large NUM_ROOT_SPANS settings, this can incur real costs at your application insights resource - so be cautious!
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     env_logger::init();
 
     // Please note with large NUM_ROOT_SPANS settings the batch span processor might start falling behind
@@ -77,11 +78,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let timer = Instant::now();
 
-    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_service_name("stress-test")
-        .with_client(reqwest::Client::new())
-        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    // Must create blocking client outside the tokio runtime. Batch exporter will spawn a new
+    // thread for exporting spans, so client usages will also happen outside the tokio runtime.
+    let client = std::thread::spawn(reqwest::blocking::Client::new)
+        .join()
+        .unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?,
+        client,
+    )?;
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(Resource::builder().with_service_name("test").build())
+        .build();
     global::set_tracer_provider(tracer_provider.clone());
 
     for i in 1..num_root_spans + 1 {
