@@ -35,7 +35,7 @@
 //! ```no_run
 //! use log::{Level, info};
 //! use opentelemetry_appender_log::OpenTelemetryLogBridge;
-//! use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
+//! use opentelemetry_sdk::logs::{SdkLoggerProvider, BatchLogProcessor};
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -46,8 +46,8 @@
 //!         reqwest::Client::new(),
 //!     )
 //!     .expect("valid connection string");
-//!     let logger_provider = LoggerProvider::builder()
-//!         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+//!     let logger_provider = SdkLoggerProvider::builder()
+//!         .with_batch_exporter(exporter)
 //!         .build();
 //!     let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
 //!     log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
@@ -59,7 +59,7 @@
 //!     info!("{fruit} costs {price}");
 //!
 //!     // Export remaining logs before exiting
-//!     let _ = logger_provider.shutdown();
+//!     logger_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
@@ -81,9 +81,9 @@
 //!         reqwest::Client::new(),
 //!     )
 //!     .expect("valid connection string");
-//!     let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
+//!     let reader = PeriodicReader::builder(exporter).build();
 //!     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-//!     global::set_meter_provider(meter_provider);
+//!     global::set_meter_provider(meter_provider.clone());
 //!
 //!     // Record value
 //!     let meter = global::meter("example");
@@ -92,6 +92,8 @@
 //!
 //!     // Simulate work, during which metrics will periodically be reported.
 //!     tokio::time::sleep(Duration::from_secs(300)).await;
+//!
+//!     meter_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
@@ -117,15 +119,16 @@ use opentelemetry::trace::Tracer as _;
 
 #[tokio::main]
 async fn main() {
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
         .with_client(reqwest::Client::new())
         .with_live_metrics(true)
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
     // ... send traces ...
 
-    opentelemetry::global::shutdown_tracer_provider();
+    tracer_provider.shutdown().unwrap();
 }
 ```
 "#
@@ -149,14 +152,16 @@ async fn main() {
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+//!     let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
 //!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
 //!         .with_client(reqwest::Client::new())
-//!         .install_batch(opentelemetry_sdk::runtime::Tokio);
+//!         .build_batch(opentelemetry_sdk::runtime::Tokio);
+//!     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 //!
+//!     let tracer = opentelemetry::global::tracer("<name>");
 //!     tracer.in_span("main", |_cx| {});
 //!
-//!     opentelemetry::global::shutdown_tracer_provider();
+//!     tracer_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
