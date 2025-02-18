@@ -1,7 +1,7 @@
 use crate::{
     convert::{
         attrs_map_to_properties, attrs_to_map, attrs_to_properties, duration_to_string,
-        status_to_result_code, time_to_string, value_to_severity_level,
+        status_to_result_code, time_to_string, value_to_severity_level, AttrValue,
     },
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
@@ -102,15 +102,15 @@ impl<C> Exporter<C> {
         for event in span.events.iter() {
             let (data, name) = match event.name.as_ref() {
                 x if x == EVENT_NAME_CUSTOM => (
-                    Data::Event(event.into()),
+                    Data::Event(EventAndResource(event, resource).into()),
                     "Microsoft.ApplicationInsights.Event",
                 ),
                 x if x == EVENT_NAME_EXCEPTION => (
-                    Data::Exception(event.into()),
+                    Data::Exception(EventAndResource(event, resource).into()),
                     "Microsoft.ApplicationInsights.Exception",
                 ),
                 _ => (
-                    Data::Message(event.into()),
+                    Data::Message(EventAndResource(event, resource).into()),
                     "Microsoft.ApplicationInsights.Message",
                 ),
             };
@@ -447,9 +447,17 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
     }
 }
 
-impl From<&Event> for ExceptionData {
-    fn from(event: &Event) -> ExceptionData {
+struct EventAndResource<'a>(&'a Event, &'a Resource);
+
+impl From<EventAndResource<'_>> for ExceptionData {
+    fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
+        attrs.extend(
+            resource
+                .iter()
+                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
+        );
+
         let exception = ExceptionDetails {
             type_name: attrs
                 .remove(semcov::trace::EXCEPTION_TYPE)
@@ -472,9 +480,14 @@ impl From<&Event> for ExceptionData {
     }
 }
 
-impl From<&Event> for EventData {
-    fn from(event: &Event) -> EventData {
+impl From<EventAndResource<'_>> for EventData {
+    fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
+        attrs.extend(
+            resource
+                .iter()
+                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
+        );
         EventData {
             ver: 2,
             name: attrs
@@ -491,9 +504,14 @@ impl From<&Event> for EventData {
 /// https://github.com/tokio-rs/tracing/blob/a0126b2e2d465e8e6d514acdf128fcef5b863d27/tracing-opentelemetry/src/subscriber.rs#L839
 const LEVEL: &str = "level";
 
-impl From<&Event> for MessageData {
-    fn from(event: &Event) -> MessageData {
+impl From<EventAndResource<'_>> for MessageData {
+    fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
+        attrs.extend(
+            resource
+                .iter()
+                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
+        );
         let severity_level = attrs.get(LEVEL).and_then(|&x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);

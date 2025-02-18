@@ -92,7 +92,9 @@ content-encoding: gzip
       "baseData": {
         "message": "An event!",
         "properties": {
-          "happened": "true"
+          "happened": "true",
+          "service.name": "server",
+          "service.namespace": "test"
         },
         "severityLevel": 2,
         "ver": 2
@@ -114,7 +116,9 @@ content-encoding: gzip
       "baseData": {
         "name": "A custom event!",
         "properties": {
-          "happened": "true"
+          "happened": "true",
+          "service.name": "server",
+          "service.namespace": "test"
         },
         "ver": 2
       },
@@ -139,6 +143,10 @@ content-encoding: gzip
             "typeName": "<no type>"
           }
         ],
+        "properties": {
+          "service.name": "server",
+          "service.namespace": "test"
+        },
         "ver": 2
       },
       "baseType": "ExceptionData"
