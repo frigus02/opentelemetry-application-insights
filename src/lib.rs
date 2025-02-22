@@ -95,7 +95,7 @@
 //!     histogram.record(3.14, &[]);
 //!
 //!     // Simulate work, during which metrics will periodically be reported.
-//!     std::thread::sleep(Duration::from_secs(300)).await;
+//!     std::thread::sleep(Duration::from_secs(300));
 //!
 //!     meter_provider.shutdown().unwrap();
 //! }
