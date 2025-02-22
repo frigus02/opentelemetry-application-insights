@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.38.0] - 2025-02-22
+
 - Upgrade `opentelemetry` dependencies to `v0.28`.
 
   - The `trace` feature turns on `opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime` in this release to avoid breaking API changes and to make this release simpler for me. In the future I hope to align the API with other crates like `opentelemetry-otlp`, which means removing the pipeline API. Examples have already been updated to the new API.
@@ -295,7 +297,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.37.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.38.0...HEAD
+[0.38.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.35.0...0.36.0
 [0.35.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.34.0...0.35.0
