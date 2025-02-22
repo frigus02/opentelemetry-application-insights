@@ -9,36 +9,41 @@
 //!
 //! ## Trace
 //!
-//! This requires the **trace** feature (enabled by default).
-//!
-//! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans (this example requires the **opentelemetry-http/reqwest** feature):
+//! This requires the **trace** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
-//! use opentelemetry::trace::Tracer as _;
+//! use opentelemetry::{global, trace::Tracer};
+//! use opentelemetry_sdk::trace::SdkTracerProvider;
 //!
 //! fn main() {
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
-//!         .expect("valid connection string")
-//!         .with_client(reqwest::blocking::Client::new())
-//!         .install_simple();
+//!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+//!         connection_string,
+//!         reqwest::blocking::Client::new(),
+//!     )
+//!     .expect("valid connection string");
+//!     let tracer_provider = SdkTracerProvider::builder()
+//!         .with_batch_exporter(exporter)
+//!         .build();
+//!     global::set_tracer_provider(tracer_provider.clone());
 //!
+//!     let tracer = global::tracer("example");
 //!     tracer.in_span("main", |_cx| {});
+//!
+//!     tracer_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
 //! ## Logs
 //!
-//! This requires the **logs** feature (enabled by default).
+//! This requires the **logs** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
 //! use log::{Level, info};
 //! use opentelemetry_appender_log::OpenTelemetryLogBridge;
-//! use opentelemetry_sdk::logs::{SdkLoggerProvider, BatchLogProcessor};
+//! use opentelemetry_sdk::logs::SdkLoggerProvider;
 //!
-//! #[tokio::main]
-//! async fn main() {
+//! fn main() {
 //!     // Setup exporter
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
 //!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
@@ -65,20 +70,19 @@
 //!
 //! ## Metrics
 //!
-//! This requires the **metrics** feature (enabled by default).
+//! This requires the **metrics** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
 //! use opentelemetry::global;
 //! use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 //! use std::time::Duration;
 //!
-//! #[tokio::main]
-//! async fn main() {
+//! fn main() {
 //!     // Setup exporter
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
 //!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
 //!         connection_string,
-//!         reqwest::Client::new(),
+//!         reqwest::blocking::Client::new(),
 //!     )
 //!     .expect("valid connection string");
 //!     let reader = PeriodicReader::builder(exporter).build();
@@ -91,7 +95,7 @@
 //!     histogram.record(3.14, &[]);
 //!
 //!     // Simulate work, during which metrics will periodically be reported.
-//!     tokio::time::sleep(Duration::from_secs(300)).await;
+//!     std::thread::sleep(Duration::from_secs(300)).await;
 //!
 //!     meter_provider.shutdown().unwrap();
 //! }
@@ -115,8 +119,6 @@ To configure role, instance, and machine name provide `service.name`, `service.i
 Sample telemetry is not supported, yet.
 
 ```no_run
-use opentelemetry::trace::Tracer as _;
-
 #[tokio::main]
 async fn main() {
     let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
@@ -133,37 +135,6 @@ async fn main() {
 ```
 "#
 )]
-//!
-//! ## Simple or Batch
-//!
-//! The functions `build_simple` and `install_simple` build/install a trace pipeline using the
-//! simple span processor. This means each span is processed and exported synchronously at the time
-//! it ends.
-//!
-//! The functions `build_batch` and `install_batch` use the batch span processor instead. This
-//! means spans are exported periodically in batches, which can be better for performance. This
-//! feature requires an async runtime such as Tokio or async-std. If you decide to use a batch span
-//! processor, make sure to call `opentelemetry::global::shutdown_tracer_provider()` before your
-//! program exits to ensure all remaining spans are exported properly (this example requires the
-//! **opentelemetry/rt-tokio** and **opentelemetry-http/reqwest** features).
-//!
-//! ```no_run
-//! use opentelemetry::trace::Tracer as _;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
-//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
-//!         .with_client(reqwest::Client::new())
-//!         .build_batch(opentelemetry_sdk::runtime::Tokio);
-//!     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
-//!
-//!     let tracer = opentelemetry::global::tracer("<name>");
-//!     tracer.in_span("main", |_cx| {});
-//!
-//!     tracer_provider.shutdown().unwrap();
-//! }
-//! ```
 //!
 //! ## Async runtimes and HTTP clients
 //!
@@ -182,6 +153,14 @@ async fn main() {
 //! [`tokio`]: https://crates.io/crates/tokio
 //!
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
+//!
+//! Map async/sync clients with the appropriate builder methods:
+//!
+//! - Sync clients with `{SdkTracerProvider,SdkLoggerProvider}.with_batch_exporter`/`PeriodicReader::builder`. If you're already in an
+//! async context when creating the client, you might need to create it using
+//! `std::thread::spawn(reqwest::blocking::Client::new).join().unwrap()`.
+//! - Async clients with the corresponding experimental async APIs. _Or_ with the pipeline API and
+//! `build_batch`/`install_batch`.
 //!
 //! # Attribute mapping
 //!

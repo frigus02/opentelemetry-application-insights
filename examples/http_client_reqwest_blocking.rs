@@ -1,4 +1,4 @@
-use opentelemetry::{trace::Tracer as _, trace::TracerProvider as _};
+use opentelemetry::trace::{Tracer, TracerProvider};
 
 fn main() {
     env_logger::init();
