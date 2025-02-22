@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use opentelemetry::{otel_warn, KeyValue};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    error::{OTelSdkError, OTelSdkResult},
+    error::OTelSdkResult,
     metrics::{
         data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
         exporter::PushMetricExporter,
@@ -64,7 +64,7 @@ where
 
         crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
             .await
-            .map_err(|err| OTelSdkError::InternalFailure(err.to_string()))
+            .map_err(Into::into)
     }
 
     async fn force_flush(&self) -> OTelSdkResult {

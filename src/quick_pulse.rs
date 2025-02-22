@@ -9,7 +9,7 @@ use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{trace::SpanKind, Context, Key};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    error::{OTelSdkError, OTelSdkResult},
+    error::OTelSdkResult,
     runtime::{RuntimeChannel, TrySend},
     trace::{IdGenerator as _, RandomIdGenerator, Span, SpanData, SpanProcessor},
     Resource,
@@ -135,7 +135,7 @@ impl<R: RuntimeChannel> SpanProcessor for QuickPulseManager<R> {
         self.message_sender
             .try_send(Message::Stop)
             .map_err(Error::QuickPulseShutdown)
-            .map_err(|err| OTelSdkError::InternalFailure(err.to_string()))
+            .map_err(Into::into)
     }
 }
 

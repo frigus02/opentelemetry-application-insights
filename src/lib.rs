@@ -364,9 +364,9 @@ use opentelemetry::InstrumentationScope;
 #[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::ExportError as SdkExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::{error::OTelSdkError, ExportError as SdkExportError};
 #[cfg(feature = "trace")]
 use opentelemetry_sdk::{
     runtime::RuntimeChannel,
@@ -894,5 +894,11 @@ impl SdkExportError for Error {
 impl TraceExportError for Error {
     fn exporter_name(&self) -> &'static str {
         "application-insights"
+    }
+}
+
+impl From<Error> for OTelSdkError {
+    fn from(value: Error) -> Self {
+        OTelSdkError::InternalFailure(value.to_string())
     }
 }
