@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgrade `opentelemetry` dependencies to `v0.28`.
 
   - The `trace` feature turns on `opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime` in this release to avoid breaking API changes and to make this release simpler for me. In the future I hope to align the API with other crates like `opentelemetry-otlp`, which means removing the pipeline API. Examples have already been updated to the new API.
+
   - If you're using `logs` or `metrics` make sure you use matching combinations of sync/async HTTP clients and runtimes. E.g.:
+
     - Use `reqwest::blocking::Client` with `.with_batch_exporter(exporter)`. If you're already in an async context, you might need to create the client using `std::thread::spawn(reqwest::blocking::Client::new).join().unwrap()`.
     - Use `reqwest::Client` with `.with_log_processor(opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build())`.
 
-- The `db.system` attribute has been deprecated. You can use `db.system.name` going forward, although the deprecated attribute continues to work.
+  - The `db.system` attribute has been deprecated. You can use `db.system.name` going forward, although the deprecated attribute continues to work.
 
 ## [0.37.0] - 2024-11-12
 
