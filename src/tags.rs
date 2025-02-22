@@ -7,10 +7,10 @@ use opentelemetry::trace::{SpanId, SpanKind};
 #[cfg(feature = "metrics")]
 use opentelemetry::KeyValue;
 use opentelemetry::{InstrumentationScope, Key};
-#[cfg(feature = "trace")]
-use opentelemetry_sdk::export::trace::SpanData;
 #[cfg(feature = "logs")]
-use opentelemetry_sdk::logs::LogRecord;
+use opentelemetry_sdk::logs::SdkLogRecord;
+#[cfg(feature = "trace")]
+use opentelemetry_sdk::trace::SpanData;
 use opentelemetry_sdk::Resource;
 use opentelemetry_semantic_conventions as semcov;
 use std::collections::HashMap;
@@ -96,7 +96,7 @@ pub(crate) fn get_tags_for_metric(
 
 #[cfg(feature = "logs")]
 pub(crate) fn get_tags_for_log(
-    record: &LogRecord,
+    record: &SdkLogRecord,
     instrumentation_scope: &InstrumentationScope,
     resource: &Resource,
 ) -> Tags {
@@ -110,7 +110,7 @@ pub(crate) fn get_tags_for_log(
             .map(|(k, v)| (k, v as &dyn AttrValue)),
     );
 
-    if let Some(trace_context) = &record.trace_context {
+    if let Some(trace_context) = record.trace_context() {
         tags.insert(tags::OPERATION_ID, trace_context.trace_id.to_string());
         tags.insert(tags::OPERATION_PARENT_ID, trace_context.span_id.to_string());
     }

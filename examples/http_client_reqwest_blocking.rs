@@ -1,14 +1,20 @@
-use opentelemetry::trace::Tracer as _;
+use opentelemetry::trace::{Tracer, TracerProvider};
 
 fn main() {
     env_logger::init();
 
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::blocking::Client::new())
-        .install_simple();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")
+            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
+        reqwest::blocking::Client::new(),
+    )
+    .expect("valid connection string");
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter)
+        .build();
+    let tracer = tracer_provider.tracer("test");
 
     tracer.in_span("reqwest-blocking-client", |_cx| {});
 
-    opentelemetry::global::shutdown_tracer_provider();
+    tracer_provider.shutdown().unwrap();
 }

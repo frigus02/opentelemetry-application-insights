@@ -3,21 +3,20 @@ use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use rand::{thread_rng, Rng};
 use std::{error::Error, time::Duration};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
         connection_string,
-        reqwest::Client::new(),
+        reqwest::blocking::Client::new(),
     )
     .expect("valid connection string");
-    let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
+    let reader = PeriodicReader::builder(exporter)
         .with_interval(Duration::from_secs(1))
         .build();
     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-    global::set_meter_provider(meter_provider);
+    global::set_meter_provider(meter_provider.clone());
 
     let meter = global::meter("custom.instrumentation");
 
@@ -51,8 +50,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 KeyValue::new("http.status_code", "200"),
             ],
         );
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        std::thread::sleep(Duration::from_millis(500));
     }
+
+    meter_provider.shutdown()?;
 
     Ok(())
 }

@@ -34,26 +34,34 @@ fn traces() {
         let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client.clone())
-            .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
-                Resource::new(vec![
-                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-                    KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
-                    KeyValue::new(semcov::resource::DEVICE_ID, "123"),
-                    KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "device"),
-                ]),
-            ))
+            .with_trace_config(
+                opentelemetry_sdk::trace::Config::default().with_resource(
+                    Resource::builder_empty()
+                        .with_attributes(vec![
+                            KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                            KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                            KeyValue::new(semcov::resource::DEVICE_ID, "123"),
+                            KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "device"),
+                        ])
+                        .build(),
+                ),
+            )
             .build_simple();
         let client_tracer = client_provider.tracer("test");
 
         let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client)
-            .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
-                Resource::new(vec![
-                    KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-                    KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
-                ]),
-            ))
+            .with_trace_config(
+                opentelemetry_sdk::trace::Config::default().with_resource(
+                    Resource::builder_empty()
+                        .with_attributes(vec![
+                            KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                            KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
+                        ])
+                        .build(),
+                ),
+            )
             .build_simple();
         let server_tracer = server_provider.tracer("test");
 
@@ -135,6 +143,9 @@ fn traces() {
             // other way around.
             std::thread::sleep(Duration::from_secs(1));
         }
+
+        client_provider.shutdown().unwrap();
+        server_provider.shutdown().unwrap();
     });
     let traces = requests_to_string(requests);
     insta::assert_snapshot!(traces);
@@ -150,6 +161,8 @@ async fn traces_batch_async_std() {
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("async-std", |_cx| {});
+
+        tracer_provider.shutdown().unwrap();
     });
     let traces_batch_async_std = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_async_std);
@@ -165,19 +178,21 @@ async fn traces_batch_tokio() {
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("tokio", |_cx| {});
+
+        tracer_provider.shutdown().unwrap();
     });
     let traces_batch_tokio = requests_to_string(requests);
     insta::assert_snapshot!(traces_batch_tokio);
 }
 
-#[tokio::test]
-async fn logs() {
-    let requests = record(TokioTick, |client| {
+#[test]
+fn logs() {
+    let requests = record(NoTick, |client| {
         // Setup tracing
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
             .with_client(client.clone())
-            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
+            .build_simple();
         let tracer = tracer_provider.tracer("test");
 
         // Setup logging
@@ -186,12 +201,16 @@ async fn logs() {
             client,
         )
         .expect("connection string is valid");
-        let logger_provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::TokioCurrentThread)
-            .with_resource(Resource::new(vec![
-                KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-                KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
-            ]))
+        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![
+                        KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                        KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                    ])
+                    .build(),
+            )
             .build();
 
         let otel_log_appender =
@@ -220,6 +239,7 @@ async fn logs() {
         });
 
         logger_provider.shutdown().unwrap();
+        tracer_provider.shutdown().unwrap();
     });
     let logs = requests_to_string(requests);
     insta::assert_snapshot!(logs);
@@ -260,6 +280,8 @@ async fn live_metrics() {
 
         // Wait for two pong requests.
         std::thread::sleep(Duration::from_secs(2));
+
+        tracer_provider.shutdown().unwrap();
     });
     let live_metrics = requests_to_string(requests);
     insta::assert_snapshot!(live_metrics);
@@ -278,13 +300,13 @@ mod recording_client {
 
     #[derive(Debug, Clone)]
     pub struct RecordingClient {
-        requests: Arc<Mutex<Vec<Request<Vec<u8>>>>>,
+        requests: Arc<Mutex<Vec<Request<Bytes>>>>,
         tick: Arc<dyn Tick>,
     }
 
     #[async_trait]
     impl HttpClient for RecordingClient {
-        async fn send(&self, req: Request<Vec<u8>>) -> Result<Response<Bytes>, HttpError> {
+        async fn send_bytes(&self, req: Request<Bytes>) -> Result<Response<Bytes>, HttpError> {
             self.tick.tick().await;
 
             let is_live_metrics = req.uri().path().contains("QuickPulseService.svc");
@@ -317,7 +339,7 @@ mod recording_client {
     pub fn record(
         tick: impl Tick + 'static,
         generate_fn: impl Fn(RecordingClient),
-    ) -> Vec<Request<Vec<u8>>> {
+    ) -> Vec<Request<Bytes>> {
         let requests = Arc::new(Mutex::new(Vec::new()));
         generate_fn(RecordingClient {
             requests: Arc::clone(&requests),
@@ -374,15 +396,16 @@ mod tick {
 }
 
 mod format {
-    use std::{sync::OnceLock, time::Duration};
-
+    use bytes::Bytes;
     use flate2::read::GzDecoder;
     use http::{HeaderName, Request};
+    use opentelemetry::Key;
     use opentelemetry_sdk::resource::{ResourceDetector, TelemetryResourceDetector};
     use opentelemetry_semantic_conventions as semcov;
     use regex::Regex;
+    use std::sync::OnceLock;
 
-    pub fn requests_to_string(requests: Vec<Request<Vec<u8>>>) -> String {
+    pub fn requests_to_string(requests: Vec<Request<Bytes>>) -> String {
         requests
             .into_iter()
             .map(request_to_string)
@@ -390,7 +413,7 @@ mod format {
             .join("\n\n\n")
     }
 
-    fn request_to_string(req: Request<Vec<u8>>) -> String {
+    fn request_to_string(req: Request<Bytes>) -> String {
         let method = req.method();
         let path = req.uri().path_and_query().expect("path exists");
         let version = format!("{:?}", req.version());
@@ -439,8 +462,10 @@ mod format {
             }
         }
         let otel_version = TelemetryResourceDetector
-            .detect(Duration::ZERO)
-            .get(semcov::resource::TELEMETRY_SDK_VERSION.into())
+            .detect()
+            .get(&Key::from_static_str(
+                semcov::resource::TELEMETRY_SDK_VERSION,
+            ))
             .expect("TelemetryResourceDetector provides TELEMETRY_SDK_VERSION")
             .to_string();
         static STRIP_CONFIGS: OnceLock<Vec<Strip>> = OnceLock::new();
@@ -458,6 +483,7 @@ mod format {
                 Strip::new(r#"(?P<prefix>"\\\\Memory\\\\Committed Bytes",\s*)"(?P<field>Value)": \d+\.\d+"#),
                 Strip::new(&format!(r#""(?P<field>telemetry\.sdk\.version)": "{otel_version}""#)),
                 Strip::new(&format!(r#""(?P<field>ai\.internal\.sdkVersion)": "opentelemetry:{otel_version}""#)),
+                Strip::new(&format!(r#""(?P<field>Version)": "opentelemetry:{otel_version}""#)),
             ]
         });
 

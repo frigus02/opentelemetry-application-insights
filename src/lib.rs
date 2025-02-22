@@ -9,45 +9,50 @@
 //!
 //! ## Trace
 //!
-//! This requires the **trace** feature (enabled by default).
-//!
-//! Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating
-//! spans (this example requires the **opentelemetry-http/reqwest** feature):
+//! This requires the **trace** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
-//! use opentelemetry::trace::Tracer as _;
+//! use opentelemetry::{global, trace::Tracer};
+//! use opentelemetry_sdk::trace::SdkTracerProvider;
 //!
 //! fn main() {
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
-//!         .expect("valid connection string")
-//!         .with_client(reqwest::blocking::Client::new())
-//!         .install_simple();
+//!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+//!         connection_string,
+//!         reqwest::blocking::Client::new(),
+//!     )
+//!     .expect("valid connection string");
+//!     let tracer_provider = SdkTracerProvider::builder()
+//!         .with_batch_exporter(exporter)
+//!         .build();
+//!     global::set_tracer_provider(tracer_provider.clone());
 //!
+//!     let tracer = global::tracer("example");
 //!     tracer.in_span("main", |_cx| {});
+//!
+//!     tracer_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
 //! ## Logs
 //!
-//! This requires the **logs** feature (enabled by default).
+//! This requires the **logs** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
 //! use log::{Level, info};
 //! use opentelemetry_appender_log::OpenTelemetryLogBridge;
-//! use opentelemetry_sdk::logs::{LoggerProvider, BatchLogProcessor};
+//! use opentelemetry_sdk::logs::SdkLoggerProvider;
 //!
-//! #[tokio::main]
-//! async fn main() {
+//! fn main() {
 //!     // Setup exporter
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
 //!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
 //!         connection_string,
-//!         reqwest::Client::new(),
+//!         reqwest::blocking::Client::new(),
 //!     )
 //!     .expect("valid connection string");
-//!     let logger_provider = LoggerProvider::builder()
-//!         .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+//!     let logger_provider = SdkLoggerProvider::builder()
+//!         .with_batch_exporter(exporter)
 //!         .build();
 //!     let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
 //!     log::set_boxed_logger(Box::new(otel_log_appender)).unwrap();
@@ -59,31 +64,30 @@
 //!     info!("{fruit} costs {price}");
 //!
 //!     // Export remaining logs before exiting
-//!     let _ = logger_provider.shutdown();
+//!     logger_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
 //! ## Metrics
 //!
-//! This requires the **metrics** feature (enabled by default).
+//! This requires the **metrics** (enabled by default) and **opentelemetry-http/reqwest** features.
 //!
 //! ```no_run
 //! use opentelemetry::global;
 //! use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 //! use std::time::Duration;
 //!
-//! #[tokio::main]
-//! async fn main() {
+//! fn main() {
 //!     // Setup exporter
 //!     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
 //!     let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
 //!         connection_string,
-//!         reqwest::Client::new(),
+//!         reqwest::blocking::Client::new(),
 //!     )
 //!     .expect("valid connection string");
-//!     let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
+//!     let reader = PeriodicReader::builder(exporter).build();
 //!     let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
-//!     global::set_meter_provider(meter_provider);
+//!     global::set_meter_provider(meter_provider.clone());
 //!
 //!     // Record value
 //!     let meter = global::meter("example");
@@ -91,7 +95,9 @@
 //!     histogram.record(3.14, &[]);
 //!
 //!     // Simulate work, during which metrics will periodically be reported.
-//!     tokio::time::sleep(Duration::from_secs(300)).await;
+//!     std::thread::sleep(Duration::from_secs(300));
+//!
+//!     meter_provider.shutdown().unwrap();
 //! }
 //! ```
 //!
@@ -113,52 +119,22 @@ To configure role, instance, and machine name provide `service.name`, `service.i
 Sample telemetry is not supported, yet.
 
 ```no_run
-use opentelemetry::trace::Tracer as _;
-
 #[tokio::main]
 async fn main() {
-    let tracer = opentelemetry_application_insights::new_pipeline_from_env()
+    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
         .with_client(reqwest::Client::new())
         .with_live_metrics(true)
-        .install_batch(opentelemetry_sdk::runtime::Tokio);
+        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
     // ... send traces ...
 
-    opentelemetry::global::shutdown_tracer_provider();
+    tracer_provider.shutdown().unwrap();
 }
 ```
 "#
 )]
-//!
-//! ## Simple or Batch
-//!
-//! The functions `build_simple` and `install_simple` build/install a trace pipeline using the
-//! simple span processor. This means each span is processed and exported synchronously at the time
-//! it ends.
-//!
-//! The functions `build_batch` and `install_batch` use the batch span processor instead. This
-//! means spans are exported periodically in batches, which can be better for performance. This
-//! feature requires an async runtime such as Tokio or async-std. If you decide to use a batch span
-//! processor, make sure to call `opentelemetry::global::shutdown_tracer_provider()` before your
-//! program exits to ensure all remaining spans are exported properly (this example requires the
-//! **opentelemetry/rt-tokio** and **opentelemetry-http/reqwest** features).
-//!
-//! ```no_run
-//! use opentelemetry::trace::Tracer as _;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     let tracer = opentelemetry_application_insights::new_pipeline_from_env()
-//!         .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
-//!         .with_client(reqwest::Client::new())
-//!         .install_batch(opentelemetry_sdk::runtime::Tokio);
-//!
-//!     tracer.in_span("main", |_cx| {});
-//!
-//!     opentelemetry::global::shutdown_tracer_provider();
-//! }
-//! ```
 //!
 //! ## Async runtimes and HTTP clients
 //!
@@ -177,6 +153,14 @@ async fn main() {
 //! [`tokio`]: https://crates.io/crates/tokio
 //!
 //! Alternatively you can bring any other HTTP client by implementing the `HttpClient` trait.
+//!
+//! Map async/sync clients with the appropriate builder methods:
+//!
+//! - Sync clients with `{SdkTracerProvider,SdkLoggerProvider}.with_batch_exporter`/`PeriodicReader::builder`. If you're already in an
+//! async context when creating the client, you might need to create it using
+//! `std::thread::spawn(reqwest::blocking::Client::new).join().unwrap()`.
+//! - Async clients with the corresponding experimental async APIs. _Or_ with the pipeline API and
+//! `build_batch`/`install_batch`.
 //!
 //! # Attribute mapping
 //!
@@ -246,7 +230,7 @@ async fn main() {
 //! | `network.peer.address` + `network.peer.port`                               | Dependency Target                                        |
 //! | `db.namespace`                                                             | Dependency Target                                        |
 //! | `http.response.status_code`                                                | Dependency Result code                                   |
-//! | `db.system`                                                                | Dependency Type                                          |
+//! | `db.system.name`                                                           | Dependency Type                                          |
 //! | `messaging.system`                                                         | Dependency Type                                          |
 //! | `rpc.system`                                                               | Dependency Type                                          |
 //! | `"HTTP"` if any `http.` attribute exists                                   | Dependency Type                                          |
@@ -271,6 +255,7 @@ async fn main() {
 //! | `user.id`                   | `enduser.id`                               |
 //! | `db.namespace`              | `db.name`                                  |
 //! | `db.query.text`             | `db.statement`                             |
+//! | `db.system.name`            | `db.system`                                |
 //! | `http.request.method`       | `http.method`                              |
 //! | `http.request.header.host`  | `http.host`                                |
 //! | `http.response.status_code` | `http.status_code`                         |
@@ -379,13 +364,13 @@ use opentelemetry::InstrumentationScope;
 #[cfg(feature = "trace")]
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::export::ExportError as SdkExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::{error::OTelSdkError, ExportError as SdkExportError};
 #[cfg(feature = "trace")]
 use opentelemetry_sdk::{
     runtime::RuntimeChannel,
-    trace::{Config, Tracer, TracerProvider},
+    trace::{Config, SdkTracerProvider, Tracer},
 };
 #[cfg(feature = "trace")]
 use opentelemetry_semantic_conventions as semcov;
@@ -580,16 +565,30 @@ impl<C> PipelineBuilder<C> {
     /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
     ///     .with_client(reqwest::blocking::Client::new())
     ///     .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
-    ///         Resource::new(vec![
+    ///         Resource::builder_empty().with_attributes(vec![
     ///             KeyValue::new("service.name", "my-application"),
-    ///         ]),
+    ///         ]).build(),
     ///     ))
     ///     .install_simple();
     /// ```
     pub fn with_trace_config(self, mut config: Config) -> Self {
         if let Some(old_config) = self.config {
-            let merged_resource = old_config.resource.merge(config.resource.clone());
-            config = config.with_resource(merged_resource);
+            let old_attrs: Vec<KeyValue> = old_config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            let new_attrs: Vec<KeyValue> = config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            config = config.with_resource(
+                Resource::builder_empty()
+                    .with_attributes(old_attrs)
+                    .with_attributes(new_attrs)
+                    .build(),
+            );
         }
 
         PipelineBuilder {
@@ -612,12 +611,21 @@ impl<C> PipelineBuilder<C> {
     ///     .install_simple();
     /// ```
     pub fn with_service_name<T: Into<Value>>(self, name: T) -> Self {
-        let new_resource = Resource::new(vec![KeyValue::new(semcov::resource::SERVICE_NAME, name)]);
         let config = if let Some(old_config) = self.config {
-            let merged_resource = old_config.resource.merge(&new_resource);
-            old_config.with_resource(merged_resource)
+            let attrs: Vec<KeyValue> = old_config
+                .resource
+                .iter()
+                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+                .collect();
+            old_config.with_resource(
+                Resource::builder_empty()
+                    .with_attributes(attrs)
+                    .with_service_name(name)
+                    .build(),
+            )
         } else {
-            Config::default().with_resource(new_resource)
+            Config::default()
+                .with_resource(Resource::builder_empty().with_service_name(name).build())
         };
 
         PipelineBuilder {
@@ -651,15 +659,15 @@ where
             ),
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         }
     }
 
-    /// Build a configured `TracerProvider` with a simple span processor.
-    pub fn build_simple(mut self) -> TracerProvider {
+    /// Build a configured `SdkTracerProvider` with a simple span processor.
+    pub fn build_simple(mut self) -> SdkTracerProvider {
         let config = self.config.take();
         let exporter = self.init_exporter();
-        let mut builder = TracerProvider::builder().with_simple_exporter(exporter);
+        let mut builder = SdkTracerProvider::builder().with_simple_exporter(exporter);
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -667,31 +675,36 @@ where
         builder.build()
     }
 
-    /// Build a configured `TracerProvider` with a batch span processor using the specified
+    /// Build a configured `SdkTracerProvider` with a batch span processor using the specified
     /// runtime.
-    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> TracerProvider {
+    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> SdkTracerProvider {
         let config = self.config.take();
         #[cfg(feature = "live-metrics")]
         let live_metrics = self.live_metrics;
         #[cfg(feature = "live-metrics")]
         let live_metrics_endpoint = self.live_metrics_endpoint.clone();
         let exporter = self.init_exporter();
-        let mut builder = TracerProvider::builder();
+        let mut builder = SdkTracerProvider::builder();
         #[cfg(feature = "live-metrics")]
         if live_metrics {
-            let mut resource = Resource::default();
+            let mut resource = Resource::builder();
             if let Some(ref config) = config {
-                resource = resource.merge(config.resource.as_ref());
+                resource = resource.with_attributes(
+                    config
+                        .resource
+                        .iter()
+                        .map(|(k, v)| KeyValue::new(k.clone(), v.clone())),
+                );
             };
             builder = builder.with_span_processor(QuickPulseManager::new(
                 exporter.client.clone(),
                 live_metrics_endpoint,
                 exporter.instrumentation_key.clone(),
-                resource,
+                resource.build(),
                 runtime.clone(),
             ));
         }
-        builder = builder.with_batch_exporter(exporter, runtime);
+        builder = builder.with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter, runtime).build());
         if let Some(config) = config {
             builder = builder.with_config(config);
         }
@@ -701,7 +714,7 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
     /// that.
     pub fn install_simple(self) -> Tracer {
         let trace_provider = self.build_simple();
@@ -712,7 +725,7 @@ where
 
     /// Install an Application Insights pipeline with the recommended defaults.
     ///
-    /// This registers a global `TracerProvider`. See the `build_simple` function if you don't need
+    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
     /// that.
     pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
         let trace_provider = self.build_batch(runtime);
@@ -723,6 +736,7 @@ where
 }
 
 /// Application Insights span exporter
+#[derive(Clone)]
 pub struct Exporter<C> {
     client: Arc<C>,
     endpoint: Arc<http::Uri>,
@@ -760,7 +774,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         }
     }
 
@@ -780,7 +794,7 @@ impl<C> Exporter<C> {
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource: Resource::empty(),
+            resource: Resource::builder_empty().build(),
         })
     }
 
@@ -880,5 +894,11 @@ impl SdkExportError for Error {
 impl TraceExportError for Error {
     fn exporter_name(&self) -> &'static str {
         "application-insights"
+    }
+}
+
+impl From<Error> for OTelSdkError {
+    fn from(value: Error) -> Self {
+        OTelSdkError::InternalFailure(value.to_string())
     }
 }

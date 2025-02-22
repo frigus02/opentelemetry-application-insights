@@ -7,10 +7,13 @@ use crate::{
 use async_trait::async_trait;
 use opentelemetry::{otel_warn, KeyValue};
 use opentelemetry_http::HttpClient;
-use opentelemetry_sdk::metrics::{
-    data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
-    exporter::PushMetricExporter,
-    MetricResult, Temporality,
+use opentelemetry_sdk::{
+    error::OTelSdkResult,
+    metrics::{
+        data::{ExponentialHistogram, Gauge, Histogram, Metric, ResourceMetrics, Sum},
+        exporter::PushMetricExporter,
+        Temporality,
+    },
 };
 use std::{convert::TryInto, sync::Arc, time::SystemTime};
 
@@ -20,7 +23,7 @@ impl<C> PushMetricExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export(&self, metrics: &mut ResourceMetrics) -> MetricResult<()> {
+    async fn export(&self, metrics: &mut ResourceMetrics) -> OTelSdkResult {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
 
@@ -59,15 +62,16 @@ where
             }
         }
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
+        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn force_flush(&self) -> OTelSdkResult {
         Ok(())
     }
 
-    async fn force_flush(&self) -> MetricResult<()> {
-        Ok(())
-    }
-
-    fn shutdown(&self) -> MetricResult<()> {
+    fn shutdown(&self) -> OTelSdkResult {
         Ok(())
     }
 
@@ -150,10 +154,7 @@ fn map_gauge<T: ToF64Lossy>(metric: &Metric, gauge: &Gauge<T>) -> Vec<EnvelopeDa
         .data_points
         .iter()
         .map(|data_point| {
-            let time = data_point
-                .time
-                .or(data_point.start_time)
-                .unwrap_or_else(SystemTime::now);
+            let time = gauge.time;
             let data = DataPoint {
                 ns: None,
                 name: metric.name.clone().into(),
@@ -171,7 +172,7 @@ fn map_histogram<T: ToF64Lossy>(metric: &Metric, histogram: &Histogram<T>) -> Ve
         .data_points
         .iter()
         .map(|data_point| {
-            let time = data_point.time;
+            let time = histogram.time;
             let data = DataPoint {
                 ns: None,
                 name: metric.name.clone().into(),
@@ -197,7 +198,7 @@ fn map_exponential_histogram<T: ToF64Lossy>(
         .data_points
         .iter()
         .map(|data_point| {
-            let time = data_point.time;
+            let time = exp_histogram.time;
             let data = DataPoint {
                 ns: None,
                 name: metric.name.clone().into(),
@@ -219,10 +220,7 @@ fn map_sum<T: ToF64Lossy>(metric: &Metric, sum: &Sum<T>) -> Vec<EnvelopeData> {
     sum.data_points
         .iter()
         .map(|data_point| {
-            let time = data_point
-                .time
-                .or(data_point.start_time)
-                .unwrap_or_else(SystemTime::now);
+            let time = sum.time;
             let data = DataPoint {
                 ns: None,
                 name: metric.name.clone().into(),

@@ -214,7 +214,9 @@ mod tests {
     #[test]
     fn attrs_to_properties_filters_ms() {
         let attrs = [KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
-        let resource = Resource::new([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")]);
+        let resource = Resource::builder_empty()
+            .with_attributes([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")])
+            .build();
         let props = attrs_to_properties(attrs.iter(), Some(&resource), &[]).unwrap();
         assert_eq!(props.len(), 2);
         assert_eq!(props.get(&"a".into()).unwrap().as_ref(), "b");

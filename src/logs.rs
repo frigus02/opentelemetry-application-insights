@@ -6,18 +6,17 @@ use crate::{
     tags::get_tags_for_log,
     Exporter,
 };
-use async_trait::async_trait;
 use opentelemetry::{logs::Severity, InstrumentationScope};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    export::logs::{LogBatch, LogExporter},
-    logs::{LogRecord, LogResult},
+    error::OTelSdkResult,
+    logs::{LogBatch, LogExporter, SdkLogRecord},
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
 use std::{sync::Arc, time::SystemTime};
 
-fn is_exception(record: &LogRecord) -> bool {
+fn is_exception(record: &SdkLogRecord) -> bool {
     record.attributes_iter().any(|(k, _)| {
         k.as_str() == semcov::trace::EXCEPTION_TYPE
             || k.as_str() == semcov::trace::EXCEPTION_MESSAGE
@@ -27,7 +26,7 @@ fn is_exception(record: &LogRecord) -> bool {
 impl<C> Exporter<C> {
     fn create_envelope_for_log(
         &self,
-        (record, instrumentation_scope): (&LogRecord, &InstrumentationScope),
+        (record, instrumentation_scope): (&SdkLogRecord, &InstrumentationScope),
     ) -> Envelope {
         let (data, name) = if is_exception(record) {
             (
@@ -45,8 +44,8 @@ impl<C> Exporter<C> {
             name,
             time: time_to_string(
                 record
-                    .timestamp
-                    .or(record.observed_timestamp)
+                    .timestamp()
+                    .or(record.observed_timestamp())
                     .unwrap_or_else(SystemTime::now),
             )
             .into(),
@@ -63,12 +62,14 @@ impl<C> Exporter<C> {
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "logs")))]
-#[async_trait]
 impl<C> LogExporter for Exporter<C>
 where
     C: HttpClient + 'static,
 {
-    async fn export(&mut self, batch: LogBatch<'_>) -> LogResult<()> {
+    fn export(
+        &self,
+        batch: LogBatch<'_>,
+    ) -> impl std::future::Future<Output = OTelSdkResult> + Send {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.endpoint);
         let envelopes: Vec<_> = batch
@@ -76,8 +77,11 @@ where
             .map(|log| self.create_envelope_for_log(log))
             .collect();
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes).await?;
-        Ok(())
+        async move {
+            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
+                .await
+                .map_err(Into::into)
+        }
     }
 
     fn set_resource(&mut self, resource: &Resource) {
@@ -112,8 +116,8 @@ impl From<Severity> for SeverityLevel {
     }
 }
 
-impl From<&LogRecord> for ExceptionData {
-    fn from(record: &LogRecord) -> ExceptionData {
+impl From<&SdkLogRecord> for ExceptionData {
+    fn from(record: &SdkLogRecord) -> ExceptionData {
         let mut attrs = attrs_to_map(record.attributes_iter());
         let exception = ExceptionDetails {
             type_name: attrs
@@ -131,19 +135,19 @@ impl From<&LogRecord> for ExceptionData {
         ExceptionData {
             ver: 2,
             exceptions: vec![exception],
-            severity_level: record.severity_number.map(Into::into),
+            severity_level: record.severity_number().map(Into::into),
             properties: attrs_map_to_properties(attrs),
         }
     }
 }
 
-impl From<&LogRecord> for MessageData {
-    fn from(record: &LogRecord) -> MessageData {
+impl From<&SdkLogRecord> for MessageData {
+    fn from(record: &SdkLogRecord) -> MessageData {
         MessageData {
             ver: 2,
-            severity_level: record.severity_number.map(Into::into),
+            severity_level: record.severity_number().map(Into::into),
             message: record
-                .body
+                .body()
                 .as_ref()
                 .map(|v| v.as_str().into_owned())
                 .unwrap_or_else(|| "".into())

@@ -13,16 +13,25 @@ An [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-mon
 Configure a OpenTelemetry pipeline using the Application Insights exporter and start creating spans (this example requires the **opentelemetry-http/reqwest** feature):
 
 ```rust,no_run
-use opentelemetry::trace::Tracer as _;
+use opentelemetry::{global, trace::Tracer};
+use opentelemetry_sdk::trace::SdkTracerProvider;
 
 fn main() {
     let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
-    let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(connection_string)
-        .expect("valid connection string")
-        .with_client(reqwest::blocking::Client::new())
-        .install_simple();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::blocking::Client::new(),
+    )
+    .expect("valid connection string");
+    let tracer_provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .build();
+    global::set_tracer_provider(tracer_provider.clone());
 
+    let tracer = global::tracer("example");
     tracer.in_span("main", |_cx| {});
+
+    tracer_provider.shutdown().unwrap();
 }
 ```
 

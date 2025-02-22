@@ -37,12 +37,12 @@ pub(crate) async fn send(
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
         .header(http::header::CONTENT_ENCODING, "gzip")
-        .body(payload)
+        .body(Bytes::from(payload))
         .expect("request should be valid");
 
     // TODO Implement retries
     let response = client
-        .send(request)
+        .send_bytes(request)
         .await
         .map_err(Error::UploadConnection)?;
     handle_response(response)

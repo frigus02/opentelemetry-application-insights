@@ -3,6 +3,7 @@ use crate::{
     uploader::{append_path, serialize_request_body},
     Error, HttpClient,
 };
+use bytes::Bytes;
 use http::{HeaderName, Request, Uri};
 use std::{
     convert::TryFrom,
@@ -88,11 +89,11 @@ pub(crate) async fn send(
     }
 
     let request = request_builder
-        .body(payload)
+        .body(Bytes::from(payload))
         .expect("request should be valid");
 
     let response = client
-        .send(request)
+        .send_bytes(request)
         .await
         .map_err(Error::UploadConnection)?;
 

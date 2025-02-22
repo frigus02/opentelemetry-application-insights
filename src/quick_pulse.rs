@@ -6,15 +6,12 @@ use crate::{
     Error,
 };
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
-use opentelemetry::{
-    trace::{SpanKind, TraceResult},
-    Context, Key,
-};
+use opentelemetry::{trace::SpanKind, Context, Key};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
-    export::trace::SpanData,
+    error::OTelSdkResult,
     runtime::{RuntimeChannel, TrySend},
-    trace::{IdGenerator as _, RandomIdGenerator, Span, SpanProcessor},
+    trace::{IdGenerator as _, RandomIdGenerator, Span, SpanData, SpanProcessor},
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
@@ -130,15 +127,15 @@ impl<R: RuntimeChannel> SpanProcessor for QuickPulseManager<R> {
         }
     }
 
-    fn force_flush(&self) -> TraceResult<()> {
+    fn force_flush(&self) -> OTelSdkResult {
         Ok(())
     }
 
-    fn shutdown(&self) -> TraceResult<()> {
+    fn shutdown(&self) -> OTelSdkResult {
         self.message_sender
             .try_send(Message::Stop)
-            .map_err(Error::QuickPulseShutdown)?;
-        Ok(())
+            .map_err(Error::QuickPulseShutdown)
+            .map_err(Into::into)
     }
 }
 
@@ -173,7 +170,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
     ) -> Self {
         let mut tags = get_tags_for_resource(&resource);
         let machine_name = resource
-            .get(Key::from_static_str(semcov::resource::HOST_NAME))
+            .get(&Key::from_static_str(semcov::resource::HOST_NAME))
             .map(|v| v.as_str().into_owned())
             .unwrap_or_else(|| "Unknown".into());
         Self {
