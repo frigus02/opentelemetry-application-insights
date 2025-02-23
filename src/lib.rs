@@ -782,12 +782,11 @@ impl<C: Debug> Debug for Exporter<C> {
         debug
             .field("client", &self.client)
             .field("endpoint", &self.endpoint)
-            .field("instrumentation_key", &self.instrumentation_key)
-            .field("resource", &self.resource);
+            .field("instrumentation_key", &self.instrumentation_key);
         #[cfg(feature = "trace")]
         debug.field("sample_rate", &self.sample_rate);
         #[cfg(any(feature = "trace", feature = "logs"))]
-        debug.field(
+        debug.field("resource", &self.resource).field(
             "resource_attributes_in_events",
             &self.resource_attributes_in_events,
         );
