@@ -399,7 +399,7 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         instrumentation_key,
         sample_rate: None,
         #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events: false,
+        resource_attributes_in_events_and_logs: false,
     }
 }
 
@@ -432,7 +432,7 @@ pub fn new_pipeline_from_connection_string(
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
         #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events: false,
+        resource_attributes_in_events_and_logs: false,
     })
 }
 
@@ -465,7 +465,7 @@ pub fn new_pipeline_from_env(
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
         #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events: false,
+        resource_attributes_in_events_and_logs: false,
     })
 }
 
@@ -484,7 +484,7 @@ pub struct PipelineBuilder<C> {
     instrumentation_key: String,
     sample_rate: Option<f64>,
     #[cfg(any(feature = "trace", feature = "logs"))]
-    resource_attributes_in_events: bool,
+    resource_attributes_in_events_and_logs: bool,
 }
 
 #[cfg(feature = "trace")]
@@ -505,7 +505,7 @@ impl<C> PipelineBuilder<C> {
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events: self.resource_attributes_in_events,
+            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
         }
     }
 
@@ -567,11 +567,11 @@ impl<C> PipelineBuilder<C> {
     /// Default: false.
     #[cfg(any(feature = "trace", feature = "logs"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "trace", feature = "logs"))))]
-    pub fn with_resource_attributes_in_events(
+    pub fn with_resource_attributes_in_events_and_logs(
         mut self,
-        resource_attributes_in_events: bool,
+        resource_attributes_in_events_and_logs: bool,
     ) -> Self {
-        self.resource_attributes_in_events = resource_attributes_in_events;
+        self.resource_attributes_in_events_and_logs = resource_attributes_in_events_and_logs;
         self
     }
 
@@ -686,7 +686,7 @@ where
             sample_rate: self.sample_rate.unwrap_or(100.0),
             resource: Resource::builder_empty().build(),
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events: self.resource_attributes_in_events,
+            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
         }
     }
 
@@ -773,7 +773,7 @@ pub struct Exporter<C> {
     #[cfg(any(feature = "trace", feature = "logs"))]
     resource: Resource,
     #[cfg(any(feature = "trace", feature = "logs"))]
-    resource_attributes_in_events: bool,
+    resource_attributes_in_events_and_logs: bool,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -787,8 +787,8 @@ impl<C: Debug> Debug for Exporter<C> {
         debug.field("sample_rate", &self.sample_rate);
         #[cfg(any(feature = "trace", feature = "logs"))]
         debug.field("resource", &self.resource).field(
-            "resource_attributes_in_events",
-            &self.resource_attributes_in_events,
+            "resource_attributes_in_events_and_logs",
+            &self.resource_attributes_in_events_and_logs,
         );
         debug.finish()
     }
@@ -810,7 +810,7 @@ impl<C> Exporter<C> {
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events: false,
+            resource_attributes_in_events_and_logs: false,
         }
     }
 
@@ -832,7 +832,7 @@ impl<C> Exporter<C> {
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
             #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events: false,
+            resource_attributes_in_events_and_logs: false,
         })
     }
 
@@ -868,11 +868,11 @@ impl<C> Exporter<C> {
     /// Default: false.
     #[cfg(any(feature = "trace", feature = "logs"))]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "trace", feature = "logs"))))]
-    pub fn with_resource_attributes_in_events(
+    pub fn with_resource_attributes_in_events_and_logs(
         mut self,
-        resource_attributes_in_events: bool,
+        resource_attributes_in_events_and_logs: bool,
     ) -> Self {
-        self.resource_attributes_in_events = resource_attributes_in_events;
+        self.resource_attributes_in_events_and_logs = resource_attributes_in_events_and_logs;
         self
     }
 }

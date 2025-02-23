@@ -186,7 +186,7 @@ async fn traces_batch_tokio() {
 }
 
 #[test]
-fn traces_with_resource_attributes_in_events() {
+fn traces_with_resource_attributes_in_events_and_logs() {
     let requests = record(NoTick, |client| {
         let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
             .expect("connection string is valid")
@@ -198,7 +198,7 @@ fn traces_with_resource_attributes_in_events() {
                         .build(),
                 ),
             )
-            .with_resource_attributes_in_events(true)
+            .with_resource_attributes_in_events_and_logs(true)
             .build_simple();
         let tracer = tracer_provider.tracer("test");
 
@@ -210,8 +210,8 @@ fn traces_with_resource_attributes_in_events() {
 
         tracer_provider.shutdown().unwrap();
     });
-    let traces_with_resource_attributes_in_events = requests_to_string(requests);
-    insta::assert_snapshot!(traces_with_resource_attributes_in_events);
+    let traces_with_resource_attributes_in_events_and_logs = requests_to_string(requests);
+    insta::assert_snapshot!(traces_with_resource_attributes_in_events_and_logs);
 }
 
 #[test]
@@ -275,14 +275,14 @@ fn logs() {
 }
 
 #[test]
-fn logs_with_resource_attributes_in_events() {
+fn logs_with_resource_attributes_in_events_and_logs() {
     let requests = record(NoTick, |client| {
         let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
             CONNECTION_STRING,
             client,
         )
         .expect("connection string is valid")
-        .with_resource_attributes_in_events(true);
+        .with_resource_attributes_in_events_and_logs(true);
         let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(
@@ -299,8 +299,8 @@ fn logs_with_resource_attributes_in_events() {
 
         logger_provider.shutdown().unwrap();
     });
-    let logs_with_resource_attributes_in_events = requests_to_string(requests);
-    insta::assert_snapshot!(logs_with_resource_attributes_in_events);
+    let logs_with_resource_attributes_in_events_and_logs = requests_to_string(requests);
+    insta::assert_snapshot!(logs_with_resource_attributes_in_events_and_logs);
 }
 
 #[tokio::test]

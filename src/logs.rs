@@ -28,7 +28,7 @@ impl<C> Exporter<C> {
         &self,
         (record, instrumentation_scope): (&SdkLogRecord, &InstrumentationScope),
     ) -> Envelope {
-        let event_resource = if self.resource_attributes_in_events {
+        let event_resource = if self.resource_attributes_in_events_and_logs {
             Some(&self.resource)
         } else {
             None

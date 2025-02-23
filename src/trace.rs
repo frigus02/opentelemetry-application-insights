@@ -99,7 +99,7 @@ impl<C> Exporter<C> {
             data: Some(data),
         });
 
-        let event_resource = if self.resource_attributes_in_events {
+        let event_resource = if self.resource_attributes_in_events_and_logs {
             Some(resource)
         } else {
             None

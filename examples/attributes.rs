@@ -43,7 +43,7 @@ fn main() {
         reqwest::blocking::Client::new(),
     )
     .expect("valid connection string")
-    .with_resource_attributes_in_events(true);
+    .with_resource_attributes_in_events_and_logs(true);
 
     let client_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())

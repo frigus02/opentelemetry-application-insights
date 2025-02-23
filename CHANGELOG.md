@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-- Add option `.with_resource_attributes_in_events(true)`. When enabled, resource attributes are included in logs and events, i.e. Trace, Exception and Event telemetry.
+- Add option `.with_resource_attributes_in_events_and_logs(true)`. When enabled, resource attributes are included in events and logs, i.e. Trace, Exception and Event telemetry.
 
 ## [0.38.0] - 2025-02-22
 
