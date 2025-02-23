@@ -398,6 +398,7 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         live_metrics: false,
         instrumentation_key,
         sample_rate: None,
+        resource_attributes_in_events: false,
     }
 }
 
@@ -429,6 +430,7 @@ pub fn new_pipeline_from_connection_string(
         live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
+        resource_attributes_in_events: false,
     })
 }
 
@@ -460,6 +462,7 @@ pub fn new_pipeline_from_env(
         live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
+        resource_attributes_in_events: false,
     })
 }
 
@@ -477,6 +480,7 @@ pub struct PipelineBuilder<C> {
     live_metrics: bool,
     instrumentation_key: String,
     sample_rate: Option<f64>,
+    resource_attributes_in_events: bool,
 }
 
 #[cfg(feature = "trace")]
@@ -496,6 +500,7 @@ impl<C> PipelineBuilder<C> {
             live_metrics: self.live_metrics,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
+            resource_attributes_in_events: self.resource_attributes_in_events,
         }
     }
 
@@ -547,6 +552,19 @@ impl<C> PipelineBuilder<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = Some(sample_rate * 100.0);
+        self
+    }
+
+    /// Set whether resource attributes should be included in events.
+    ///
+    /// This affects both trace events and logs.
+    ///
+    /// Default: false.
+    pub fn with_resource_attributes_in_events(
+        mut self,
+        resource_attributes_in_events: bool,
+    ) -> Self {
+        self.resource_attributes_in_events = resource_attributes_in_events;
         self
     }
 
@@ -660,6 +678,7 @@ where
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
             resource: Resource::builder_empty().build(),
+            resource_attributes_in_events: self.resource_attributes_in_events,
         }
     }
 
@@ -745,6 +764,7 @@ pub struct Exporter<C> {
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
     resource: Resource,
+    resource_attributes_in_events: bool,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -753,7 +773,12 @@ impl<C: Debug> Debug for Exporter<C> {
         debug
             .field("client", &self.client)
             .field("endpoint", &self.endpoint)
-            .field("instrumentation_key", &self.instrumentation_key);
+            .field("instrumentation_key", &self.instrumentation_key)
+            .field("resource", &self.resource)
+            .field(
+                "resource_attributes_in_events",
+                &self.resource_attributes_in_events,
+            );
         #[cfg(feature = "trace")]
         debug.field("sample_rate", &self.sample_rate);
         debug.finish()
@@ -775,6 +800,7 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
+            resource_attributes_in_events: false,
         }
     }
 
@@ -795,6 +821,7 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
+            resource_attributes_in_events: false,
         })
     }
 
@@ -820,6 +847,19 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
+    /// Set whether resource attributes should be included in events.
+    ///
+    /// This affects both trace events and logs.
+    ///
+    /// Default: false.
+    pub fn with_resource_attributes_in_events(
+        mut self,
+        resource_attributes_in_events: bool,
+    ) -> Self {
+        self.resource_attributes_in_events = resource_attributes_in_events;
         self
     }
 }

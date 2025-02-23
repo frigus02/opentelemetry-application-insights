@@ -1,7 +1,7 @@
 use crate::{
     convert::{
         attrs_map_to_properties, attrs_to_map, attrs_to_properties, duration_to_string,
-        status_to_result_code, time_to_string, value_to_severity_level, AttrValue,
+        status_to_result_code, time_to_string, value_to_severity_level,
     },
     models::{
         context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
@@ -99,18 +99,23 @@ impl<C> Exporter<C> {
             data: Some(data),
         });
 
+        let event_resource = if self.resource_attributes_in_events {
+            Some(resource)
+        } else {
+            None
+        };
         for event in span.events.iter() {
             let (data, name) = match event.name.as_ref() {
                 x if x == EVENT_NAME_CUSTOM => (
-                    Data::Event(EventAndResource(event, resource).into()),
+                    Data::Event(EventAndResource(event, event_resource).into()),
                     "Microsoft.ApplicationInsights.Event",
                 ),
                 x if x == EVENT_NAME_EXCEPTION => (
-                    Data::Exception(EventAndResource(event, resource).into()),
+                    Data::Exception(EventAndResource(event, event_resource).into()),
                     "Microsoft.ApplicationInsights.Exception",
                 ),
                 _ => (
-                    Data::Message(EventAndResource(event, resource).into()),
+                    Data::Message(EventAndResource(event, event_resource).into()),
                     "Microsoft.ApplicationInsights.Message",
                 ),
             };
@@ -217,9 +222,7 @@ pub(crate) fn is_remote_dependency_success(span: &SpanData) -> Option<bool> {
 struct SpanAndResource<'a>(&'a SpanData, &'a Resource);
 
 impl<'a> From<SpanAndResource<'a>> for RequestData {
-    fn from(s: SpanAndResource<'a>) -> RequestData {
-        let span = s.0;
-        let resource = s.1;
+    fn from(SpanAndResource(span, resource): SpanAndResource<'a>) -> RequestData {
         let mut data = RequestData {
             ver: 2,
             id: span.span_context.span_id().to_string().into(),
@@ -313,9 +316,7 @@ impl<'a> From<SpanAndResource<'a>> for RequestData {
 }
 
 impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
-    fn from(s: SpanAndResource<'a>) -> RemoteDependencyData {
-        let span = s.0;
-        let resource = s.1;
+    fn from(SpanAndResource(span, resource): SpanAndResource<'a>) -> RemoteDependencyData {
         let mut data = RemoteDependencyData {
             ver: 2,
             id: Some(span.span_context.span_id().to_string().into()),
@@ -447,17 +448,11 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
     }
 }
 
-struct EventAndResource<'a>(&'a Event, &'a Resource);
+struct EventAndResource<'a>(&'a Event, Option<&'a Resource>);
 
 impl From<EventAndResource<'_>> for ExceptionData {
     fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
-        attrs.extend(
-            resource
-                .iter()
-                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
-        );
-
         let exception = ExceptionDetails {
             type_name: attrs
                 .remove(semcov::trace::EXCEPTION_TYPE)
@@ -475,7 +470,7 @@ impl From<EventAndResource<'_>> for ExceptionData {
             ver: 2,
             exceptions: vec![exception],
             severity_level: None,
-            properties: attrs_map_to_properties(attrs),
+            properties: attrs_map_to_properties(attrs, resource),
         }
     }
 }
@@ -483,18 +478,13 @@ impl From<EventAndResource<'_>> for ExceptionData {
 impl From<EventAndResource<'_>> for EventData {
     fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
-        attrs.extend(
-            resource
-                .iter()
-                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
-        );
         EventData {
             ver: 2,
             name: attrs
                 .remove(CUSTOM_EVENT_NAME)
                 .map(Into::into)
                 .unwrap_or_else(|| "<no name>".into()),
-            properties: attrs_map_to_properties(attrs),
+            properties: attrs_map_to_properties(attrs, resource),
         }
     }
 }
@@ -507,11 +497,6 @@ const LEVEL: &str = "level";
 impl From<EventAndResource<'_>> for MessageData {
     fn from(EventAndResource(event, resource): EventAndResource<'_>) -> Self {
         let mut attrs = attrs_to_map(event.attributes.iter());
-        attrs.extend(
-            resource
-                .iter()
-                .map(|(k, v)| (k.as_str(), v as &dyn AttrValue)),
-        );
         let severity_level = attrs.get(LEVEL).and_then(|&x| value_to_severity_level(x));
         if severity_level.is_some() {
             attrs.remove(LEVEL);
@@ -524,7 +509,7 @@ impl From<EventAndResource<'_>> for MessageData {
             } else {
                 event.name.clone().into_owned().into()
             },
-            properties: attrs_map_to_properties(attrs),
+            properties: attrs_map_to_properties(attrs, resource),
         }
     }
 }

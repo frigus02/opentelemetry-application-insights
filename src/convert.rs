@@ -82,11 +82,18 @@ where
 #[cfg(any(feature = "trace", feature = "logs"))]
 pub(crate) fn attrs_map_to_properties(
     attributes: HashMap<&str, &dyn AttrValue>,
+    resource: Option<&Resource>,
 ) -> Option<Properties> {
     let properties: Properties = attributes
         .iter()
-        .filter(|(&k, _)| !k.starts_with("_MS."))
-        .map(|(&k, &v)| (k.into(), v.as_str().into()))
+        .map(|(&k, &v)| (k, v))
+        .chain(
+            resource
+                .iter()
+                .flat_map(|r| r.iter().map(|(k, v)| (k.as_str(), v as &dyn AttrValue))),
+        )
+        .filter(|(k, _)| !k.starts_with("_MS."))
+        .map(|(k, v)| (k.into(), v.as_str().into()))
         .collect();
 
     Some(properties).filter(|x| !x.is_empty())
@@ -258,9 +265,13 @@ mod tests {
         let attrs = [KeyValue::new("a", "b"), KeyValue::new("_MS.a", "b")];
         let attrs_map = attrs_to_map(attrs.iter());
         assert_eq!(attrs_map.len(), 2);
-        let props = attrs_map_to_properties(attrs_map).unwrap();
-        assert_eq!(props.len(), 1);
+        let resource = Resource::builder_empty()
+            .with_attributes([KeyValue::new("c", "d"), KeyValue::new("_MS.c", "d")])
+            .build();
+        let props = attrs_map_to_properties(attrs_map, Some(&resource)).unwrap();
+        assert_eq!(props.len(), 2);
         assert_eq!(props.get(&"a".into()), Some(&"b".into()));
+        assert_eq!(props.get(&"c".into()).unwrap().as_ref(), "d");
     }
 
     #[test_case(AnyValue::Int(1), "1" ; "int")]

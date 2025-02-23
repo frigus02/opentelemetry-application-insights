@@ -1,0 +1,27 @@
+---
+source: tests/http_requests.rs
+expression: logs_with_resource_attributes_in_events
+---
+POST /v2/track HTTP/1.1
+host: dc.services.visualstudio.com
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "data": {
+      "baseData": {
+        "message": "message",
+        "properties": {
+          "attr": "value"
+        },
+        "ver": 2
+      },
+      "baseType": "MessageData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Message",
+    "tags": {},
+    "time": "STRIPPED"
+  }
+]

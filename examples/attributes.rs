@@ -42,7 +42,8 @@ fn main() {
             .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
         reqwest::blocking::Client::new(),
     )
-    .expect("valid connection string");
+    .expect("valid connection string")
+    .with_resource_attributes_in_events(true);
 
     let client_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
@@ -66,6 +67,7 @@ fn main() {
                 .with_attributes(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
+                    KeyValue::new("my.custom.attribute", "example"),
                 ])
                 .build(),
         )
