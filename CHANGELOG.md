@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.39.0] - 2025-02-23
+
 - Add option `.with_resource_attributes_in_events_and_logs(true)`. When enabled, resource attributes are included in events and logs, i.e. Trace, Exception and Event telemetry.
 
 ## [0.38.0] - 2025-02-22
@@ -299,7 +301,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.38.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.39.0...HEAD
+[0.39.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.38.0...0.39.0
 [0.38.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.36.0...0.37.0
 [0.36.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.35.0...0.36.0
