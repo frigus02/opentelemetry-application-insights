@@ -4,15 +4,16 @@ use crate::{
         status_to_result_code, time_to_string, value_to_severity_level,
     },
     models::{
-        context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, Envelope, EventData, ExceptionData,
-        ExceptionDetails, LimitedLenString, MessageData, RemoteDependencyData, RequestData,
+        context_tag_keys::attrs::CUSTOM_EVENT_NAME, Data, DataPoint, Envelope, EventData,
+        ExceptionData, ExceptionDetails, LimitedLenString, MessageData, MetricData,
+        RemoteDependencyData, RequestData,
     },
-    tags::{get_tags_for_event, get_tags_for_span},
+    tags::{get_tags_for_event, get_tags_for_resource, get_tags_for_span},
     Exporter,
 };
 use opentelemetry::{
     trace::{Event, SpanKind, Status},
-    Value,
+    InstrumentationScope, KeyValue, Value,
 };
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
@@ -21,7 +22,14 @@ use opentelemetry_sdk::{
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -69,6 +77,11 @@ pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
 impl<C> Exporter<C> {
     fn create_envelopes_for_span(&self, span: SpanData, resource: &Resource) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.events.len());
+        if let Some(resource_envelope) =
+            self.create_resource_metric_envelope(resource, &span.instrumentation_scope)
+        {
+            result.push(resource_envelope);
+        }
 
         let (data, tags, name) = match span.span_kind {
             SpanKind::Server | SpanKind::Consumer => {
@@ -125,6 +138,34 @@ impl<C> Exporter<C> {
         }
 
         result
+    }
+
+    fn create_resource_metric_envelope(
+        &self,
+        resource: &Resource,
+        instrumentation_scope: &InstrumentationScope,
+    ) -> Option<Envelope> {
+        if resource.is_empty() {
+            return None;
+        }
+
+        Some(Envelope {
+            name: "Microsoft.ApplicationInsights.Metric",
+            time: time_to_string(SystemTime::now()).into(),
+            sample_rate: None,
+            i_key: Some(self.instrumentation_key.clone().into()),
+            tags: Some(get_tags_for_resource(resource, instrumentation_scope)),
+            data: Some(Data::Metric(MetricData {
+                ver: 2,
+                metrics: vec![DataPoint {
+                    ns: None,
+                    name: "_OTELRESOURCE_".into(),
+                    kind: None,
+                    value: 1.,
+                }],
+                properties: attrs_to_properties((&[] as &[KeyValue]).iter(), Some(resource), &[]),
+            })),
+        })
     }
 }
 

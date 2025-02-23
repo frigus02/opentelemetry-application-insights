@@ -118,10 +118,13 @@ pub(crate) fn get_tags_for_log(
     tags
 }
 
-#[cfg(feature = "live-metrics")]
-pub(crate) fn get_tags_for_resource(resource: &Resource) -> Tags {
+#[cfg(any(feature = "trace", feature = "live-metrics"))]
+pub(crate) fn get_tags_for_resource(
+    resource: &Resource,
+    instrumentation_scope: &InstrumentationScope,
+) -> Tags {
     let mut tags = Tags::new();
-    build_tags_from_resource_attrs(&mut tags, resource, &Default::default());
+    build_tags_from_resource_attrs(&mut tags, resource, instrumentation_scope);
     tags
 }
 

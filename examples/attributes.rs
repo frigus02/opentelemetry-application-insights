@@ -66,6 +66,7 @@ fn main() {
                 .with_attributes(vec![
                     KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "example-attributes"),
                     KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
+                    KeyValue::new("a.custom.resource", "hi"),
                 ])
                 .build(),
         )

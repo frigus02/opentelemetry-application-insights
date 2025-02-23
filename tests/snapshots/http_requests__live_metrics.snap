@@ -149,12 +149,96 @@ content-encoding: gzip
 ]
 
 
+POST /QuickPulseService.svc/post?ikey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66 HTTP/1.1
+host: redirected
+expect: 100-continue
+x-ms-qps-transmission-time: STRIPPED
+content-type: application/json
+content-encoding: gzip
+
+[
+  {
+    "Instance": "Unknown",
+    "InvariantVersion": 1,
+    "MachineName": "Unknown",
+    "Metrics": [
+      {
+        "Name": "\\Processor(_Total)\\% Processor Time",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\Memory\\Committed Bytes",
+        "Value": "STRIPPED",
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Requests Failed/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Dependency Calls Failed/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      },
+      {
+        "Name": "\\ApplicationInsights\\Exceptions/Sec",
+        "Value": 0.0,
+        "Weight": 1
+      }
+    ],
+    "RoleName": "unknown_service",
+    "StreamId": "STRIPPED",
+    "Timestamp": "STRIPPED",
+    "Version": "STRIPPED"
+  }
+]
+
+
 POST /v2/track HTTP/1.1
 host: dc.services.visualstudio.com
 content-type: application/json
 content-encoding: gzip
 
 [
+  {
+    "data": {
+      "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "STRIPPED"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
   {
     "data": {
       "baseData": {
@@ -210,6 +294,33 @@ content-encoding: gzip
   {
     "data": {
       "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "STRIPPED"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
         "duration": "STRIPPED",
         "id": "STRIPPED",
         "name": "live-metrics",
@@ -232,6 +343,33 @@ content-encoding: gzip
       "ai.cloud.role": "unknown_service",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "service.name": "unknown_service",
+          "telemetry.sdk.language": "rust",
+          "telemetry.sdk.name": "opentelemetry",
+          "telemetry.sdk.version": "STRIPPED"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "unknown_service",
+      "ai.internal.sdkVersion": "STRIPPED"
     },
     "time": "STRIPPED"
   },

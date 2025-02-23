@@ -11,6 +11,30 @@ content-encoding: gzip
   {
     "data": {
       "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "service.name": "server",
+          "service.namespace": "test"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "test.server"
+    },
+    "time": "STRIPPED"
+  },
+  {
+    "data": {
+      "baseData": {
         "duration": "STRIPPED",
         "id": "STRIPPED",
         "name": "async operation",
@@ -43,6 +67,30 @@ content-type: application/json
 content-encoding: gzip
 
 [
+  {
+    "data": {
+      "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "service.name": "server",
+          "service.namespace": "test"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "test.server"
+    },
+    "time": "STRIPPED"
+  },
   {
     "data": {
       "baseData": {
@@ -162,6 +210,34 @@ content-type: application/json
 content-encoding: gzip
 
 [
+  {
+    "data": {
+      "baseData": {
+        "metrics": [
+          {
+            "name": "_OTELRESOURCE_",
+            "value": 1.0
+          }
+        ],
+        "properties": {
+          "device.id": "123",
+          "device.model.name": "device",
+          "service.name": "client",
+          "service.namespace": "test"
+        },
+        "ver": 2
+      },
+      "baseType": "MetricData"
+    },
+    "iKey": "0fdcec70-0ce5-4085-89d9-9ae8ead9af66",
+    "name": "Microsoft.ApplicationInsights.Metric",
+    "tags": {
+      "ai.cloud.role": "test.client",
+      "ai.device.id": "123",
+      "ai.device.model": "device"
+    },
+    "time": "STRIPPED"
+  },
   {
     "data": {
       "baseData": {

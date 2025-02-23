@@ -168,7 +168,7 @@ impl<C: HttpClient + 'static> QuickPulseSender<C> {
         instrumentation_key: String,
         resource: Resource,
     ) -> Self {
-        let mut tags = get_tags_for_resource(&resource);
+        let mut tags = get_tags_for_resource(&resource, &Default::default());
         let machine_name = resource
             .get(&Key::from_static_str(semcov::resource::HOST_NAME))
             .map(|v| v.as_str().into_owned())
