@@ -28,14 +28,19 @@ impl<C> Exporter<C> {
         &self,
         (record, instrumentation_scope): (&SdkLogRecord, &InstrumentationScope),
     ) -> Envelope {
+        let event_resource = if self.resource_attributes_in_events_and_logs {
+            Some(&self.resource)
+        } else {
+            None
+        };
         let (data, name) = if is_exception(record) {
             (
-                Data::Exception(record.into()),
+                Data::Exception(RecordAndResource(record, event_resource).into()),
                 "Microsoft.ApplicationInsights.Exception",
             )
         } else {
             (
-                Data::Message(record.into()),
+                Data::Message(RecordAndResource(record, event_resource).into()),
                 "Microsoft.ApplicationInsights.Message",
             )
         };
@@ -116,8 +121,10 @@ impl From<Severity> for SeverityLevel {
     }
 }
 
-impl From<&SdkLogRecord> for ExceptionData {
-    fn from(record: &SdkLogRecord) -> ExceptionData {
+struct RecordAndResource<'a>(&'a SdkLogRecord, Option<&'a Resource>);
+
+impl From<RecordAndResource<'_>> for ExceptionData {
+    fn from(RecordAndResource(record, resource): RecordAndResource) -> ExceptionData {
         let mut attrs = attrs_to_map(record.attributes_iter());
         let exception = ExceptionDetails {
             type_name: attrs
@@ -136,13 +143,13 @@ impl From<&SdkLogRecord> for ExceptionData {
             ver: 2,
             exceptions: vec![exception],
             severity_level: record.severity_number().map(Into::into),
-            properties: attrs_map_to_properties(attrs),
+            properties: attrs_map_to_properties(attrs, resource),
         }
     }
 }
 
-impl From<&SdkLogRecord> for MessageData {
-    fn from(record: &SdkLogRecord) -> MessageData {
+impl From<RecordAndResource<'_>> for MessageData {
+    fn from(RecordAndResource(record, resource): RecordAndResource) -> MessageData {
         MessageData {
             ver: 2,
             severity_level: record.severity_number().map(Into::into),
@@ -154,7 +161,7 @@ impl From<&SdkLogRecord> for MessageData {
                 .into(),
             properties: attrs_to_properties(
                 record.attributes_iter(),
-                None,
+                resource,
                 #[cfg(feature = "trace")]
                 &[],
             ),

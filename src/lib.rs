@@ -398,6 +398,8 @@ pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
         live_metrics: false,
         instrumentation_key,
         sample_rate: None,
+        #[cfg(any(feature = "trace", feature = "logs"))]
+        resource_attributes_in_events_and_logs: false,
     }
 }
 
@@ -429,6 +431,8 @@ pub fn new_pipeline_from_connection_string(
         live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
+        #[cfg(any(feature = "trace", feature = "logs"))]
+        resource_attributes_in_events_and_logs: false,
     })
 }
 
@@ -460,6 +464,8 @@ pub fn new_pipeline_from_env(
         live_metrics: false,
         instrumentation_key: connection_string.instrumentation_key,
         sample_rate: None,
+        #[cfg(any(feature = "trace", feature = "logs"))]
+        resource_attributes_in_events_and_logs: false,
     })
 }
 
@@ -477,6 +483,8 @@ pub struct PipelineBuilder<C> {
     live_metrics: bool,
     instrumentation_key: String,
     sample_rate: Option<f64>,
+    #[cfg(any(feature = "trace", feature = "logs"))]
+    resource_attributes_in_events_and_logs: bool,
 }
 
 #[cfg(feature = "trace")]
@@ -496,6 +504,8 @@ impl<C> PipelineBuilder<C> {
             live_metrics: self.live_metrics,
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate,
+            #[cfg(any(feature = "trace", feature = "logs"))]
+            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
         }
     }
 
@@ -547,6 +557,21 @@ impl<C> PipelineBuilder<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = Some(sample_rate * 100.0);
+        self
+    }
+
+    /// Set whether resource attributes should be included in events.
+    ///
+    /// This affects both trace events and logs.
+    ///
+    /// Default: false.
+    #[cfg(any(feature = "trace", feature = "logs"))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "trace", feature = "logs"))))]
+    pub fn with_resource_attributes_in_events_and_logs(
+        mut self,
+        resource_attributes_in_events_and_logs: bool,
+    ) -> Self {
+        self.resource_attributes_in_events_and_logs = resource_attributes_in_events_and_logs;
         self
     }
 
@@ -660,6 +685,8 @@ where
             instrumentation_key: self.instrumentation_key,
             sample_rate: self.sample_rate.unwrap_or(100.0),
             resource: Resource::builder_empty().build(),
+            #[cfg(any(feature = "trace", feature = "logs"))]
+            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
         }
     }
 
@@ -745,6 +772,8 @@ pub struct Exporter<C> {
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
     resource: Resource,
+    #[cfg(any(feature = "trace", feature = "logs"))]
+    resource_attributes_in_events_and_logs: bool,
 }
 
 impl<C: Debug> Debug for Exporter<C> {
@@ -756,6 +785,11 @@ impl<C: Debug> Debug for Exporter<C> {
             .field("instrumentation_key", &self.instrumentation_key);
         #[cfg(feature = "trace")]
         debug.field("sample_rate", &self.sample_rate);
+        #[cfg(any(feature = "trace", feature = "logs"))]
+        debug.field("resource", &self.resource).field(
+            "resource_attributes_in_events_and_logs",
+            &self.resource_attributes_in_events_and_logs,
+        );
         debug.finish()
     }
 }
@@ -775,6 +809,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
+            #[cfg(any(feature = "trace", feature = "logs"))]
+            resource_attributes_in_events_and_logs: false,
         }
     }
 
@@ -795,6 +831,8 @@ impl<C> Exporter<C> {
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource: Resource::builder_empty().build(),
+            #[cfg(any(feature = "trace", feature = "logs"))]
+            resource_attributes_in_events_and_logs: false,
         })
     }
 
@@ -820,6 +858,21 @@ impl<C> Exporter<C> {
     pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
         // Application Insights expects the sample rate as a percentage.
         self.sample_rate = sample_rate * 100.0;
+        self
+    }
+
+    /// Set whether resource attributes should be included in events.
+    ///
+    /// This affects both trace events and logs.
+    ///
+    /// Default: false.
+    #[cfg(any(feature = "trace", feature = "logs"))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "trace", feature = "logs"))))]
+    pub fn with_resource_attributes_in_events_and_logs(
+        mut self,
+        resource_attributes_in_events_and_logs: bool,
+    ) -> Self {
+        self.resource_attributes_in_events_and_logs = resource_attributes_in_events_and_logs;
         self
     }
 }

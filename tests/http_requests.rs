@@ -186,6 +186,35 @@ async fn traces_batch_tokio() {
 }
 
 #[test]
+fn traces_with_resource_attributes_in_events_and_logs() {
+    let requests = record(NoTick, |client| {
+        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+            .expect("connection string is valid")
+            .with_client(client)
+            .with_trace_config(
+                opentelemetry_sdk::trace::Config::default().with_resource(
+                    Resource::builder_empty()
+                        .with_attribute(KeyValue::new("attr", "value"))
+                        .build(),
+                ),
+            )
+            .with_resource_attributes_in_events_and_logs(true)
+            .build_simple();
+        let tracer = tracer_provider.tracer("test");
+
+        tracer.in_span("resource attributes in events", |_cx| {
+            get_active_span(|span| {
+                span.add_event("An event!", vec![]);
+            });
+        });
+
+        tracer_provider.shutdown().unwrap();
+    });
+    let traces_with_resource_attributes_in_events_and_logs = requests_to_string(requests);
+    insta::assert_snapshot!(traces_with_resource_attributes_in_events_and_logs);
+}
+
+#[test]
 fn logs() {
     let requests = record(NoTick, |client| {
         // Setup tracing
@@ -243,6 +272,35 @@ fn logs() {
     });
     let logs = requests_to_string(requests);
     insta::assert_snapshot!(logs);
+}
+
+#[test]
+fn logs_with_resource_attributes_in_events_and_logs() {
+    let requests = record(NoTick, |client| {
+        let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+            CONNECTION_STRING,
+            client,
+        )
+        .expect("connection string is valid")
+        .with_resource_attributes_in_events_and_logs(true);
+        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attribute(KeyValue::new("attr", "value"))
+                    .build(),
+            )
+            .build();
+
+        let logger = logger_provider.logger("test");
+        let mut record = logger.create_log_record();
+        record.set_body("message".into());
+        logger.emit(record);
+
+        logger_provider.shutdown().unwrap();
+    });
+    let logs_with_resource_attributes_in_events_and_logs = requests_to_string(requests);
+    insta::assert_snapshot!(logs_with_resource_attributes_in_events_and_logs);
 }
 
 #[tokio::test]
