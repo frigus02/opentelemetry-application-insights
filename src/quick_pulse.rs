@@ -1,4 +1,4 @@
-pub(crate) use crate::{
+use crate::{
     models::{context_tag_keys, QuickPulseEnvelope, QuickPulseMetric},
     tags::get_tags_for_resource,
     trace::{get_duration, is_remote_dependency_success, is_request_success, EVENT_NAME_EXCEPTION},
