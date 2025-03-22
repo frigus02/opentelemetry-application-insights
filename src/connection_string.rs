@@ -6,7 +6,7 @@ pub(crate) const DEFAULT_LIVE_ENDPOINT: &str = "https://rt.services.visualstudio
 const FIELDS_SEPARATOR: char = ';';
 const FIELD_KEY_VALUE_SEPARATOR: char = '=';
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct ConnectionString {
     pub(crate) ingestion_endpoint: http::Uri,
     #[cfg(feature = "live-metrics")]

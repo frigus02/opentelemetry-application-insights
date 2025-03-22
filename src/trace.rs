@@ -21,9 +21,7 @@ use opentelemetry_sdk::{
     Resource,
 };
 use opentelemetry_semantic_conventions as semcov;
-use std::{borrow::Cow, collections::HashMap, future::Future, pin::Pin, sync::Arc, time::Duration};
-
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
 
 /// Deprecated semantic convention key for HTTP host
 ///
@@ -139,19 +137,17 @@ where
     C: HttpClient + 'static,
 {
     /// Export spans to Application Insights
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
+    async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
         let client = Arc::clone(&self.client);
-        let endpoint = Arc::clone(&self.endpoint);
+        let endpoint = Arc::clone(&self.track_endpoint);
         let envelopes: Vec<_> = batch
             .into_iter()
             .flat_map(|span| self.create_envelopes_for_span(span, &self.resource))
             .collect();
 
-        Box::pin(async move {
-            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
-                .await
-                .map_err(Into::into)
-        })
+        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
+            .await
+            .map_err(Into::into)
     }
 
     fn set_resource(&mut self, resource: &Resource) {
@@ -432,7 +428,7 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
             )
         }) {
             data.type_ = Some(db_system.into());
-        } else if let Some(&messaging_system) = attrs.get(semcov::trace::MESSAGING_SYSTEM) {
+        } else if let Some(&messaging_system) = attrs.get(semcov::attribute::MESSAGING_SYSTEM) {
             data.type_ = Some(messaging_system.into());
         } else if let Some(&rpc_system) = attrs.get(semcov::trace::RPC_SYSTEM) {
             data.type_ = Some(rpc_system.into());

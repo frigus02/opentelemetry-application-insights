@@ -3,7 +3,7 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
 use serde::Deserialize;
-use std::{convert::TryInto, io::Write};
+use std::io::Write;
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -124,16 +124,4 @@ fn can_retry_item(item: &TransmissionItem) -> bool {
         || item.status_code == STATUS_APPLICATION_INACTIVE
         || item.status_code == STATUS_INTERNAL_SERVER_ERROR
         || item.status_code == STATUS_SERVICE_UNAVAILABLE
-}
-
-pub(crate) fn append_path(
-    uri: impl ToString,
-    path: impl AsRef<str>,
-) -> Result<http::Uri, http::uri::InvalidUri> {
-    let mut curr = uri.to_string();
-    if !curr.ends_with('/') {
-        curr.push('/');
-    }
-    curr.push_str(path.as_ref());
-    curr.try_into()
 }

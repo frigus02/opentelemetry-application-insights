@@ -1,8 +1,4 @@
-use crate::{
-    models::QuickPulseEnvelope,
-    uploader::{append_path, serialize_request_body},
-    Error, HttpClient,
-};
+use crate::{models::QuickPulseEnvelope, uploader::serialize_request_body, Error, HttpClient};
 use bytes::Bytes;
 use http::{HeaderName, Request, Uri};
 use std::{
@@ -54,19 +50,9 @@ pub(crate) struct QuickPulseResponse {
 pub(crate) async fn send(
     client: &dyn HttpClient,
     endpoint: &Uri,
-    instrumentation_key: &str,
     post_or_ping: PostOrPing,
     envelope: QuickPulseEnvelope,
 ) -> Result<QuickPulseResponse, Error> {
-    let endpoint = append_path(
-        endpoint,
-        format!(
-            "QuickPulseService.svc/{}?ikey={}",
-            post_or_ping, instrumentation_key
-        ),
-    )
-    .map_err(|err| Error::Upload(err.to_string()))?;
-
     let payload = serialize_envelope(&envelope, &post_or_ping)?;
 
     let mut request_builder = Request::post(endpoint)

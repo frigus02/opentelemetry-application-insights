@@ -119,14 +119,22 @@ To configure role, instance, and machine name provide `service.name`, `service.i
 Sample telemetry is not supported, yet.
 
 ```no_run
+use opentelemetry::{global, trace::Tracer};
+use opentelemetry_sdk::trace::SdkTracerProvider;
+
 #[tokio::main]
 async fn main() {
-    let tracer_provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING is valid connection string")
-        .with_client(reqwest::Client::new())
-        .with_live_metrics(true)
-        .build_batch(opentelemetry_sdk::runtime::Tokio);
-    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::blocking::Client::new(),
+    )
+    .expect("valid connection string");
+    let tracer_provider = SdkTracerProvider::builder()
+        .with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter.clone(), opentelemetry_sdk::runtime::Tokio).build())
+        .with_span_processor(opentelemetry_application_insights::LiveMetricsSpanProcessor::new(exporter, opentelemetry_sdk::runtime::Tokio))
+        .build();
+    global::set_tracer_provider(tracer_provider.clone());
 
     // ... send traces ...
 
@@ -147,7 +155,6 @@ async fn main() {
 //!   `with_client(reqwest::blocking::Client::new())`.
 //! - and more...
 //!
-//! [`async-std`]: https://crates.io/crates/async-std
 //! [`opentelemetry-http`]: https://crates.io/crates/opentelemetry-http
 //! [`reqwest`]: https://crates.io/crates/reqwest
 //! [`tokio`]: https://crates.io/crates/tokio
@@ -354,419 +361,27 @@ mod uploader;
 #[cfg(feature = "live-metrics")]
 mod uploader_quick_pulse;
 
-#[cfg(feature = "live-metrics")]
-use connection_string::DEFAULT_LIVE_ENDPOINT;
-use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
+use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT, DEFAULT_LIVE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
-use opentelemetry::trace::ExportError as TraceExportError;
-#[cfg(feature = "trace")]
-use opentelemetry::InstrumentationScope;
-#[cfg(feature = "trace")]
-use opentelemetry::{global, trace::TracerProvider as _, KeyValue, Value};
 pub use opentelemetry_http::HttpClient;
+use opentelemetry_sdk::error::OTelSdkError;
+use opentelemetry_sdk::ExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::{error::OTelSdkError, ExportError as SdkExportError};
-#[cfg(feature = "trace")]
-use opentelemetry_sdk::{
-    runtime::RuntimeChannel,
-    trace::{Config, SdkTracerProvider, Tracer},
-};
-#[cfg(feature = "trace")]
-use opentelemetry_semantic_conventions as semcov;
 #[cfg(feature = "live-metrics")]
-use quick_pulse::QuickPulseManager;
-#[cfg(feature = "trace")]
-use std::convert::TryInto;
-use std::{error::Error as StdError, fmt::Debug, sync::Arc};
-
-/// Create a new Application Insights exporter pipeline builder
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-#[deprecated(
-    since = "0.27.0",
-    note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
-)]
-pub fn new_pipeline(instrumentation_key: String) -> PipelineBuilder<()> {
-    PipelineBuilder {
-        client: (),
-        config: None,
-        endpoint: http::Uri::from_static(DEFAULT_BREEZE_ENDPOINT),
-        #[cfg(feature = "live-metrics")]
-        live_metrics_endpoint: http::Uri::from_static(DEFAULT_LIVE_ENDPOINT),
-        #[cfg(feature = "live-metrics")]
-        live_metrics: false,
-        instrumentation_key,
-        sample_rate: None,
-        #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events_and_logs: false,
-    }
-}
-
-/// Create a new Application Insights exporter pipeline builder
-///
-/// ```no_run
-/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-/// let tracer = opentelemetry_application_insights::new_pipeline_from_connection_string(
-///         "InstrumentationKey=...;IngestionEndpoint=https://westus2-0.in.applicationinsights.azure.com"
-///     )?
-///     .with_client(reqwest::blocking::Client::new())
-///     .install_simple();
-/// # Ok(())
-/// # }
-/// ```
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-pub fn new_pipeline_from_connection_string(
-    connection_string: impl AsRef<str>,
-) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
-    let connection_string: ConnectionString = connection_string.as_ref().parse()?;
-    Ok(PipelineBuilder {
-        client: (),
-        config: None,
-        endpoint: connection_string.ingestion_endpoint,
-        #[cfg(feature = "live-metrics")]
-        live_metrics_endpoint: connection_string.live_endpoint,
-        #[cfg(feature = "live-metrics")]
-        live_metrics: false,
-        instrumentation_key: connection_string.instrumentation_key,
-        sample_rate: None,
-        #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events_and_logs: false,
-    })
-}
-
-/// Create a new Application Insights exporter pipeline builder
-///
-/// Reads connection string from `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable.
-///
-/// ```no_run
-/// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-/// let tracer = opentelemetry_application_insights::new_pipeline_from_env()?
-///     .with_client(reqwest::blocking::Client::new())
-///     .install_simple();
-/// # Ok(())
-/// # }
-/// ```
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-pub fn new_pipeline_from_env(
-) -> Result<PipelineBuilder<()>, Box<dyn StdError + Send + Sync + 'static>> {
-    let connection_string: ConnectionString =
-        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?.parse()?;
-    Ok(PipelineBuilder {
-        client: (),
-        config: None,
-        endpoint: connection_string.ingestion_endpoint,
-        #[cfg(feature = "live-metrics")]
-        live_metrics_endpoint: connection_string.live_endpoint,
-        #[cfg(feature = "live-metrics")]
-        live_metrics: false,
-        instrumentation_key: connection_string.instrumentation_key,
-        sample_rate: None,
-        #[cfg(any(feature = "trace", feature = "logs"))]
-        resource_attributes_in_events_and_logs: false,
-    })
-}
-
-/// Application Insights exporter pipeline builder
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-#[derive(Debug)]
-pub struct PipelineBuilder<C> {
-    client: C,
-    config: Option<Config>,
-    endpoint: http::Uri,
-    #[cfg(feature = "live-metrics")]
-    live_metrics_endpoint: http::Uri,
-    #[cfg(feature = "live-metrics")]
-    live_metrics: bool,
-    instrumentation_key: String,
-    sample_rate: Option<f64>,
-    #[cfg(any(feature = "trace", feature = "logs"))]
-    resource_attributes_in_events_and_logs: bool,
-}
-
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-impl<C> PipelineBuilder<C> {
-    /// Set HTTP client, which the exporter will use to send telemetry to Application Insights.
-    ///
-    /// Use this to set an HTTP client which fits your async runtime.
-    pub fn with_client<NC>(self, client: NC) -> PipelineBuilder<NC> {
-        PipelineBuilder {
-            client,
-            config: self.config,
-            endpoint: self.endpoint,
-            #[cfg(feature = "live-metrics")]
-            live_metrics_endpoint: self.live_metrics_endpoint,
-            #[cfg(feature = "live-metrics")]
-            live_metrics: self.live_metrics,
-            instrumentation_key: self.instrumentation_key,
-            sample_rate: self.sample_rate,
-            #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
-        }
-    }
-
-    /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The
-    /// exporter will call `/v2/track` on the specified endpoint.
-    ///
-    /// Default: <https://dc.services.visualstudio.com>
-    ///
-    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
-    ///
-    /// [`reqwest`]: https://crates.io/crates/reqwest
-    ///
-    /// ```no_run
-    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_endpoint("https://westus2-0.in.applicationinsights.azure.com")?
-    ///     .install_simple();
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[deprecated(
-        since = "0.27.0",
-        note = "use new_pipeline_from_connection_string() or new_pipeline_from_env() instead"
-    )]
-    pub fn with_endpoint(
-        mut self,
-        endpoint: &str,
-    ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = endpoint.try_into()?;
-        Ok(self)
-    }
-
-    /// Set sample rate, which is passed through to Application Insights. It should be a value
-    /// between 0 and 1 and match the rate given to the sampler.
-    ///
-    /// Default: 1.0
-    ///
-    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
-    ///
-    /// [`reqwest`]: https://crates.io/crates/reqwest
-    ///
-    /// ```no_run
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_sample_rate(0.3)
-    ///     .install_simple();
-    /// ```
-    pub fn with_sample_rate(mut self, sample_rate: f64) -> Self {
-        // Application Insights expects the sample rate as a percentage.
-        self.sample_rate = Some(sample_rate * 100.0);
-        self
-    }
-
-    /// Set whether resource attributes should be included in events.
-    ///
-    /// This affects both trace events and logs.
-    ///
-    /// Default: false.
-    #[cfg(any(feature = "trace", feature = "logs"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "trace", feature = "logs"))))]
-    pub fn with_resource_attributes_in_events_and_logs(
-        mut self,
-        resource_attributes_in_events_and_logs: bool,
-    ) -> Self {
-        self.resource_attributes_in_events_and_logs = resource_attributes_in_events_and_logs;
-        self
-    }
-
-    /// Assign the SDK config for the exporter pipeline.
-    ///
-    /// If there is an existing `sdk::Config` in the `PipelineBuilder` the `sdk::Resource`s
-    /// are merged and any other parameters are overwritten.
-    ///
-    /// Note: This example requires [`reqwest`] and the **opentelemetry-http/reqwest** feature.
-    ///
-    /// [`reqwest`]: https://crates.io/crates/reqwest
-    ///
-    /// ```no_run
-    /// # use opentelemetry::KeyValue;
-    /// # use opentelemetry_sdk::Resource;
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
-    ///         Resource::builder_empty().with_attributes(vec![
-    ///             KeyValue::new("service.name", "my-application"),
-    ///         ]).build(),
-    ///     ))
-    ///     .install_simple();
-    /// ```
-    pub fn with_trace_config(self, mut config: Config) -> Self {
-        if let Some(old_config) = self.config {
-            let old_attrs: Vec<KeyValue> = old_config
-                .resource
-                .iter()
-                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
-                .collect();
-            let new_attrs: Vec<KeyValue> = config
-                .resource
-                .iter()
-                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
-                .collect();
-            config = config.with_resource(
-                Resource::builder_empty()
-                    .with_attributes(old_attrs)
-                    .with_attributes(new_attrs)
-                    .build(),
-            );
-        }
-
-        PipelineBuilder {
-            config: Some(config),
-            ..self
-        }
-    }
-
-    /// Assign the service name under which to group traces by adding a service.name
-    /// `sdk::Resource` or overriding a previous setting of it.
-    ///
-    /// If a `sdk::Config` does not exist on the `PipelineBuilder` one will be created.
-    ///
-    /// This will be translated, along with the service namespace, to the Cloud Role Name.
-    ///
-    /// ```
-    /// let tracer = opentelemetry_application_insights::new_pipeline("...".into())
-    ///     .with_client(reqwest::blocking::Client::new())
-    ///     .with_service_name("my-application")
-    ///     .install_simple();
-    /// ```
-    pub fn with_service_name<T: Into<Value>>(self, name: T) -> Self {
-        let config = if let Some(old_config) = self.config {
-            let attrs: Vec<KeyValue> = old_config
-                .resource
-                .iter()
-                .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
-                .collect();
-            old_config.with_resource(
-                Resource::builder_empty()
-                    .with_attributes(attrs)
-                    .with_service_name(name)
-                    .build(),
-            )
-        } else {
-            Config::default()
-                .with_resource(Resource::builder_empty().with_service_name(name).build())
-        };
-
-        PipelineBuilder {
-            config: Some(config),
-            ..self
-        }
-    }
-
-    /// Enable live metrics.
-    #[cfg(feature = "live-metrics")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "live-metrics")))]
-    pub fn with_live_metrics(self, enable_live_metrics: bool) -> Self {
-        PipelineBuilder {
-            live_metrics: enable_live_metrics,
-            ..self
-        }
-    }
-}
-
-#[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-impl<C> PipelineBuilder<C>
-where
-    C: HttpClient + 'static,
-{
-    fn init_exporter(self) -> Exporter<C> {
-        Exporter {
-            client: Arc::new(self.client),
-            endpoint: Arc::new(
-                append_v2_track(self.endpoint).expect("appending /v2/track should always work"),
-            ),
-            instrumentation_key: self.instrumentation_key,
-            sample_rate: self.sample_rate.unwrap_or(100.0),
-            resource: Resource::builder_empty().build(),
-            #[cfg(any(feature = "trace", feature = "logs"))]
-            resource_attributes_in_events_and_logs: self.resource_attributes_in_events_and_logs,
-        }
-    }
-
-    /// Build a configured `SdkTracerProvider` with a simple span processor.
-    pub fn build_simple(mut self) -> SdkTracerProvider {
-        let config = self.config.take();
-        let exporter = self.init_exporter();
-        let mut builder = SdkTracerProvider::builder().with_simple_exporter(exporter);
-        if let Some(config) = config {
-            builder = builder.with_config(config);
-        }
-
-        builder.build()
-    }
-
-    /// Build a configured `SdkTracerProvider` with a batch span processor using the specified
-    /// runtime.
-    pub fn build_batch<R: RuntimeChannel>(mut self, runtime: R) -> SdkTracerProvider {
-        let config = self.config.take();
-        #[cfg(feature = "live-metrics")]
-        let live_metrics = self.live_metrics;
-        #[cfg(feature = "live-metrics")]
-        let live_metrics_endpoint = self.live_metrics_endpoint.clone();
-        let exporter = self.init_exporter();
-        let mut builder = SdkTracerProvider::builder();
-        #[cfg(feature = "live-metrics")]
-        if live_metrics {
-            let mut resource = Resource::builder();
-            if let Some(ref config) = config {
-                resource = resource.with_attributes(
-                    config
-                        .resource
-                        .iter()
-                        .map(|(k, v)| KeyValue::new(k.clone(), v.clone())),
-                );
-            };
-            builder = builder.with_span_processor(QuickPulseManager::new(
-                exporter.client.clone(),
-                live_metrics_endpoint,
-                exporter.instrumentation_key.clone(),
-                resource.build(),
-                runtime.clone(),
-            ));
-        }
-        builder = builder.with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter, runtime).build());
-        if let Some(config) = config {
-            builder = builder.with_config(config);
-        }
-
-        builder.build()
-    }
-
-    /// Install an Application Insights pipeline with the recommended defaults.
-    ///
-    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
-    /// that.
-    pub fn install_simple(self) -> Tracer {
-        let trace_provider = self.build_simple();
-        let tracer = trace_provider.tracer_with_scope(scope());
-        let _previous_provider = global::set_tracer_provider(trace_provider);
-        tracer
-    }
-
-    /// Install an Application Insights pipeline with the recommended defaults.
-    ///
-    /// This registers a global `SdkTracerProvider`. See the `build_simple` function if you don't need
-    /// that.
-    pub fn install_batch<R: RuntimeChannel>(self, runtime: R) -> Tracer {
-        let trace_provider = self.build_batch(runtime);
-        let tracer = trace_provider.tracer_with_scope(scope());
-        let _previous_provider = global::set_tracer_provider(trace_provider);
-        tracer
-    }
-}
+pub use quick_pulse::LiveMetricsSpanProcessor;
+use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
+use uploader_quick_pulse::PostOrPing;
 
 /// Application Insights span exporter
 #[derive(Clone)]
 pub struct Exporter<C> {
     client: Arc<C>,
-    endpoint: Arc<http::Uri>,
+    track_endpoint: Arc<http::Uri>,
+    #[cfg(feature = "live-metrics")]
+    live_post_endpoint: http::Uri,
+    #[cfg(feature = "live-metrics")]
+    live_ping_endpoint: http::Uri,
     instrumentation_key: String,
     #[cfg(feature = "trace")]
     sample_rate: f64,
@@ -781,7 +396,7 @@ impl<C: Debug> Debug for Exporter<C> {
         let mut debug = f.debug_struct("Exporter");
         debug
             .field("client", &self.client)
-            .field("endpoint", &self.endpoint)
+            .field("track_endpoint", &self.track_endpoint)
             .field("instrumentation_key", &self.instrumentation_key);
         #[cfg(feature = "trace")]
         debug.field("sample_rate", &self.sample_rate);
@@ -790,6 +405,10 @@ impl<C: Debug> Debug for Exporter<C> {
             "resource_attributes_in_events_and_logs",
             &self.resource_attributes_in_events_and_logs,
         );
+        #[cfg(feature = "live-metrics")]
+        debug
+            .field("live_post_endpoint", &self.live_post_endpoint)
+            .field("live_ping_endpoint", &self.live_ping_endpoint);
         debug.finish()
     }
 }
@@ -800,9 +419,18 @@ impl<C> Exporter<C> {
     pub fn new(instrumentation_key: String, client: C) -> Self {
         Self {
             client: Arc::new(client),
-            endpoint: Arc::new(
-                append_v2_track(DEFAULT_BREEZE_ENDPOINT)
-                    .expect("appending /v2/track should always work"),
+            track_endpoint: Arc::new(append_v2_track(DEFAULT_BREEZE_ENDPOINT)),
+            #[cfg(feature = "live-metrics")]
+            live_post_endpoint: append_quick_pulse(
+                DEFAULT_LIVE_ENDPOINT,
+                PostOrPing::Post,
+                &instrumentation_key,
+            ),
+            #[cfg(feature = "live-metrics")]
+            live_ping_endpoint: append_quick_pulse(
+                DEFAULT_LIVE_ENDPOINT,
+                PostOrPing::Ping,
+                &instrumentation_key,
             ),
             instrumentation_key,
             #[cfg(feature = "trace")]
@@ -822,9 +450,18 @@ impl<C> Exporter<C> {
         let connection_string: ConnectionString = connection_string.as_ref().parse()?;
         Ok(Self {
             client: Arc::new(client),
-            endpoint: Arc::new(
-                append_v2_track(connection_string.ingestion_endpoint)
-                    .expect("appending /v2/track should always work"),
+            track_endpoint: Arc::new(append_v2_track(&connection_string.ingestion_endpoint)),
+            #[cfg(feature = "live-metrics")]
+            live_post_endpoint: append_quick_pulse(
+                &connection_string.live_endpoint,
+                PostOrPing::Post,
+                &connection_string.instrumentation_key,
+            ),
+            #[cfg(feature = "live-metrics")]
+            live_ping_endpoint: append_quick_pulse(
+                &connection_string.live_endpoint,
+                PostOrPing::Ping,
+                &connection_string.instrumentation_key,
             ),
             instrumentation_key: connection_string.instrumentation_key,
             #[cfg(feature = "trace")]
@@ -845,7 +482,7 @@ impl<C> Exporter<C> {
         mut self,
         endpoint: &str,
     ) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
-        self.endpoint = Arc::new(append_v2_track(endpoint)?);
+        self.track_endpoint = Arc::new(append_v2_track(endpoint));
         Ok(self)
     }
 
@@ -877,16 +514,32 @@ impl<C> Exporter<C> {
     }
 }
 
-fn append_v2_track(uri: impl ToString) -> Result<http::Uri, http::uri::InvalidUri> {
-    uploader::append_path(uri, "v2/track")
+fn append_v2_track(uri: impl ToString) -> http::Uri {
+    append_path(uri, "v2/track").expect("appending /v2/track should always work")
 }
 
-#[cfg(feature = "trace")]
-fn scope() -> InstrumentationScope {
-    InstrumentationScope::builder("opentelemetry-application-insights")
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .with_schema_url(semcov::SCHEMA_URL)
-        .build()
+fn append_quick_pulse(
+    uri: impl ToString,
+    post_or_ping: PostOrPing,
+    instrumentation_key: &str,
+) -> http::Uri {
+    let path = format!(
+        "QuickPulseService.svc/{}?ikey={}",
+        post_or_ping, instrumentation_key,
+    );
+    append_path(uri, &path).unwrap_or_else(|_| panic!("appending {} should always work", path))
+}
+
+fn append_path(
+    uri: impl ToString,
+    path: impl AsRef<str>,
+) -> Result<http::Uri, http::uri::InvalidUri> {
+    let mut curr = uri.to_string();
+    if !curr.ends_with('/') {
+        curr.push('/');
+    }
+    curr.push_str(path.as_ref());
+    curr.try_into()
 }
 
 /// Errors that occurred during span export.
@@ -938,13 +591,7 @@ pub enum Error {
     QuickPulseShutdown(opentelemetry_sdk::runtime::TrySendError),
 }
 
-impl SdkExportError for Error {
-    fn exporter_name(&self) -> &'static str {
-        "application-insights"
-    }
-}
-
-impl TraceExportError for Error {
+impl ExportError for Error {
     fn exporter_name(&self) -> &'static str {
         "application-insights"
     }
