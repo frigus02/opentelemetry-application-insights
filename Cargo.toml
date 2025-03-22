@@ -82,7 +82,7 @@ required-features = ["opentelemetry-http/reqwest"]
 
 [[example]]
 name = "http_client_reqwest"
-required-features = ["opentelemetry_sdk/rt-tokio", "opentelemetry-http/reqwest"]
+required-features = ["opentelemetry_sdk/rt-tokio", "opentelemetry-http/reqwest", "opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime"]
 
 [[example]]
 name = "http_client_reqwest_blocking"

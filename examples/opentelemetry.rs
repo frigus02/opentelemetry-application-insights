@@ -1,7 +1,7 @@
 use opentelemetry::{
     global,
     propagation::TextMapPropagator,
-    trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer, TracerProvider},
+    trace::{FutureExt, Span, SpanKind, TraceContextExt, Tracer},
     Context, KeyValue,
 };
 use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -82,16 +82,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = std::thread::spawn(reqwest::blocking::Client::new)
         .join()
         .unwrap();
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
-        client,
-    )
-    .expect("valid connection string");
+    let exporter = opentelemetry_application_insights::Exporter::new_from_env(client)
+        .expect("valid connection string");
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
         .build();
-    let tracer = tracer_provider.tracer("test");
+    global::set_tracer_provider(tracer_provider.clone());
+    let tracer = global::tracer("test");
 
     match traceparent {
         Some(traceparent) => {

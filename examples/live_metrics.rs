@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         .build();
     let tracer = tracer_provider.tracer("test");
 
-    print!("Simulating requests. Press Ctrl+C to stop.");
+    println!("Simulating requests. Press Ctrl+C to stop.");
 
     let mut rng = thread_rng();
     loop {
