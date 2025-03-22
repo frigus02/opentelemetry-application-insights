@@ -371,6 +371,7 @@ use opentelemetry_sdk::Resource;
 #[cfg(feature = "live-metrics")]
 pub use quick_pulse::LiveMetricsSpanProcessor;
 use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
+#[cfg(feature = "live-metrics")]
 use uploader_quick_pulse::PostOrPing;
 
 /// Application Insights span exporter
@@ -518,6 +519,7 @@ fn append_v2_track(uri: impl ToString) -> http::Uri {
     append_path(uri, "v2/track").expect("appending /v2/track should always work")
 }
 
+#[cfg(feature = "live-metrics")]
 fn append_quick_pulse(
     uri: impl ToString,
     post_or_ping: PostOrPing,
