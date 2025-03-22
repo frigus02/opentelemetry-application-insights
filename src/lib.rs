@@ -361,7 +361,9 @@ mod uploader;
 #[cfg(feature = "live-metrics")]
 mod uploader_quick_pulse;
 
-use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT, DEFAULT_LIVE_ENDPOINT};
+#[cfg(feature = "live-metrics")]
+use connection_string::DEFAULT_LIVE_ENDPOINT;
+use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
 pub use models::context_tag_keys::attrs;
 pub use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::error::OTelSdkError;
