@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.40.0] - 2025-03-22
+
 - Upgrade `opentelemetry` dependencies to `v0.29`.
 
 - **Breaking**: Remove pipeline API. This requires some consumer changes:
@@ -323,7 +325,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.39.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.40.0...HEAD
+[0.40.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.39.0...0.40.0
 [0.39.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.38.0...0.39.0
 [0.38.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.37.0...0.38.0
 [0.37.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.36.0...0.37.0
