@@ -18,7 +18,7 @@ use opentelemetry::{
     Context, KeyValue,
 };
 use opentelemetry_application_insights::{attrs as ai, Exporter};
-use opentelemetry_sdk::{trace::SdkTracerProvider, Resource};
+use opentelemetry_sdk::{logs::SdkLoggerProvider, trace::SdkTracerProvider, Resource};
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
 use std::{collections::HashMap, time::Duration};
@@ -206,7 +206,7 @@ fn logs() {
         let tracer = tracer_provider.tracer("test");
 
         // Setup logging
-        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        let logger_provider = SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(
                 Resource::builder_empty()
@@ -256,7 +256,7 @@ fn logs_with_resource_attributes_in_events_and_logs() {
         let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
             .expect("connection string is valid")
             .with_resource_attributes_in_events_and_logs(true);
-        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        let logger_provider = SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(
                 Resource::builder_empty()

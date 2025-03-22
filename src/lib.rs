@@ -106,7 +106,7 @@
     doc = r#"
 ## Live Metrics
 
-This requires the **live-metrics** feature _and_ the `build_batch`/`install_batch` methods.
+This requires the **live-metrics** feature and the experimental async runtime span processor API behind the **opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime** feature.
 
 Enable live metrics collection: <https://learn.microsoft.com/en-us/azure/azure-monitor/app/live-stream>.
 
@@ -114,7 +114,7 @@ Metrics are based on traces. See attribute mapping below for how traces are mapp
 dependencies and exceptions and how they are deemed "successful" or not.
 
 To configure role, instance, and machine name provide `service.name`, `service.instance.id`, and
-`host.name` resource attributes respectively in the trace config.
+`host.name` resource attributes respectively in the resource.
 
 Sample telemetry is not supported, yet.
 
@@ -443,6 +443,14 @@ impl<C> Exporter<C> {
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource_attributes_in_events_and_logs: false,
         }
+    }
+
+    /// Create a new exporter.
+    ///
+    /// Reads connection string from `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable.
+    pub fn new_from_env(client: C) -> Result<Self, Box<dyn StdError + Send + Sync + 'static>> {
+        let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?;
+        Self::new_from_connection_string(connection_string, client)
     }
 
     /// Create a new exporter.

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` dependencies to `v0.29`.
+
+- **Breaking**: Remove pipeline API. This requires some consumer changes:
+
+  In short:
+
+  - Create exporter using `opentelemetry_application_insights::Exporter::new_from_connection_string`.
+  - Configure Application Insights specifics using `.with_` functions on the exporter.
+  - Create and configure trace, metrics, and logs providers using `opentelemetry_sdk::trace::SdkTracerProvider`, `opentelemetry_sdk::metrics::SdkMeterProvider`, and `opentelemetry_sdk::logs::SdkLoggerProvider`.
+
+  In detail, here are replacements for functions on the removed pipeline API:
+
+  - `new_pipeline_from_env` --> `Exporter::new_from_env`
+  - `new_pipeline_from_connection_string` --> `Exporter::new_from_connection_string`
+  - `pipeline_builder.with_sample_rate` --> `exporter.with_sample_rate`
+  - `pipeline_builder.with_resource_attributes_in_events_and_logs` --> `exporter.with_resource_attributes_in_events_and_logs`
+  - `pipeline_builder.with_trace_config` --> individual functions on [`TracerProviderBuilder`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/trace/struct.TracerProviderBuilder.html)
+  - `pipeline_builder.with_service_name` --> create resource using [`Resource::builder()`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/struct.Resource.html#method.builder)[`.with_service_name(...)`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/resource/struct.ResourceBuilder.html#method.with_service_name)[`.build()`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/resource/struct.ResourceBuilder.html#method.build) and apply using [`.with_resource(...)`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/trace/struct.TracerProviderBuilder.html#method.with_resource).
+  - `pipeline_builder.with_live_metrics` --> create span processor using `opentelemetry_application_insights::LiveMetricsSpanProcessor::new(exporter, runtime)` and apply using [`.with_span_processor(...)`](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/trace/struct.TracerProviderBuilder.html#method.with_span_processor). The live metrics span processor requires an async runtime and an async client. Therefore you probably also want to use an [async span processor for general trace collection](https://docs.rs/opentelemetry_sdk/0.29.0/opentelemetry_sdk/trace/span_processor_with_async_runtime/struct.BatchSpanProcessor.html).
+
 ## [0.39.0] - 2025-02-23
 
 - Add option `.with_resource_attributes_in_events_and_logs(true)`. When enabled, resource attributes are included in events and logs, i.e. Trace, Exception and Event telemetry.
