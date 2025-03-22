@@ -10,11 +10,7 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let client = reqwest::blocking::Client::new();
 
-    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")?;
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        connection_string,
-        client,
-    )?;
+    let exporter = opentelemetry_application_insights::Exporter::new_from_env(client)?;
 
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter.clone())

@@ -10,12 +10,9 @@ use std::{error::Error, time::Duration};
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     env_logger::init();
 
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
-        reqwest::Client::new(),
-    )
-    .expect("valid connection string");
+    let exporter =
+        opentelemetry_application_insights::Exporter::new_from_env(reqwest::Client::new())
+            .expect("valid connection string");
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter.clone(), opentelemetry_sdk::runtime::Tokio).build())
         .with_span_processor(opentelemetry_application_insights::LiveMetricsSpanProcessor::new(exporter, opentelemetry_sdk::runtime::Tokio))
