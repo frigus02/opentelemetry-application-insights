@@ -76,7 +76,7 @@ where
         batch: LogBatch<'_>,
     ) -> impl std::future::Future<Output = OTelSdkResult> + Send {
         let client = Arc::clone(&self.client);
-        let endpoint = Arc::clone(&self.endpoint);
+        let endpoint = Arc::clone(&self.track_endpoint);
         let envelopes: Vec<_> = batch
             .iter()
             .map(|log| self.create_envelope_for_log(log))

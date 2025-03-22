@@ -17,12 +17,12 @@ use opentelemetry::{
     },
     Context, KeyValue,
 };
-use opentelemetry_application_insights::{attrs as ai, new_pipeline_from_connection_string};
-use opentelemetry_sdk::Resource;
+use opentelemetry_application_insights::{attrs as ai, Exporter};
+use opentelemetry_sdk::{logs::SdkLoggerProvider, trace::SdkTracerProvider, Resource};
 use opentelemetry_semantic_conventions as semcov;
 use recording_client::record;
 use std::{collections::HashMap, time::Duration};
-use tick::{AsyncStdTick, NoTick, TokioTick};
+use tick::{NoTick, TokioTick};
 
 // Fake instrumentation key (this is a random uuid)
 const CONNECTION_STRING: &str = "InstrumentationKey=0fdcec70-0ce5-4085-89d9-9ae8ead9af66";
@@ -30,39 +30,35 @@ const CONNECTION_STRING: &str = "InstrumentationKey=0fdcec70-0ce5-4085-89d9-9ae8
 #[test]
 fn traces() {
     let requests = record(NoTick, |client| {
-        // Fake instrumentation key (this is a random uuid)
-        let client_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client.clone())
-            .with_trace_config(
-                opentelemetry_sdk::trace::Config::default().with_resource(
-                    Resource::builder_empty()
-                        .with_attributes(vec![
-                            KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-                            KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
-                            KeyValue::new(semcov::resource::DEVICE_ID, "123"),
-                            KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "device"),
-                        ])
-                        .build(),
-                ),
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+
+        let client_provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![
+                        KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                        KeyValue::new(semcov::resource::SERVICE_NAME, "client"),
+                        KeyValue::new(semcov::resource::DEVICE_ID, "123"),
+                        KeyValue::new(semcov::resource::DEVICE_MODEL_NAME, "device"),
+                    ])
+                    .build(),
             )
-            .build_simple();
+            .build();
         let client_tracer = client_provider.tracer("test");
 
-        let server_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
-            .with_trace_config(
-                opentelemetry_sdk::trace::Config::default().with_resource(
-                    Resource::builder_empty()
-                        .with_attributes(vec![
-                            KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
-                            KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
-                        ])
-                        .build(),
-                ),
+        let server_provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attributes(vec![
+                        KeyValue::new(semcov::resource::SERVICE_NAMESPACE, "test"),
+                        KeyValue::new(semcov::resource::SERVICE_NAME, "server"),
+                    ])
+                    .build(),
             )
-            .build_simple();
+            .build();
         let server_tracer = server_provider.tracer("test");
 
         // An HTTP client make a request
@@ -151,30 +147,14 @@ fn traces() {
     insta::assert_snapshot!(traces);
 }
 
-#[async_std::test]
-async fn traces_batch_async_std() {
-    let requests = record(AsyncStdTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
-            .build_batch(opentelemetry_sdk::runtime::AsyncStd);
-        let tracer = tracer_provider.tracer("test");
-
-        tracer.in_span("async-std", |_cx| {});
-
-        tracer_provider.shutdown().unwrap();
-    });
-    let traces_batch_async_std = requests_to_string(requests);
-    insta::assert_snapshot!(traces_batch_async_std);
-}
-
 #[tokio::test]
 async fn traces_batch_tokio() {
     let requests = record(TokioTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
-            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter, opentelemetry_sdk::runtime::TokioCurrentThread).build())
+            .build();
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("tokio", |_cx| {});
@@ -188,18 +168,17 @@ async fn traces_batch_tokio() {
 #[test]
 fn traces_with_resource_attributes_in_events_and_logs() {
     let requests = record(NoTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
             .expect("connection string is valid")
-            .with_client(client)
-            .with_trace_config(
-                opentelemetry_sdk::trace::Config::default().with_resource(
-                    Resource::builder_empty()
-                        .with_attribute(KeyValue::new("attr", "value"))
-                        .build(),
-                ),
+            .with_resource_attributes_in_events_and_logs(true);
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter)
+            .with_resource(
+                Resource::builder_empty()
+                    .with_attribute(KeyValue::new("attr", "value"))
+                    .build(),
             )
-            .with_resource_attributes_in_events_and_logs(true)
-            .build_simple();
+            .build();
         let tracer = tracer_provider.tracer("test");
 
         tracer.in_span("resource attributes in events", |_cx| {
@@ -217,20 +196,17 @@ fn traces_with_resource_attributes_in_events_and_logs() {
 #[test]
 fn logs() {
     let requests = record(NoTick, |client| {
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+
         // Setup tracing
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client.clone())
-            .build_simple();
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_simple_exporter(exporter.clone())
+            .build();
         let tracer = tracer_provider.tracer("test");
 
         // Setup logging
-        let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-            CONNECTION_STRING,
-            client,
-        )
-        .expect("connection string is valid");
-        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        let logger_provider = SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(
                 Resource::builder_empty()
@@ -277,13 +253,10 @@ fn logs() {
 #[test]
 fn logs_with_resource_attributes_in_events_and_logs() {
     let requests = record(NoTick, |client| {
-        let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-            CONNECTION_STRING,
-            client,
-        )
-        .expect("connection string is valid")
-        .with_resource_attributes_in_events_and_logs(true);
-        let logger_provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid")
+            .with_resource_attributes_in_events_and_logs(true);
+        let logger_provider = SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(
                 Resource::builder_empty()
@@ -306,12 +279,15 @@ fn logs_with_resource_attributes_in_events_and_logs() {
 #[tokio::test]
 #[cfg(feature = "live-metrics")]
 async fn live_metrics() {
+    use opentelemetry_application_insights::LiveMetricsSpanProcessor;
+
     let requests = record(TokioTick, |client| {
-        let tracer_provider = new_pipeline_from_connection_string(CONNECTION_STRING)
-            .expect("connection string is valid")
-            .with_client(client)
-            .with_live_metrics(true)
-            .build_batch(opentelemetry_sdk::runtime::TokioCurrentThread);
+        let exporter = Exporter::new_from_connection_string(CONNECTION_STRING, client)
+            .expect("connection string is valid");
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_span_processor(opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(exporter.clone(), opentelemetry_sdk::runtime::TokioCurrentThread).build())
+            .with_span_processor(LiveMetricsSpanProcessor::new(exporter, opentelemetry_sdk::runtime::TokioCurrentThread))
+            .build();
         let tracer = tracer_provider.tracer("test");
 
         // Wait for one ping request so we start to collect metrics.
@@ -404,8 +380,7 @@ mod recording_client {
             tick: Arc::new(tick),
         });
 
-        // Give async runtime some time to quit. I don't see any way to properly wait for tasks
-        // spawned with async-std.
+        // Wait for async span processors to stop.
         std::thread::sleep(Duration::from_secs(1));
 
         Arc::try_unwrap(requests)
@@ -430,16 +405,6 @@ mod tick {
     #[async_trait]
     impl Tick for NoTick {
         async fn tick(&self) {}
-    }
-
-    #[derive(Debug)]
-    pub struct AsyncStdTick;
-
-    #[async_trait]
-    impl Tick for AsyncStdTick {
-        async fn tick(&self) {
-            async_std::task::sleep(Duration::from_millis(1)).await;
-        }
     }
 
     #[derive(Debug)]

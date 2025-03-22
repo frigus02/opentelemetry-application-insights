@@ -3,9 +3,7 @@ use opentelemetry::trace::{Tracer, TracerProvider};
 fn main() {
     env_logger::init();
 
-    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
-        std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING")
-            .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist"),
+    let exporter = opentelemetry_application_insights::Exporter::new_from_env(
         reqwest::blocking::Client::new(),
     )
     .expect("valid connection string");
