@@ -312,7 +312,7 @@ async fn live_metrics() {
             span.record_error(error.as_ref());
         }
 
-        // Wait for two pong requests.
+        // Wait for two post requests.
         std::thread::sleep(Duration::from_secs(2));
 
         tracer_provider.shutdown().unwrap();
