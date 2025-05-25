@@ -5,7 +5,7 @@ use crate::{
     Exporter,
 };
 use async_trait::async_trait;
-use opentelemetry::{otel_warn, KeyValue};
+use opentelemetry::KeyValue;
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
     error::OTelSdkResult,
@@ -15,7 +15,11 @@ use opentelemetry_sdk::{
         Temporality,
     },
 };
-use std::{convert::TryInto, sync::Arc, time::SystemTime};
+use std::{
+    convert::TryInto,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 #[async_trait]
@@ -25,24 +29,24 @@ where
 {
     fn export(
         &self,
-        metrics: &mut ResourceMetrics,
+        metrics: &ResourceMetrics,
     ) -> impl std::future::Future<Output = OTelSdkResult> + Send {
         let client = Arc::clone(&self.client);
         let endpoint = Arc::clone(&self.track_endpoint);
 
         let mut envelopes = Vec::new();
-        for scope_metrics in metrics.scope_metrics.iter() {
-            for metric in scope_metrics.metrics.iter() {
+        for scope_metrics in metrics.scope_metrics() {
+            for metric in scope_metrics.metrics() {
                 let data_points = map_metric(metric);
                 for data in data_points {
                     let tags =
-                        get_tags_for_metric(&metrics.resource, &scope_metrics.scope, &data.attrs);
+                        get_tags_for_metric(metrics.resource(), scope_metrics.scope(), &data.attrs);
                     let properties: Properties = metrics
-                        .resource
+                        .resource()
                         .iter()
                         .chain(
                             scope_metrics
-                                .scope
+                                .scope()
                                 .attributes()
                                 .map(|kv| (&kv.key, &kv.value)),
                         )
@@ -76,7 +80,7 @@ where
         Ok(())
     }
 
-    fn shutdown(&self) -> OTelSdkResult {
+    fn shutdown_with_timeout(&self, _timeout: Duration) -> OTelSdkResult {
         Ok(())
     }
 
@@ -123,121 +127,106 @@ impl ToF64Lossy for f64 {
 }
 
 fn map_metric(metric: &Metric) -> Vec<EnvelopeData> {
-    let data = metric.data.as_any();
-    if let Some(gauge) = data.downcast_ref::<Gauge<u64>>() {
-        map_gauge(metric, gauge)
-    } else if let Some(gauge) = data.downcast_ref::<Gauge<i64>>() {
-        map_gauge(metric, gauge)
-    } else if let Some(gauge) = data.downcast_ref::<Gauge<f64>>() {
-        map_gauge(metric, gauge)
-    } else if let Some(histogram) = data.downcast_ref::<Histogram<i64>>() {
-        map_histogram(metric, histogram)
-    } else if let Some(histogram) = data.downcast_ref::<Histogram<u64>>() {
-        map_histogram(metric, histogram)
-    } else if let Some(histogram) = data.downcast_ref::<Histogram<f64>>() {
-        map_histogram(metric, histogram)
-    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<i64>>() {
-        map_exponential_histogram(metric, exp_histogram)
-    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<u64>>() {
-        map_exponential_histogram(metric, exp_histogram)
-    } else if let Some(exp_histogram) = data.downcast_ref::<ExponentialHistogram<f64>>() {
-        map_exponential_histogram(metric, exp_histogram)
-    } else if let Some(sum) = data.downcast_ref::<Sum<u64>>() {
-        map_sum(metric, sum)
-    } else if let Some(sum) = data.downcast_ref::<Sum<i64>>() {
-        map_sum(metric, sum)
-    } else if let Some(sum) = data.downcast_ref::<Sum<f64>>() {
-        map_sum(metric, sum)
-    } else {
-        otel_warn!(name: "ApplicationInsights.ExportMetrics.UnknownAggregator");
-        Vec::new()
+    use opentelemetry_sdk::metrics::data::{AggregatedMetrics::*, MetricData};
+    match metric.data() {
+        F64(MetricData::Gauge(data)) => map_gauge(metric, data),
+        U64(MetricData::Gauge(data)) => map_gauge(metric, data),
+        I64(MetricData::Gauge(data)) => map_gauge(metric, data),
+        F64(MetricData::Sum(data)) => map_sum(metric, data),
+        U64(MetricData::Sum(data)) => map_sum(metric, data),
+        I64(MetricData::Sum(data)) => map_sum(metric, data),
+        F64(MetricData::Histogram(data)) => map_histogram(metric, data),
+        U64(MetricData::Histogram(data)) => map_histogram(metric, data),
+        I64(MetricData::Histogram(data)) => map_histogram(metric, data),
+        F64(MetricData::ExponentialHistogram(data)) => map_exponential_histogram(metric, data),
+        U64(MetricData::ExponentialHistogram(data)) => map_exponential_histogram(metric, data),
+        I64(MetricData::ExponentialHistogram(data)) => map_exponential_histogram(metric, data),
     }
 }
 
-fn map_gauge<T: ToF64Lossy>(metric: &Metric, gauge: &Gauge<T>) -> Vec<EnvelopeData> {
+fn map_gauge<T: Copy + ToF64Lossy>(metric: &Metric, gauge: &Gauge<T>) -> Vec<EnvelopeData> {
     gauge
-        .data_points
-        .iter()
+        .data_points()
         .map(|data_point| {
-            let time = gauge.time;
+            let time = gauge.time();
             let data = DataPoint {
                 ns: None,
-                name: metric.name.clone().into(),
+                name: metric.name().into(),
                 kind: Some(DataPointType::Measurement),
-                value: data_point.value.to_f64_lossy(),
+                value: data_point.value().to_f64_lossy(),
             };
-            let attrs = data_point.attributes.to_owned();
+            let attrs = data_point.attributes().cloned().collect();
             EnvelopeData { time, data, attrs }
         })
         .collect()
 }
 
-fn map_histogram<T: ToF64Lossy>(metric: &Metric, histogram: &Histogram<T>) -> Vec<EnvelopeData> {
+fn map_histogram<T: Copy + ToF64Lossy>(
+    metric: &Metric,
+    histogram: &Histogram<T>,
+) -> Vec<EnvelopeData> {
     histogram
-        .data_points
-        .iter()
+        .data_points()
         .map(|data_point| {
-            let time = histogram.time;
+            let time = histogram.time();
             let data = DataPoint {
                 ns: None,
-                name: metric.name.clone().into(),
+                name: metric.name().into(),
                 kind: Some(DataPointType::Aggregation {
-                    count: Some(data_point.count.try_into().unwrap_or_default()),
-                    min: data_point.min.as_ref().map(ToF64Lossy::to_f64_lossy),
-                    max: data_point.max.as_ref().map(ToF64Lossy::to_f64_lossy),
+                    count: Some(data_point.count().try_into().unwrap_or_default()),
+                    min: data_point.min().as_ref().map(ToF64Lossy::to_f64_lossy),
+                    max: data_point.max().as_ref().map(ToF64Lossy::to_f64_lossy),
                     std_dev: None,
                 }),
-                value: data_point.sum.to_f64_lossy(),
+                value: data_point.sum().to_f64_lossy(),
             };
-            let attrs = data_point.attributes.to_owned();
+            let attrs = data_point.attributes().cloned().collect();
             EnvelopeData { time, data, attrs }
         })
         .collect()
 }
 
-fn map_exponential_histogram<T: ToF64Lossy>(
+fn map_exponential_histogram<T: Copy + ToF64Lossy>(
     metric: &Metric,
     exp_histogram: &ExponentialHistogram<T>,
 ) -> Vec<EnvelopeData> {
     exp_histogram
-        .data_points
-        .iter()
+        .data_points()
         .map(|data_point| {
-            let time = exp_histogram.time;
+            let time = exp_histogram.time();
             let data = DataPoint {
                 ns: None,
-                name: metric.name.clone().into(),
+                name: metric.name().into(),
                 kind: Some(DataPointType::Aggregation {
-                    count: Some(data_point.count.try_into().unwrap_or_default()),
-                    min: data_point.min.as_ref().map(ToF64Lossy::to_f64_lossy),
-                    max: data_point.max.as_ref().map(ToF64Lossy::to_f64_lossy),
+                    count: Some(data_point.count().try_into().unwrap_or_default()),
+                    min: data_point.min().as_ref().map(ToF64Lossy::to_f64_lossy),
+                    max: data_point.max().as_ref().map(ToF64Lossy::to_f64_lossy),
                     std_dev: None,
                 }),
-                value: data_point.sum.to_f64_lossy(),
+                value: data_point.sum().to_f64_lossy(),
             };
-            let attrs = data_point.attributes.to_owned();
+            let attrs = data_point.attributes().cloned().collect();
             EnvelopeData { time, data, attrs }
         })
         .collect()
 }
 
-fn map_sum<T: ToF64Lossy>(metric: &Metric, sum: &Sum<T>) -> Vec<EnvelopeData> {
-    sum.data_points
-        .iter()
+fn map_sum<T: Copy + ToF64Lossy>(metric: &Metric, sum: &Sum<T>) -> Vec<EnvelopeData> {
+    sum.data_points()
         .map(|data_point| {
-            let time = sum.time;
+            let time = sum.time();
             let data = DataPoint {
                 ns: None,
-                name: metric.name.clone().into(),
+                name: metric.name().into(),
                 kind: Some(DataPointType::Aggregation {
                     count: None,
                     min: None,
                     max: None,
                     std_dev: None,
                 }),
-                value: data_point.value.to_f64_lossy(),
+                value: data_point.value().to_f64_lossy(),
             };
-            let attrs = data_point.attributes.to_owned();
+            let attrs = data_point.attributes().cloned().collect();
             EnvelopeData { time, data, attrs }
         })
         .collect()

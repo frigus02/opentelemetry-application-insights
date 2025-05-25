@@ -20,8 +20,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::Duration,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
@@ -166,7 +165,7 @@ impl<R: RuntimeChannel> SpanProcessor for LiveMetricsSpanProcessor<R> {
         Ok(())
     }
 
-    fn shutdown(&self) -> OTelSdkResult {
+    fn shutdown_with_timeout(&self, _timeout: Duration) -> OTelSdkResult {
         self.message_sender
             .try_send(Message::Stop)
             .map_err(Error::QuickPulseShutdown)
