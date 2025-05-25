@@ -332,9 +332,9 @@ impl MetricsCollector {
     fn new() -> Self {
         Self {
             system: System::new(),
-            system_refresh_kind: RefreshKind::new()
-                .with_cpu(CpuRefreshKind::new().with_cpu_usage())
-                .with_memory(MemoryRefreshKind::new().with_ram()),
+            system_refresh_kind: RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
+                .with_memory(MemoryRefreshKind::nothing().with_ram()),
             request_count: 0,
             request_failed_count: 0,
             request_duration: Duration::default(),
