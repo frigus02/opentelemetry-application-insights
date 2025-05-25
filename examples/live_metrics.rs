@@ -3,7 +3,7 @@ use opentelemetry::{
     KeyValue,
 };
 use opentelemetry_semantic_conventions as semcov;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use std::{error::Error, time::Duration};
 
 #[tokio::main]
@@ -21,9 +21,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     println!("Simulating requests. Press Ctrl+C to stop.");
 
-    let mut rng = thread_rng();
+    let mut rng = rng();
     loop {
-        let success = rng.gen_ratio(9, 10);
+        let success = rng.random_ratio(9, 10);
         let _request = tracer
             .span_builder("request")
             .with_kind(SpanKind::Server)
