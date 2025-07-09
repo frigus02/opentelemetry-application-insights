@@ -1,4 +1,5 @@
 use crate::{models::Envelope, Error, HttpClient};
+use backon::{Backoff, BackoffBuilder, Retryable};
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
@@ -28,24 +29,38 @@ struct TransmissionItem {
 }
 
 /// Sends a telemetry items to the server.
-pub(crate) async fn send(
+pub(crate) async fn send<B>(
     client: &dyn HttpClient,
     endpoint: &Uri,
     items: Vec<Envelope>,
-) -> Result<(), Error> {
-    let payload = serialize_envelopes(items)?;
-    let request = Request::post(endpoint)
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .header(http::header::CONTENT_ENCODING, "gzip")
-        .body(Bytes::from(payload))
-        .expect("request should be valid");
+    backoff: Option<B>,
+) -> Result<(), Error>
+where
+    B: BackoffBuilder + Clone + Send + Sync + 'static,
+    B::Backoff: Backoff + Send + 'static,
+{
+    let payload = Bytes::from(serialize_envelopes(items)?);
 
-    // TODO Implement retries
-    let response = client
-        .send_bytes(request)
-        .await
-        .map_err(Error::UploadConnection)?;
-    handle_response(response)
+    let operation = async || {
+        let request = Request::post(endpoint)
+            .header(http::header::CONTENT_TYPE, "application/json")
+            .header(http::header::CONTENT_ENCODING, "gzip")
+            .body(payload.clone())
+            .expect("request should be valid");
+
+        let response = client
+            .send_bytes(request)
+            .await
+            .map_err(Error::UploadConnection)?;
+
+        handle_response(response)
+    };
+
+    if let Some(backoff) = backoff {
+        operation.retry(backoff).when(can_retry_operation).await
+    } else {
+        operation().await
+    }
 }
 
 fn serialize_envelopes(items: Vec<Envelope>) -> Result<Vec<u8>, Error> {
@@ -75,43 +90,44 @@ fn handle_response(response: Response<Bytes>) -> Result<(), Error> {
             if content.items_received == content.items_accepted {
                 Ok(())
             } else if content.errors.iter().any(can_retry_item) {
-                Err(Error::Upload(format!(
-                    "{}: Some items may be retried. However we don't currently support this.",
-                    status
-                )))
+                Err(Error::Upload {
+                    status,
+                    can_retry: true,
+                })
             } else {
-                Err(Error::Upload(format!(
-                    "{}: No retry possible. Response: {:?}",
-                    status, content
-                )))
+                Err(Error::Upload {
+                    status,
+                    can_retry: false,
+                })
             }
         }
         status @ STATUS_REQUEST_TIMEOUT
         | status @ STATUS_TOO_MANY_REQUESTS
         | status @ STATUS_APPLICATION_INACTIVE
-        | status @ STATUS_SERVICE_UNAVAILABLE => {
-            // TODO Implement retries
-            Err(Error::Upload(format!("{}: Retry possible", status)))
-        }
+        | status @ STATUS_SERVICE_UNAVAILABLE => Err(Error::Upload {
+            status,
+            can_retry: true,
+        }),
         status @ STATUS_INTERNAL_SERVER_ERROR => {
-            if let Ok(content) = serde_json::from_slice::<Transmission>(response.body()) {
-                if content.errors.iter().any(can_retry_item) {
-                    Err(Error::Upload(format!(
-                        "{}: Some items may be retried. However we don't currently support this.",
-                        status
-                    )))
-                } else {
-                    Err(Error::Upload(format!("{}: No retry possible", status)))
-                }
+            let content: Transmission = serde_json::from_slice(response.body())
+                .map_err(Error::UploadDeserializeResponse)?;
+
+            if content.errors.iter().any(can_retry_item) {
+                Err(Error::Upload {
+                    status,
+                    can_retry: true,
+                })
             } else {
-                // TODO Implement retries
-                Err(Error::Upload(format!(
-                    "{}: Some items may be retried",
-                    status
-                )))
+                Err(Error::Upload {
+                    status,
+                    can_retry: false,
+                })
             }
         }
-        status => Err(Error::Upload(format!("{}: No retry possible", status))),
+        status => Err(Error::Upload {
+            status,
+            can_retry: false,
+        }),
     }
 }
 
@@ -124,4 +140,15 @@ fn can_retry_item(item: &TransmissionItem) -> bool {
         || item.status_code == STATUS_APPLICATION_INACTIVE
         || item.status_code == STATUS_INTERNAL_SERVER_ERROR
         || item.status_code == STATUS_SERVICE_UNAVAILABLE
+}
+
+fn can_retry_operation(error: &Error) -> bool {
+    matches!(
+        error,
+        Error::UploadConnection(_)
+            | Error::Upload {
+                can_retry: true,
+                ..
+            }
+    )
 }

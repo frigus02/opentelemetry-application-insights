@@ -6,6 +6,7 @@ use crate::{
     tags::get_tags_for_log,
     Exporter,
 };
+use backon::{Backoff, BackoffBuilder};
 use opentelemetry::{logs::Severity, InstrumentationScope};
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
@@ -23,7 +24,11 @@ fn is_exception(record: &SdkLogRecord) -> bool {
     })
 }
 
-impl<C> Exporter<C> {
+impl<C, B> Exporter<C, B>
+where
+    B: BackoffBuilder + Clone + Send + Sync + 'static,
+    B::Backoff: Backoff + Send + 'static,
+{
     fn create_envelope_for_log(
         &self,
         (record, instrumentation_scope): (&SdkLogRecord, &InstrumentationScope),
@@ -67,9 +72,11 @@ impl<C> Exporter<C> {
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "logs")))]
-impl<C> LogExporter for Exporter<C>
+impl<C, B> LogExporter for Exporter<C, B>
 where
     C: HttpClient + 'static,
+    B: BackoffBuilder + Clone + Send + Sync + 'static,
+    B::Backoff: Backoff + Send + 'static,
 {
     fn export(
         &self,
@@ -83,9 +90,14 @@ where
             .collect();
 
         async move {
-            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
-                .await
-                .map_err(Into::into)
+            crate::uploader::send(
+                client.as_ref(),
+                endpoint.as_ref(),
+                envelopes,
+                self.backoff.clone(),
+            )
+            .await
+            .map_err(Into::into)
         }
     }
 

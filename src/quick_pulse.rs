@@ -5,6 +5,7 @@ use crate::{
     uploader_quick_pulse::{self, PostOrPing},
     Error, Exporter,
 };
+use backon::{Backoff, BackoffBuilder};
 use futures_util::{pin_mut, select_biased, FutureExt as _, StreamExt as _};
 use opentelemetry::{trace::SpanKind, Context, Key};
 use opentelemetry_http::HttpClient;
@@ -83,10 +84,12 @@ enum Message {
 
 impl<R: RuntimeChannel> LiveMetricsSpanProcessor<R> {
     /// Create new live metrics span processor.
-    pub fn new<C: HttpClient + 'static>(
-        exporter: Exporter<C>,
-        runtime: R,
-    ) -> LiveMetricsSpanProcessor<R> {
+    pub fn new<C, B>(exporter: Exporter<C, B>, runtime: R) -> LiveMetricsSpanProcessor<R>
+    where
+        C: HttpClient + 'static,
+        B: BackoffBuilder + Clone + Send + Sync + 'static,
+        B::Backoff: Backoff + Send + 'static,
+    {
         let (message_sender, message_receiver) = runtime.batch_message_channel(1);
         let delay_runtime = runtime.clone();
         let is_collecting_outer = Arc::new(AtomicBool::new(false));

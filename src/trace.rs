@@ -10,6 +10,7 @@ use crate::{
     tags::{get_tags_for_event, get_tags_for_span},
     Exporter,
 };
+use backon::{Backoff, BackoffBuilder};
 use opentelemetry::{
     trace::{Event, SpanKind, Status},
     Value,
@@ -64,7 +65,11 @@ const DEPRECATED_SERVER_SOCKET_PORT: &str = "server.socket.port";
 pub(crate) const EVENT_NAME_CUSTOM: &str = "ai.custom";
 pub(crate) const EVENT_NAME_EXCEPTION: &str = "exception";
 
-impl<C> Exporter<C> {
+impl<C, B> Exporter<C, B>
+where
+    B: BackoffBuilder + Clone + Send + Sync + 'static,
+    B::Backoff: Backoff + Send + 'static,
+{
     fn create_envelopes_for_span(&self, span: SpanData, resource: &Resource) -> Vec<Envelope> {
         let mut result = Vec::with_capacity(1 + span.events.len());
 
@@ -132,9 +137,11 @@ impl<C> Exporter<C> {
 }
 
 #[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
-impl<C> SpanExporter for Exporter<C>
+impl<C, B> SpanExporter for Exporter<C, B>
 where
     C: HttpClient + 'static,
+    B: BackoffBuilder + Clone + Send + Sync + 'static,
+    B::Backoff: Backoff + Send + 'static,
 {
     /// Export spans to Application Insights
     async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
@@ -145,9 +152,14 @@ where
             .flat_map(|span| self.create_envelopes_for_span(span, &self.resource))
             .collect();
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
-            .await
-            .map_err(Into::into)
+        crate::uploader::send(
+            client.as_ref(),
+            endpoint.as_ref(),
+            envelopes,
+            self.backoff.clone(),
+        )
+        .await
+        .map_err(Into::into)
     }
 
     fn set_resource(&mut self, resource: &Resource) {
