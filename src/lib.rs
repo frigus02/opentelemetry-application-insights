@@ -373,7 +373,13 @@ use opentelemetry_sdk::ExportError;
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "live-metrics")]
 pub use quick_pulse::LiveMetricsSpanProcessor;
-use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
+use std::{
+    convert::TryInto,
+    error::Error as StdError,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 #[cfg(feature = "live-metrics")]
 use uploader_quick_pulse::PostOrPing;
 
@@ -392,6 +398,7 @@ where
     live_ping_endpoint: http::Uri,
     instrumentation_key: String,
     backoff: Option<B>,
+    retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
     #[cfg(feature = "trace")]
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
@@ -452,6 +459,7 @@ where
             ),
             instrumentation_key,
             backoff: None,
+            retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
@@ -492,6 +500,7 @@ where
             ),
             instrumentation_key: connection_string.instrumentation_key,
             backoff: None,
+            retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
@@ -504,6 +513,15 @@ where
     /// Set the backoff strategy used to retry failed requests.
     pub fn with_backoff(mut self, backoff: B) -> Self {
         self.backoff = Some(backoff);
+        self
+    }
+
+    /// Set a retry notification function that is called when a request fails and is retried.
+    pub fn with_retry_notify<N>(mut self, retry_notify: N) -> Self
+    where
+        N: FnMut(&Error, Duration) + Send + 'static,
+    {
+        self.retry_notify = Some(Arc::new(Mutex::new(Box::new(retry_notify))));
         self
     }
 

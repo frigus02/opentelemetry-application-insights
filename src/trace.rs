@@ -157,6 +157,7 @@ where
             endpoint.as_ref(),
             envelopes,
             self.backoff.clone(),
+            self.retry_notify.clone(),
         )
         .await
         .map_err(Into::into)

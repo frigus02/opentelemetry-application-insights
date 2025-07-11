@@ -4,7 +4,11 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
 use serde::Deserialize;
-use std::io::Write;
+use std::{
+    io::Write,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 const STATUS_OK: u16 = 200;
 const STATUS_PARTIAL_CONTENT: u16 = 206;
@@ -34,6 +38,7 @@ pub(crate) async fn send<B>(
     endpoint: &Uri,
     items: Vec<Envelope>,
     backoff: Option<B>,
+    retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
 ) -> Result<(), Error>
 where
     B: BackoffBuilder + Clone + Send + Sync + 'static,
@@ -57,7 +62,16 @@ where
     };
 
     if let Some(backoff) = backoff {
-        operation.retry(backoff).when(can_retry_operation).await
+        operation
+            .retry(backoff)
+            .when(can_retry_operation)
+            .notify(|error, duration| {
+                if let Some(ref notify) = retry_notify {
+                    let mut notify = notify.lock().unwrap();
+                    notify(error, duration);
+                }
+            })
+            .await
     } else {
         operation().await
     }
