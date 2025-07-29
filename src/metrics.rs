@@ -5,7 +5,6 @@ use crate::{
     Exporter,
 };
 use async_trait::async_trait;
-use backon::{Backoff, BackoffBuilder};
 use opentelemetry::KeyValue;
 use opentelemetry_http::HttpClient;
 use opentelemetry_sdk::{
@@ -24,11 +23,9 @@ use std::{
 
 #[cfg_attr(docsrs, doc(cfg(feature = "metrics")))]
 #[async_trait]
-impl<C, B> PushMetricExporter for Exporter<C, B>
+impl<C> PushMetricExporter for Exporter<C>
 where
     C: HttpClient + 'static,
-    B: BackoffBuilder + Clone + Send + Sync + 'static,
-    B::Backoff: Backoff + Send + 'static,
 {
     fn export(
         &self,
@@ -77,7 +74,6 @@ where
                 client.as_ref(),
                 endpoint.as_ref(),
                 envelopes,
-                self.backoff.clone(),
                 self.retry_notify.clone(),
             )
             .await

@@ -361,7 +361,6 @@ mod uploader;
 #[cfg(feature = "live-metrics")]
 mod uploader_quick_pulse;
 
-use backon::{Backoff, BackoffBuilder, ExponentialBuilder};
 #[cfg(feature = "live-metrics")]
 use connection_string::DEFAULT_LIVE_ENDPOINT;
 use connection_string::{ConnectionString, DEFAULT_BREEZE_ENDPOINT};
@@ -385,11 +384,7 @@ use uploader_quick_pulse::PostOrPing;
 
 /// Application Insights span exporter
 #[derive(Clone)]
-pub struct Exporter<C, B = ExponentialBuilder>
-where
-    B: BackoffBuilder + Clone + Send + Sync + 'static,
-    B::Backoff: Backoff + Send + 'static,
-{
+pub struct Exporter<C> {
     client: Arc<C>,
     track_endpoint: Arc<http::Uri>,
     #[cfg(feature = "live-metrics")]
@@ -397,7 +392,6 @@ where
     #[cfg(feature = "live-metrics")]
     live_ping_endpoint: http::Uri,
     instrumentation_key: String,
-    backoff: Option<B>,
     retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
     #[cfg(feature = "trace")]
     sample_rate: f64,
@@ -407,12 +401,7 @@ where
     resource_attributes_in_events_and_logs: bool,
 }
 
-impl<C, B> Debug for Exporter<C, B>
-where
-    C: Debug,
-    B: BackoffBuilder + Clone + Send + Sync + 'static,
-    B::Backoff: Backoff + Send + 'static,
-{
+impl<C: Debug> Debug for Exporter<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug = f.debug_struct("Exporter");
         debug
@@ -434,11 +423,7 @@ where
     }
 }
 
-impl<C, B> Exporter<C, B>
-where
-    B: BackoffBuilder + Clone + Send + Sync + 'static,
-    B::Backoff: Backoff + Send + 'static,
-{
+impl<C> Exporter<C> {
     /// Create a new exporter.
     #[deprecated(since = "0.27.0", note = "use new_from_connection_string() instead")]
     pub fn new(instrumentation_key: String, client: C) -> Self {
@@ -458,7 +443,6 @@ where
                 &instrumentation_key,
             ),
             instrumentation_key,
-            backoff: None,
             retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
@@ -499,7 +483,6 @@ where
                 &connection_string.instrumentation_key,
             ),
             instrumentation_key: connection_string.instrumentation_key,
-            backoff: None,
             retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
@@ -508,12 +491,6 @@ where
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource_attributes_in_events_and_logs: false,
         })
-    }
-
-    /// Set the backoff strategy used to retry failed requests.
-    pub fn with_backoff(mut self, backoff: B) -> Self {
-        self.backoff = Some(backoff);
-        self
     }
 
     /// Set a retry notification function that is called when a request fails and is retried.
@@ -628,10 +605,10 @@ pub enum Error {
     UploadConnection(Box<dyn StdError + Send + Sync + 'static>),
 
     /// Application Insights returned at least one error for the reported telemetry data.
-    #[error("upload failed with {status} (can retry: {can_retry})")]
+    #[error("upload failed with {status_code} (can retry: {can_retry})")]
     Upload {
         /// The HTTP status code returned by Application Insights.
-        status: u16,
+        status_code: u16,
         /// Whether the exporter can retry sending the telemetry data.
         can_retry: bool,
     },
