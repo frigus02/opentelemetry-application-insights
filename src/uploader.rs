@@ -1,5 +1,5 @@
 use crate::{models::Envelope, Error, HttpClient};
-use backon::{ExponentialBuilder, Retryable};
+use backon::{ExponentialBuilder, RetryableWithContext};
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
@@ -10,7 +10,6 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::sync::Mutex as AsyncMutex;
 
 // We need these constants because HTTP 439 is not part of the official HTTP
 // status code registry.
@@ -37,6 +36,27 @@ struct TelemetryErrorDetails {
     status_code: u16,
 }
 
+async fn send_internal(
+    client: &dyn HttpClient,
+    endpoint: &Uri,
+    items: &[Envelope],
+) -> Result<RetryPlan, Error> {
+    let payload = Bytes::from(serialize_envelopes(items)?);
+
+    let request = Request::post(endpoint)
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .header(http::header::CONTENT_ENCODING, "gzip")
+        .body(payload)
+        .expect("request should be valid");
+
+    let response = client
+        .send_bytes(request)
+        .await
+        .map_err(Error::UploadConnection)?;
+
+    handle_upload_response(response)
+}
+
 /// Sends a telemetry items to the server.
 pub(crate) async fn send(
     client: &dyn HttpClient,
@@ -44,54 +64,38 @@ pub(crate) async fn send(
     items: Vec<Envelope>,
     retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
 ) -> Result<(), Error> {
-    // Wrap items in an Arc<AsyncMutex> so the closure doesn't borrow locals across .await.
-    let items = Arc::new(AsyncMutex::new(items));
+    let attempt = |mut items: Vec<Envelope>| async {
+        match send_internal(client, endpoint, &items).await {
+            Ok(RetryPlan::Done) => (Vec::new(), Ok(())),
 
-    let attempt = async || {
-        let payload = {
-            let items_guard = items.lock().await;
-            Bytes::from(serialize_envelopes(&items_guard)?)
-        };
-
-        let request = Request::post(endpoint)
-            .header(http::header::CONTENT_TYPE, "application/json")
-            .header(http::header::CONTENT_ENCODING, "gzip")
-            .body(payload)
-            .expect("request should be valid");
-
-        let response = client
-            .send_bytes(request)
-            .await
-            .map_err(Error::UploadConnection)?;
-
-        match handle_upload_response(response)? {
-            RetryPlan::Done => Ok(()),
-
-            RetryPlan::Retry {
+            Ok(RetryPlan::Retry {
                 status_code: status,
                 to_retry,
-            } => {
-                let mut items_guard = items.lock().await;
-
-                *items_guard = items_guard
+            }) => {
+                items = items
                     .drain(..)
                     .enumerate()
                     .filter_map(|(index, envelope)| to_retry.contains(&index).then_some(envelope))
                     .collect();
 
-                if items_guard.is_empty() {
-                    return Ok(());
+                if items.is_empty() {
+                    return (items, Ok(()));
                 }
 
-                Err(Error::Upload {
-                    status_code: status,
-                    can_retry: true,
-                })
+                (
+                    items,
+                    Err(Error::Upload {
+                        status_code: status,
+                        can_retry: true,
+                    }),
+                )
             }
+
+            Err(err) => (items, Err(err)),
         }
     };
 
-    attempt
+    let (_, result) = attempt
         .retry(
             ExponentialBuilder::new()
                 .with_min_delay(RETRY_MIN_DELAY)
@@ -99,6 +103,7 @@ pub(crate) async fn send(
                 .with_jitter()
                 .without_max_times(),
         )
+        .context(items)
         .when(can_retry_operation)
         .notify(|error, duration| {
             if let Some(ref notify) = retry_notify {
@@ -106,7 +111,8 @@ pub(crate) async fn send(
                 notify(error, duration);
             }
         })
-        .await
+        .await;
+    result
 }
 
 const RETRY_MIN_DELAY: Duration = Duration::from_millis(500);

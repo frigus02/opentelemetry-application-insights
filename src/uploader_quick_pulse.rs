@@ -108,7 +108,7 @@ pub(crate) async fn send(
         })
     } else {
         Err(Error::Upload {
-            status: response.status().as_u16(),
+            status_code: response.status().as_u16(),
             can_retry: false,
         })
     }
@@ -123,7 +123,7 @@ fn serialize_envelope(
         PostOrPing::Ping => serde_json::to_vec(&envelope),
     }
     .map_err(Error::UploadSerializeRequest)?;
-    serialize_request_body(serialized)
+    serialize_request_body(&serialized)
 }
 
 /// Time the request was made.
