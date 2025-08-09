@@ -1,5 +1,5 @@
 use crate::{models::Envelope, Error, HttpClient};
-use backon::{ExponentialBuilder, RetryableWithContext};
+use backon::{ExponentialBuilder, FuturesTimerSleeper, RetryableWithContext};
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
@@ -89,6 +89,7 @@ pub(crate) async fn send(
                 .without_max_times()
                 .with_total_delay(Some(RETRY_TOTAL_DELAY)),
         )
+        .sleep(FuturesTimerSleeper)
         .context(items)
         .when(|err| {
             matches!(
