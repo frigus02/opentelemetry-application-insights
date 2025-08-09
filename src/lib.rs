@@ -392,7 +392,7 @@ pub struct Exporter<C> {
     #[cfg(feature = "live-metrics")]
     live_ping_endpoint: http::Uri,
     instrumentation_key: String,
-    retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
+    retry_notify: Option<Arc<Mutex<dyn FnMut(&Error, Duration) + Send + 'static>>>,
     #[cfg(feature = "trace")]
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
@@ -493,12 +493,13 @@ impl<C> Exporter<C> {
         })
     }
 
-    /// Set a retry notification function that is called when a request fails and is retried.
+    /// Set a retry notification function that is called when a request to upload telemetry to
+    /// Application Insights failed and will be retried.
     pub fn with_retry_notify<N>(mut self, retry_notify: N) -> Self
     where
         N: FnMut(&Error, Duration) + Send + 'static,
     {
-        self.retry_notify = Some(Arc::new(Mutex::new(Box::new(retry_notify))));
+        self.retry_notify = Some(Arc::new(Mutex::new(retry_notify)));
         self
     }
 

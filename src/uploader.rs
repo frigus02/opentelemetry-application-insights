@@ -62,7 +62,7 @@ pub(crate) async fn send(
     client: &dyn HttpClient,
     endpoint: &Uri,
     items: Vec<Envelope>,
-    retry_notify: Option<Arc<Mutex<Box<dyn FnMut(&Error, Duration) + Send + 'static>>>>,
+    retry_notify: Option<Arc<Mutex<dyn FnMut(&Error, Duration) + Send + 'static>>>,
 ) -> Result<(), Error> {
     let attempt = |mut items: Vec<Envelope>| async {
         match send_internal(client, endpoint, &items).await {
