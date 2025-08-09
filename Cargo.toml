@@ -62,7 +62,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking"],
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
-sysinfo = { version = "0.35", optional = true }
+sysinfo = { version = "0.36", optional = true }
 thiserror = "2"
 tracing = { version = ">=0.1.40", default-features = false, optional = true }
 
