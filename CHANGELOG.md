@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.42.0] - 2025-08-09
+
+- Add retries. No configuration necessary (or available). opentelemetry-application-insights will now retry uploads, hopefully resulting in fewer telemetry getting lost. Thanks, [alexbrt@](https://github.com/alexbrt).
 - Upgrade `sysinfo` to `v0.36`.
 
 ## [0.41.0] - 2025-05-25
@@ -331,7 +334,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.41.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...HEAD
+[0.42.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.41.0...0.42.0
 [0.41.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.40.0...0.41.0
 [0.40.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.39.0...0.40.0
 [0.39.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.38.0...0.39.0
