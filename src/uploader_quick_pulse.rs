@@ -107,10 +107,10 @@ pub(crate) async fn send(
             polling_interval_hint,
         })
     } else {
-        Err(Error::Upload {
-            status_code: response.status().as_u16(),
-            can_retry: false,
-        })
+        Err(Error::Upload(format!(
+            "{}: Failed to upload live metrics",
+            response.status().as_u16(),
+        )))
     }
 }
 

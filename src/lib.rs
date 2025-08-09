@@ -606,13 +606,8 @@ pub enum Error {
     UploadConnection(Box<dyn StdError + Send + Sync + 'static>),
 
     /// Application Insights returned at least one error for the reported telemetry data.
-    #[error("upload failed with {status_code} (can retry: {can_retry})")]
-    Upload {
-        /// The HTTP status code returned by Application Insights.
-        status_code: u16,
-        /// Whether the exporter can retry sending the telemetry data.
-        can_retry: bool,
-    },
+    #[error("upload failed with {0}")]
+    Upload(String),
 
     /// Failed to process span for live metrics.
     #[cfg(feature = "live-metrics")]
