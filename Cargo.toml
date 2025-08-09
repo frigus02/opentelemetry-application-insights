@@ -47,6 +47,7 @@ reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
 
 [dependencies]
 async-trait = "0.1"
+backon = { version = "1.5", default-features = false, features = ["futures-timer-sleep"] }
 bytes = "1"
 chrono = "0.4"
 flate2 = "1"

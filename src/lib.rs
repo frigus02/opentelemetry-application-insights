@@ -372,7 +372,13 @@ use opentelemetry_sdk::ExportError;
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "live-metrics")]
 pub use quick_pulse::LiveMetricsSpanProcessor;
-use std::{convert::TryInto, error::Error as StdError, fmt::Debug, sync::Arc};
+use std::{
+    convert::TryInto,
+    error::Error as StdError,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 #[cfg(feature = "live-metrics")]
 use uploader_quick_pulse::PostOrPing;
 
@@ -386,6 +392,7 @@ pub struct Exporter<C> {
     #[cfg(feature = "live-metrics")]
     live_ping_endpoint: http::Uri,
     instrumentation_key: String,
+    retry_notify: Option<Arc<Mutex<dyn FnMut(&Error, Duration) + Send + 'static>>>,
     #[cfg(feature = "trace")]
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
@@ -436,6 +443,7 @@ impl<C> Exporter<C> {
                 &instrumentation_key,
             ),
             instrumentation_key,
+            retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
@@ -475,6 +483,7 @@ impl<C> Exporter<C> {
                 &connection_string.instrumentation_key,
             ),
             instrumentation_key: connection_string.instrumentation_key,
+            retry_notify: None,
             #[cfg(feature = "trace")]
             sample_rate: 100.0,
             #[cfg(any(feature = "trace", feature = "logs"))]
@@ -482,6 +491,16 @@ impl<C> Exporter<C> {
             #[cfg(any(feature = "trace", feature = "logs"))]
             resource_attributes_in_events_and_logs: false,
         })
+    }
+
+    /// Set a retry notification function that is called when a request to upload telemetry to
+    /// Application Insights failed and will be retried.
+    pub fn with_retry_notify<N>(mut self, retry_notify: N) -> Self
+    where
+        N: FnMut(&Error, Duration) + Send + 'static,
+    {
+        self.retry_notify = Some(Arc::new(Mutex::new(retry_notify)));
+        self
     }
 
     /// Set endpoint used to ingest telemetry. This should consist of scheme and authrity. The

@@ -145,9 +145,14 @@ where
             .flat_map(|span| self.create_envelopes_for_span(span, &self.resource))
             .collect();
 
-        crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
-            .await
-            .map_err(Into::into)
+        crate::uploader::send(
+            client.as_ref(),
+            endpoint.as_ref(),
+            envelopes,
+            self.retry_notify.clone(),
+        )
+        .await
+        .map_err(Into::into)
     }
 
     fn set_resource(&mut self, resource: &Resource) {

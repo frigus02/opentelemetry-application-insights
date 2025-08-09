@@ -70,9 +70,14 @@ where
         }
 
         async move {
-            crate::uploader::send(client.as_ref(), endpoint.as_ref(), envelopes)
-                .await
-                .map_err(Into::into)
+            crate::uploader::send(
+                client.as_ref(),
+                endpoint.as_ref(),
+                envelopes,
+                self.retry_notify.clone(),
+            )
+            .await
+            .map_err(Into::into)
         }
     }
 
