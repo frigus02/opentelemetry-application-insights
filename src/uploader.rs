@@ -3,7 +3,7 @@ use backon::{ExponentialBuilder, RetryableWithContext};
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http::{Request, Response, Uri};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     io::Write,
@@ -26,7 +26,7 @@ const RETRY_MAX_DELAY: Duration = Duration::from_secs(5);
 const RETRY_TOTAL_DELAY: Duration = Duration::from_secs(35);
 
 /// Response containing the status of each telemetry item.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TrackResponse {
     /// The number of items received.
@@ -38,7 +38,7 @@ struct TrackResponse {
 }
 
 /// The error details.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ErrorDetails {
     /// The index in the original payload of the item.
@@ -246,4 +246,187 @@ fn can_retry_status_code(code: u16) -> bool {
 
 fn status_code_error(status_code: u16) -> Error {
     Error::Upload(format!("{status_code}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use flate2::read::GzDecoder;
+    use http::{Request, Response};
+    use opentelemetry_http::{HttpClient, HttpError};
+    use std::{collections::VecDeque, sync::Mutex};
+
+    #[derive(Default, Debug)]
+    struct TestClient {
+        requests: Mutex<Vec<Request<Bytes>>>,
+        responses: Mutex<VecDeque<Result<Response<Bytes>, HttpError>>>,
+    }
+
+    impl TestClient {
+        fn with_response(self, response: Result<Response<Bytes>, HttpError>) -> Self {
+            self.responses.lock().unwrap().push_back(response);
+            self
+        }
+
+        fn with_200(self) -> Self {
+            self.with_response(Ok(Response::builder()
+                .status(200)
+                .body(Bytes::from("{}"))
+                .expect("")))
+        }
+
+        fn with_206(self, track_response: TrackResponse) -> Self {
+            self.with_response(Ok(Response::builder()
+                .status(206)
+                .body(Bytes::from(serde_json::to_vec(&track_response).unwrap()))
+                .expect("")))
+        }
+
+        fn with_400(self) -> Self {
+            self.with_response(Ok(Response::builder()
+                .status(400)
+                .body(Bytes::from("{}"))
+                .expect("")))
+        }
+
+        fn with_connection_error(self) -> Self {
+            self.with_response(Err("connection error".into()))
+        }
+    }
+
+    #[async_trait]
+    impl HttpClient for TestClient {
+        async fn send_bytes(&self, req: Request<Bytes>) -> Result<Response<Bytes>, HttpError> {
+            self.requests.lock().unwrap().push(req);
+            self.responses
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("not enough responses are set up")
+        }
+    }
+
+    fn endpoint() -> Uri {
+        Uri::from_static("https://example.com/track")
+    }
+
+    fn envelopes(n: usize) -> Vec<Envelope> {
+        let mut items = Vec::with_capacity(n);
+        for index in 0..n {
+            items.push(Envelope {
+                name: "Test",
+                time: index.to_string().into(),
+                sample_rate: None,
+                i_key: None,
+                tags: None,
+                data: None,
+            });
+        }
+        items
+    }
+
+    fn envelopes_ids_from_request_body(body: &[u8]) -> Vec<usize> {
+        let gzip_decoder = GzDecoder::new(body);
+        let mut envelopes: Vec<serde_json::Value> =
+            serde_json::from_reader(gzip_decoder).expect("body is json array");
+        envelopes
+            .drain(..)
+            .map(|envelope| {
+                envelope
+                    .as_object()
+                    .unwrap()
+                    .get("time")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap()
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn success() {
+        let client = TestClient::default().with_200();
+        let result = send(&client, &endpoint(), envelopes(1), None).await;
+        assert!(result.is_ok());
+        assert_eq!(client.requests.lock().unwrap().len(), 1, "request count");
+    }
+
+    #[tokio::test]
+    async fn success_partial_with_all_items() {
+        let client = TestClient::default().with_206(TrackResponse {
+            items_received: 2,
+            items_accepted: 2,
+            errors: Vec::new(),
+        });
+        let result = send(&client, &endpoint(), envelopes(2), None).await;
+        assert!(result.is_ok());
+        assert_eq!(client.requests.lock().unwrap().len(), 1, "request count");
+    }
+
+    #[tokio::test]
+    async fn fatal() {
+        let client = TestClient::default().with_400();
+        let result = send(&client, &endpoint(), envelopes(1), None).await;
+        assert!(result.is_err());
+        assert_eq!(client.requests.lock().unwrap().len(), 1, "request count");
+        assert_eq!(result.unwrap_err().to_string(), "upload failed with 400");
+    }
+
+    #[tokio::test]
+    async fn retry_connection_error() {
+        let client = TestClient::default().with_connection_error().with_200();
+        let result = send(&client, &endpoint(), envelopes(1), None).await;
+        assert!(result.is_ok());
+        assert_eq!(client.requests.lock().unwrap().len(), 2, "request count");
+    }
+
+    #[tokio::test]
+    async fn retry_partial_content() {
+        let client = TestClient::default()
+            .with_206(TrackResponse {
+                items_received: 10,
+                items_accepted: 6,
+                errors: vec![
+                    ErrorDetails {
+                        index: 1,
+                        status_code: 400,
+                    },
+                    ErrorDetails {
+                        index: 7,
+                        status_code: STATUS_REQUEST_TIMEOUT,
+                    },
+                    ErrorDetails {
+                        index: 8,
+                        status_code: STATUS_REQUEST_TIMEOUT,
+                    },
+                    ErrorDetails {
+                        index: 9,
+                        status_code: STATUS_REQUEST_TIMEOUT,
+                    },
+                ],
+            })
+            .with_206(TrackResponse {
+                items_received: 3,
+                items_accepted: 2,
+                errors: vec![ErrorDetails {
+                    index: 2,
+                    status_code: STATUS_TOO_MANY_REQUESTS,
+                }],
+            })
+            .with_200();
+        let result = send(&client, &endpoint(), envelopes(10), None).await;
+        assert!(result.is_ok());
+        let requests = client.requests.lock().unwrap();
+        assert_eq!(requests.len(), 3, "request count");
+        let items0 = envelopes_ids_from_request_body(requests[0].body());
+        assert_eq!(items0, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let items1 = envelopes_ids_from_request_body(requests[1].body());
+        assert_eq!(items1, vec![7, 8, 9]);
+        let items2 = envelopes_ids_from_request_body(requests[2].body());
+        assert_eq!(items2, vec![9]);
+    }
 }
