@@ -371,7 +371,7 @@ use opentelemetry_sdk::ExportError;
 #[cfg(any(feature = "trace", feature = "logs"))]
 use opentelemetry_sdk::Resource;
 #[cfg(feature = "live-metrics")]
-pub use quick_pulse::LiveMetricsSpanProcessor;
+pub use quick_pulse::{CollectorType, LiveMetricsSpanProcessor};
 use std::{
     convert::TryInto,
     error::Error as StdError,
