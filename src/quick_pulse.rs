@@ -22,7 +22,7 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, Pid, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, System};
 
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
@@ -75,15 +75,6 @@ impl<R: RuntimeChannel> std::fmt::Debug for LiveMetricsSpanProcessor<R> {
     }
 }
 
-/// Metrics Collector Type
-#[derive(Debug)]
-pub enum CollectorType {
-    ///System Collector (default)
-    System,
-    ///Process Collector (collects only the app running process metrics)
-    ProcessOnly,
-}
-
 #[derive(Debug)]
 enum Message {
     Send,
@@ -96,21 +87,12 @@ impl<R: RuntimeChannel> LiveMetricsSpanProcessor<R> {
         exporter: Exporter<C>,
         runtime: R,
     ) -> LiveMetricsSpanProcessor<R> {
-        Self::new_with_collector(exporter, runtime, CollectorType::System)
-    }
-
-    /// Create new live metrics span processor with specific metrics collector.
-    pub fn new_with_collector<C: HttpClient + 'static>(
-        exporter: Exporter<C>,
-        runtime: R,
-        collector_type: CollectorType,
-    ) -> LiveMetricsSpanProcessor<R> {
         let (message_sender, message_receiver) = runtime.batch_message_channel(1);
         let delay_runtime = runtime.clone();
         let is_collecting_outer = Arc::new(AtomicBool::new(false));
         let is_collecting = is_collecting_outer.clone();
         let shared_outer = Arc::new(Mutex::new(Shared {
-            metrics_collector: MetricsCollector::new(collector_type),
+            metrics_collector: MetricsCollector::new(),
             resource_data: (&exporter.resource).into(),
         }));
         let shared = shared_outer.clone();
@@ -333,84 +315,10 @@ impl<C: HttpClient + 'static> Sender<C> {
     }
 }
 
-enum HardwareCollector {
-    System {
-        system: System,
-        refresh_kind: RefreshKind,
-    },
-    Process {
-        pid: Pid,
-        system: System,
-        refresh_kind: ProcessRefreshKind,
-    },
-}
-
-impl HardwareCollector {
-    fn refresh_specifics(&mut self) {
-        match self {
-            HardwareCollector::System {
-                system,
-                refresh_kind,
-            } => system.refresh_specifics(*refresh_kind),
-            HardwareCollector::Process {
-                pid,
-                system,
-                refresh_kind,
-            } => {
-                system.refresh_processes_specifics(
-                    sysinfo::ProcessesToUpdate::Some(&[*pid]),
-                    true,
-                    *refresh_kind,
-                );
-            }
-        }
-    }
-
-    fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
-        let mut cpu_usage = 0.;
-
-        match self {
-            HardwareCollector::System { system, .. } => {
-                for cpu in system.cpus() {
-                    cpu_usage += f64::from(cpu.cpu_usage());
-                }
-            }
-            HardwareCollector::Process { pid, system, .. } => {
-                if let Some(process) = system.process(*pid) {
-                    cpu_usage += f64::from(process.cpu_usage())
-                }
-            }
-        }
-
-        metrics.push(QuickPulseMetric {
-            name: METRIC_PROCESSOR_TIME,
-            value: cpu_usage,
-            weight: 1,
-        });
-    }
-
-    fn collect_memory_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
-        let memory_usage = match self {
-            HardwareCollector::System { system, .. } => system.used_memory(),
-            HardwareCollector::Process { pid, system, .. } => {
-                if let Some(process) = system.process(*pid) {
-                    process.memory()
-                } else {
-                    0
-                }
-            }
-        };
-
-        metrics.push(QuickPulseMetric {
-            name: METRIC_COMMITTED_BYTES,
-            value: memory_usage as f64,
-            weight: 1,
-        });
-    }
-}
-
 struct MetricsCollector {
-    hardware_collector: HardwareCollector,
+    system: System,
+    process_refresh_kind: ProcessRefreshKind,
+    process_id: Pid,
     request_count: usize,
     request_failed_count: usize,
     request_duration: Duration,
@@ -422,23 +330,11 @@ struct MetricsCollector {
 }
 
 impl MetricsCollector {
-    fn new(collector_type: CollectorType) -> Self {
-        let cpu_mem_collector = match collector_type {
-            CollectorType::System => HardwareCollector::System {
-                system: System::new(),
-                refresh_kind: RefreshKind::nothing()
-                    .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
-                    .with_memory(MemoryRefreshKind::nothing().with_ram()),
-            },
-            CollectorType::ProcessOnly => HardwareCollector::Process {
-                system: System::new(),
-                pid: Pid::from_u32(std::process::id()),
-                refresh_kind: ProcessRefreshKind::nothing().with_cpu().with_memory(),
-            },
-        };
-
+    fn new() -> Self {
         Self {
-            hardware_collector: cpu_mem_collector,
+            system: System::new(),
+            process_refresh_kind: ProcessRefreshKind::nothing().with_cpu().with_memory(),
+            process_id: Pid::from_u32(std::process::id()),
             request_count: 0,
             request_failed_count: 0,
             request_duration: Duration::default(),
@@ -489,12 +385,44 @@ impl MetricsCollector {
 
     fn collect_and_reset(&mut self) -> Vec<QuickPulseMetric> {
         let mut metrics = Vec::new();
-        self.hardware_collector.refresh_specifics();
-        self.hardware_collector.collect_cpu_usage(&mut metrics);
-        self.hardware_collector.collect_memory_usage(&mut metrics);
+        self.system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[self.process_id]),
+            true,
+            self.process_refresh_kind,
+        );
+        self.collect_cpu_usage(&mut metrics);
+        self.collect_memory_usage(&mut metrics);
         self.collect_requests_dependencies_exceptions(&mut metrics);
         self.reset();
         metrics
+    }
+
+    fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        let cpu_usage = if let Some(process) = self.system.process(self.process_id) {
+            f64::from(process.cpu_usage())
+        } else {
+            0.
+        };
+
+        metrics.push(QuickPulseMetric {
+            name: METRIC_PROCESSOR_TIME,
+            value: cpu_usage,
+            weight: 1,
+        });
+    }
+
+    fn collect_memory_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        let memory_usage = if let Some(process) = self.system.process(self.process_id) {
+            process.memory()
+        } else {
+            0
+        };
+
+        metrics.push(QuickPulseMetric {
+            name: METRIC_COMMITTED_BYTES,
+            value: memory_usage as f64,
+            weight: 1,
+        });
     }
 
     fn collect_requests_dependencies_exceptions(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
