@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.43.0] - 2025-09-01
+
+- In live metrics, report CPU and memory usage of the current process rather than the system. This is more useful, especially when more than one application is running on the system. This also follows what the .NET SDK does. Thanks, [rafamerlin@](https://github.com/rafamerlin).
+
 ## [0.42.0] - 2025-08-09
 
 - Add retries. No configuration necessary (or available). opentelemetry-application-insights will now retry uploads, hopefully resulting in fewer telemetry getting lost. Thanks, [alexbrt@](https://github.com/alexbrt).
@@ -334,7 +338,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.43.0...HEAD
+[0.43.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...0.43.0
 [0.42.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.41.0...0.42.0
 [0.41.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.40.0...0.41.0
 [0.40.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.39.0...0.40.0
