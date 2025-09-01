@@ -22,7 +22,7 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, System};
 
 const MAX_POST_WAIT_TIME: Duration = Duration::from_secs(20);
 const MAX_PING_WAIT_TIME: Duration = Duration::from_secs(60);
@@ -317,7 +317,8 @@ impl<C: HttpClient + 'static> Sender<C> {
 
 struct MetricsCollector {
     system: System,
-    system_refresh_kind: RefreshKind,
+    process_refresh_kind: ProcessRefreshKind,
+    process_id: Pid,
     request_count: usize,
     request_failed_count: usize,
     request_duration: Duration,
@@ -332,9 +333,8 @@ impl MetricsCollector {
     fn new() -> Self {
         Self {
             system: System::new(),
-            system_refresh_kind: RefreshKind::nothing()
-                .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
-                .with_memory(MemoryRefreshKind::nothing().with_ram()),
+            process_refresh_kind: ProcessRefreshKind::nothing().with_cpu().with_memory(),
+            process_id: Pid::from_u32(std::process::id()),
             request_count: 0,
             request_failed_count: 0,
             request_duration: Duration::default(),
@@ -385,7 +385,11 @@ impl MetricsCollector {
 
     fn collect_and_reset(&mut self) -> Vec<QuickPulseMetric> {
         let mut metrics = Vec::new();
-        self.system.refresh_specifics(self.system_refresh_kind);
+        self.system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[self.process_id]),
+            true,
+            self.process_refresh_kind,
+        );
         self.collect_cpu_usage(&mut metrics);
         self.collect_memory_usage(&mut metrics);
         self.collect_requests_dependencies_exceptions(&mut metrics);
@@ -394,10 +398,12 @@ impl MetricsCollector {
     }
 
     fn collect_cpu_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
-        let mut cpu_usage = 0.;
-        for cpu in self.system.cpus() {
-            cpu_usage += f64::from(cpu.cpu_usage());
-        }
+        let cpu_usage = if let Some(process) = self.system.process(self.process_id) {
+            f64::from(process.cpu_usage())
+        } else {
+            0.
+        };
+
         metrics.push(QuickPulseMetric {
             name: METRIC_PROCESSOR_TIME,
             value: cpu_usage,
@@ -406,9 +412,15 @@ impl MetricsCollector {
     }
 
     fn collect_memory_usage(&mut self, metrics: &mut Vec<QuickPulseMetric>) {
+        let memory_usage = if let Some(process) = self.system.process(self.process_id) {
+            process.memory()
+        } else {
+            0
+        };
+
         metrics.push(QuickPulseMetric {
             name: METRIC_COMMITTED_BYTES,
-            value: self.system.used_memory() as f64,
+            value: memory_usage as f64,
             weight: 1,
         });
     }
