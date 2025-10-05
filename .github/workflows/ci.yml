@@ -52,6 +52,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
-      - name: Run cargo check-external-types
+        uses: taiki-e/install-action@f355b1dcaf1a1c56ccead97cc540a259faf4bd5a # v2.62.20
+        with:
+          tool: cargo-hack
+      - name: Run cargo hack --rust-version
         run: cargo hack check --rust-version --workspace --all-targets --ignore-private
