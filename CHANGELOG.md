@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` dependencies to `v0.31`.
+
 ## [0.43.0] - 2025-09-01
 
 - In live metrics, report CPU and memory usage of the current process rather than the system. This is more useful, especially when more than one application is running on the system. This also follows what the .NET SDK does. Thanks, [rafamerlin@](https://github.com/rafamerlin).
@@ -27,13 +29,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - **Breaking**: Remove pipeline API. This requires some consumer changes:
 
   In short:
-
   - Create exporter using `opentelemetry_application_insights::Exporter::new_from_connection_string`.
   - Configure Application Insights specifics using `.with_` functions on the exporter.
   - Create and configure trace, metrics, and logs providers using `opentelemetry_sdk::trace::SdkTracerProvider`, `opentelemetry_sdk::metrics::SdkMeterProvider`, and `opentelemetry_sdk::logs::SdkLoggerProvider`.
 
   In detail, here are replacements for functions on the removed pipeline API:
-
   - `new_pipeline_from_env` --> `Exporter::new_from_env`
   - `new_pipeline_from_connection_string` --> `Exporter::new_from_connection_string`
   - `pipeline_builder.with_sample_rate` --> `exporter.with_sample_rate`
@@ -51,11 +51,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [0.38.0] - 2025-02-22
 
 - Upgrade `opentelemetry` dependencies to `v0.28`.
-
   - The `trace` feature turns on `opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime` in this release to avoid breaking API changes and to make this release simpler for me. In the future I hope to align the API with other crates like `opentelemetry-otlp`, which means removing the pipeline API. Examples have already been updated to the new API.
 
   - If you're using `logs` or `metrics` make sure you use matching combinations of sync/async HTTP clients and runtimes. E.g.:
-
     - Use `reqwest::blocking::Client` with `.with_batch_exporter(exporter)`. If you're already in an async context, you might need to create the client using `std::thread::spawn(reqwest::blocking::Client::new).join().unwrap()`.
     - Use `reqwest::Client` with `.with_log_processor(opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor::builder(exporter, opentelemetry_sdk::runtime::Tokio).build())`.
 
@@ -101,7 +99,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [0.31.0] - 2024-05-09
 
 - Change how the tags Could role, Cloud role instance, Application version and Internal SDK version are extracted:
-
   - Spans no longer extract them from span attributes. They still extract them from resource attributes. And they newly extract them also from instrumentation library attributes.
   - Events newly extract them from resource and instrumentation library attributes.
 
@@ -204,7 +201,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Upgrade to `v0.13.0` of `opentelemetry`.
 
   The choice of simple/batch span processor as well as the async runtime now needs to be made in Rust code:
-
   - If you previously used `.install()` with the `reqwest::blocking::Client`, you should now use `.install_simple()`.
   - If you previously used `.install()` with the `reqwest::Client` and the Tokio runtime, you should now use `.install_batch(opentelemetry::runtime::Tokio)` as well as enable to **opentelemetry/rt-tokio** feature.
   - If you previously used `.install()` with the `surf::Client` and the async-std runtime, you should now use `.install_batch(opentelemetry::runtime::AsyncStd)` as well as enable to **opentelemetry/rt-async-std** feature.
