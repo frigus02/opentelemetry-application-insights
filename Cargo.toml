@@ -3,6 +3,7 @@ name = "opentelemetry-application-insights"
 version = "0.44.0"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2018"
+rust-version = "1.75.0"
 description = "OpenTelemetry exporter for Azure Application Insights"
 readme = "README.md"
 repository = "https://github.com/frigus02/opentelemetry-application-insights"
