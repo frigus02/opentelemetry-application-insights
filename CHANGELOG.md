@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.44.0] - 2025-10-05
+
 - Upgrade `opentelemetry` dependencies to `v0.31`.
 
 ## [0.43.0] - 2025-09-01
@@ -334,7 +336,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.43.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.44.0...HEAD
+[0.44.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.43.0...0.44.0
 [0.43.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...0.43.0
 [0.42.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.41.0...0.42.0
 [0.41.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.40.0...0.41.0
