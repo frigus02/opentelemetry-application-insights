@@ -107,6 +107,10 @@ name = "logs"
 required-features = ["logs", "opentelemetry-http/reqwest"]
 
 [[example]]
+name = "logs_pipeline"
+required-features = ["logs", "opentelemetry-http/reqwest"]
+
+[[example]]
 name = "metrics"
 required-features = ["metrics", "opentelemetry_sdk/rt-tokio"]
 
