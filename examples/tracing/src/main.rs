@@ -1,5 +1,5 @@
 use opentelemetry::{propagation::TextMapPropagator, trace::TracerProvider as _};
-use opentelemetry_sdk::propagation::TraceContextPropagator;
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -53,10 +53,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let traceparent = iter.next();
     let child_no = iter.next();
 
-    let provider = opentelemetry_application_insights::new_pipeline_from_env()
-        .expect("env var APPLICATIONINSIGHTS_CONNECTION_STRING should exist")
-        .with_client(reqwest::Client::new())
-        .build_batch(opentelemetry_sdk::runtime::Tokio);
+    let connection_string = std::env::var("APPLICATIONINSIGHTS_CONNECTION_STRING").unwrap();
+    let exporter = opentelemetry_application_insights::Exporter::new_from_connection_string(
+        connection_string,
+        reqwest::Client::new(),
+    )
+    .expect("valid connection string");
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .build();
     let telemetry = tracing_opentelemetry::layer().with_tracer(provider.tracer("tracing-example"));
     let subscriber = Registry::default().with(telemetry);
     tracing::subscriber::set_global_default(subscriber).expect("setting global default failed");
@@ -68,7 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let propagator = TraceContextPropagator::new();
             let cx = propagator.extract(&extractor);
             let span = tracing::info_span!("child", otel.kind = "server");
-            span.set_parent(cx);
+            span.set_parent(cx)?;
             let _guard = span.enter();
             run_in_child_process(
                 child_no
