@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- **Breaking:** Removed dependency on `reqwest` and the Cargo features `reqwest-*`. These have been aliases for features in `opentelemetry-http` and `reqwest` for a while now. Use the features `reqwest`, `reqwest-blocking`, `reqwest-rustls`, `reqwest-rustls-webpki-roots` in `opentelemetry-http` instead.
+
 ## [0.44.0] - 2025-10-05
 
 - Upgrade `opentelemetry` dependencies to `v0.31`.
