@@ -38,14 +38,6 @@ metrics = ["opentelemetry_sdk/metrics"]
 logs = ["opentelemetry_sdk/logs"]
 live-metrics = ["trace", "futures-util", "sysinfo", "opentelemetry_sdk/experimental_trace_batch_span_processor_with_async_runtime"]
 internal-logs = ["tracing"]
-# Deprecated features: These don't enable anything in
-# opentelemetry-application-insights. They only enable features in dependency
-# crates.
-reqwest-blocking-client = ["reqwest-client"]
-reqwest-blocking-client-rustls = ["reqwest-client-rustls"]
-reqwest-client = ["opentelemetry-http/reqwest", "reqwest/native-tls"]
-reqwest-client-vendored-tls = ["opentelemetry-http/reqwest", "reqwest/native-tls-vendored"]
-reqwest-client-rustls = ["opentelemetry-http/reqwest", "reqwest/rustls-tls"]
 
 [dependencies]
 async-trait = "0.1"
@@ -60,7 +52,6 @@ opentelemetry = "0.31"
 opentelemetry-http = "0.31"
 opentelemetry-semantic-conventions = { version = "0.31", features = ["semconv_experimental"] }
 opentelemetry_sdk = "0.31"
-reqwest = { version = "0.12", default-features = false, features = ["blocking"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
