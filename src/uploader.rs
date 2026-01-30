@@ -47,12 +47,14 @@ struct ErrorDetails {
     status_code: u16,
 }
 
+pub(crate) type RetryNotifyFn = dyn FnMut(&Error, Duration) + Send + 'static;
+
 /// Sends a telemetry items to the server.
 pub(crate) async fn send(
     client: &dyn HttpClient,
     endpoint: &Uri,
     items: Vec<Envelope>,
-    retry_notify: Option<Arc<Mutex<dyn FnMut(&Error, Duration) + Send + 'static>>>,
+    retry_notify: Option<Arc<Mutex<RetryNotifyFn>>>,
 ) -> Result<(), Error> {
     let attempt = |mut items: Vec<Envelope>| async {
         match send_internal(client, endpoint, &items).await {
@@ -112,7 +114,7 @@ async fn send_internal(
     endpoint: &Uri,
     items: &[Envelope],
 ) -> Result<(), UploadError> {
-    let payload = Bytes::from(serialize_envelopes(items).map_err(|err| UploadError::Fatal(err))?);
+    let payload = Bytes::from(serialize_envelopes(items).map_err(UploadError::Fatal)?);
 
     let request = Request::post(endpoint)
         .header(http::header::CONTENT_TYPE, "application/json")
@@ -141,7 +143,7 @@ pub(crate) fn serialize_request_body(data: &[u8]) -> Result<Vec<u8>, Error> {
     // serde_json::to_writer(gzip_encoder):          247ms
     let mut gzip_encoder = GzEncoder::new(Vec::new(), Compression::default());
     gzip_encoder
-        .write_all(&data)
+        .write_all(data)
         .map_err(Error::UploadCompressRequest)?;
     gzip_encoder.finish().map_err(Error::UploadCompressRequest)
 }

@@ -392,7 +392,7 @@ pub struct Exporter<C> {
     #[cfg(feature = "live-metrics")]
     live_ping_endpoint: http::Uri,
     instrumentation_key: String,
-    retry_notify: Option<Arc<Mutex<dyn FnMut(&Error, Duration) + Send + 'static>>>,
+    retry_notify: Option<Arc<Mutex<uploader::RetryNotifyFn>>>,
     #[cfg(feature = "trace")]
     sample_rate: f64,
     #[cfg(any(feature = "trace", feature = "logs"))]
