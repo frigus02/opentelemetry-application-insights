@@ -118,9 +118,11 @@ impl<R: RuntimeChannel> LiveMetricsSpanProcessor<R> {
                         let (resource_data, metrics) = {
                             let mut shared = shared.lock().unwrap();
                             let resource_data = shared.resource_data.clone();
-                            let metrics = curr_is_collecting
-                                .then(|| shared.metrics_collector.collect_and_reset())
-                                .unwrap_or_default();
+                            let metrics = if curr_is_collecting {
+                                shared.metrics_collector.collect_and_reset()
+                            } else {
+                                Default::default()
+                            };
                             (resource_data, metrics)
                         };
                         let (next_is_collecting, next_timeout) = sender
