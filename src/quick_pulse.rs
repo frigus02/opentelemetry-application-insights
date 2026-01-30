@@ -181,8 +181,8 @@ impl<R: RuntimeChannel> SpanProcessor for LiveMetricsSpanProcessor<R> {
 impl<R: RuntimeChannel> Drop for LiveMetricsSpanProcessor<R> {
     fn drop(&mut self) {
         if let Err(err) = self.shutdown() {
-            let err: &dyn std::error::Error = &err;
-            opentelemetry::otel_warn!(name: "ApplicationInsights.LiveMetrics.ShutdownFailed", error = err);
+            let err = err.to_string();
+            opentelemetry::otel_warn!(name: "ApplicationInsights.LiveMetrics.ShutdownFailed", error = &err);
         }
     }
 }
