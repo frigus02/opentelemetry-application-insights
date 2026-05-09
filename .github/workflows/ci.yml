@@ -55,5 +55,11 @@ jobs:
         uses: taiki-e/install-action@f355b1dcaf1a1c56ccead97cc540a259faf4bd5a # v2.62.20
         with:
           tool: cargo-hack
+      # Backon's latest version 1.6 uses edition 2024, which isn't available with Rust 1.75 (MSRV)
+      # But we are compatible with 1.5. Not sure how to solve this properly. For now fix the build
+      # by forcing 1.5 exactly here.
+      - name: Fix backon version
+        run: |
+          sed -i 's/backon = { version = "1.5"/backon = { version = "=1.5.2"/' Cargo.toml
       - name: Run cargo hack --rust-version
         run: cargo hack check --rust-version --lib
