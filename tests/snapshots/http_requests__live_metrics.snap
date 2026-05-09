@@ -12,13 +12,13 @@ x-ms-qps-stream-id: STRIPPED
 x-ms-qps-machine-name: Unknown
 x-ms-qps-instance-name: Unknown
 x-ms-qps-invariant-version: 1
-x-ms-qps-role-name: unknown_service:http_requests-9b93771c4bb6736f
+x-ms-qps-role-name: STRIPPED
 
 {
   "Instance": "Unknown",
   "InvariantVersion": 1,
   "MachineName": "Unknown",
-  "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
+  "RoleName": "STRIPPED",
   "StreamId": "STRIPPED",
   "Timestamp": "STRIPPED",
   "Version": "STRIPPED"
@@ -84,7 +84,7 @@ content-encoding: gzip
         "Weight": 1
       }
     ],
-    "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
+    "RoleName": "STRIPPED",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
     "Version": "STRIPPED"
@@ -141,7 +141,7 @@ content-encoding: gzip
         "Weight": 1
       }
     ],
-    "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
+    "RoleName": "STRIPPED",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
     "Version": "STRIPPED"
