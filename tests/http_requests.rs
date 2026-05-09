@@ -461,6 +461,10 @@ mod format {
     fn strip_changing_header<'a>(name: &HeaderName, value: &'a str) -> &'a str {
         if name == "x-ms-qps-transmission-time" || name == "x-ms-qps-stream-id" {
             "STRIPPED"
+        } else if name == "x-ms-qps-role-name"
+            && value.starts_with("unknown_service:http_requests-")
+        {
+            "STRIPPED"
         } else {
             value
         }
@@ -513,6 +517,7 @@ mod format {
                 Strip::new(&format!(r#""(?P<field>Version)": "opentelemetry:{otel_version}""#)),
                 Strip::new(&format!(r#""(?P<field>service\.name)": "unknown_service:http_requests-[a-f0-9]+""#)),
                 Strip::new(&format!(r#""(?P<field>ai\.cloud\.role)": "unknown_service:http_requests-[a-f0-9]+""#)),
+                Strip::new(&format!(r#""(?P<field>RoleName)": "unknown_service:http_requests-[a-f0-9]+""#)),
             ]
         });
 
