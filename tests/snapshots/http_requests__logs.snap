@@ -15,7 +15,7 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "span_with_logs",
         "properties": {
-          "service.name": "unknown_service:http_requests-9b93771c4bb6736f",
+          "service.name": "STRIPPED",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
           "telemetry.sdk.version": "STRIPPED"
@@ -30,7 +30,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.RemoteDependency",
     "sampleRate": 100.0,
     "tags": {
-      "ai.cloud.role": "unknown_service:http_requests-9b93771c4bb6736f",
+      "ai.cloud.role": "STRIPPED",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },

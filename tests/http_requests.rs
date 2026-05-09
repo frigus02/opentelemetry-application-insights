@@ -511,6 +511,8 @@ mod format {
                 Strip::new(&format!(r#""(?P<field>telemetry\.sdk\.version)": "{otel_version}""#)),
                 Strip::new(&format!(r#""(?P<field>ai\.internal\.sdkVersion)": "opentelemetry:{otel_version}""#)),
                 Strip::new(&format!(r#""(?P<field>Version)": "opentelemetry:{otel_version}""#)),
+                Strip::new(&format!(r#""(?P<field>service\.name)": "unknown_service:http_requests-[a-f0-9]+""#)),
+                Strip::new(&format!(r#""(?P<field>ai\.cloud\.role)": "unknown_service:http_requests-[a-f0-9]+""#)),
             ]
         });
 
