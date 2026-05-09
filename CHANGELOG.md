@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-05-09
+
 - Upgrade `opentelemetry` dependencies to `v0.32`.
 - **Breaking:** Removed dependency on `reqwest` and the Cargo features `reqwest-*`. These have been aliases for features in `opentelemetry-http` and `reqwest` for a while now. Use the features `reqwest`, `reqwest-blocking`, `reqwest-rustls`, `reqwest-rustls-webpki-roots` in `opentelemetry-http` instead.
 
@@ -339,7 +341,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.44.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.45.0...HEAD
+[0.45.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.44.0...0.45.0
 [0.44.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.43.0...0.44.0
 [0.43.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...0.43.0
 [0.42.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.41.0...0.42.0
