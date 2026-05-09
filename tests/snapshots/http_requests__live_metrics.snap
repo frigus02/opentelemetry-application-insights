@@ -12,13 +12,13 @@ x-ms-qps-stream-id: STRIPPED
 x-ms-qps-machine-name: Unknown
 x-ms-qps-instance-name: Unknown
 x-ms-qps-invariant-version: 1
-x-ms-qps-role-name: unknown_service
+x-ms-qps-role-name: unknown_service:http_requests-9b93771c4bb6736f
 
 {
   "Instance": "Unknown",
   "InvariantVersion": 1,
   "MachineName": "Unknown",
-  "RoleName": "unknown_service",
+  "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
   "StreamId": "STRIPPED",
   "Timestamp": "STRIPPED",
   "Version": "STRIPPED"
@@ -84,7 +84,7 @@ content-encoding: gzip
         "Weight": 1
       }
     ],
-    "RoleName": "unknown_service",
+    "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
     "Version": "STRIPPED"
@@ -141,7 +141,7 @@ content-encoding: gzip
         "Weight": 1
       }
     ],
-    "RoleName": "unknown_service",
+    "RoleName": "unknown_service:http_requests-9b93771c4bb6736f",
     "StreamId": "STRIPPED",
     "Timestamp": "STRIPPED",
     "Version": "STRIPPED"
@@ -162,7 +162,7 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service",
+          "service.name": "unknown_service:http_requests-9b93771c4bb6736f",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
           "telemetry.sdk.version": "STRIPPED"
@@ -177,7 +177,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.RemoteDependency",
     "sampleRate": 100.0,
     "tags": {
-      "ai.cloud.role": "unknown_service",
+      "ai.cloud.role": "unknown_service:http_requests-9b93771c4bb6736f",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },
@@ -200,7 +200,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Exception",
     "sampleRate": 100.0,
     "tags": {
-      "ai.cloud.role": "unknown_service",
+      "ai.cloud.role": "unknown_service:http_requests-9b93771c4bb6736f",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED",
       "ai.operation.parentId": "STRIPPED"
@@ -214,7 +214,7 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service",
+          "service.name": "unknown_service:http_requests-9b93771c4bb6736f",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
           "telemetry.sdk.version": "STRIPPED"
@@ -229,7 +229,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Request",
     "sampleRate": 100.0,
     "tags": {
-      "ai.cloud.role": "unknown_service",
+      "ai.cloud.role": "unknown_service:http_requests-9b93771c4bb6736f",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },
@@ -242,7 +242,7 @@ content-encoding: gzip
         "id": "STRIPPED",
         "name": "live-metrics",
         "properties": {
-          "service.name": "unknown_service",
+          "service.name": "unknown_service:http_requests-9b93771c4bb6736f",
           "telemetry.sdk.language": "rust",
           "telemetry.sdk.name": "opentelemetry",
           "telemetry.sdk.version": "STRIPPED"
@@ -257,7 +257,7 @@ content-encoding: gzip
     "name": "Microsoft.ApplicationInsights.Request",
     "sampleRate": 100.0,
     "tags": {
-      "ai.cloud.role": "unknown_service",
+      "ai.cloud.role": "unknown_service:http_requests-9b93771c4bb6736f",
       "ai.internal.sdkVersion": "STRIPPED",
       "ai.operation.id": "STRIPPED"
     },

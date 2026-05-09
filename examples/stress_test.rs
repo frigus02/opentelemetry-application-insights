@@ -6,14 +6,11 @@ use opentelemetry::{
 use opentelemetry_sdk::Resource;
 use std::env;
 use std::error::Error;
-use std::ops::Add;
 use std::time::{Duration, Instant, SystemTime};
 
-async fn mock_sql_call(n: u64, duration: u64) {
+async fn mock_sql_call(n: u64, duration: Duration) {
     let tracer = global::tracer("run_in_child_process_new");
-    let now = SystemTime::now();
-    let end_time = now.add(Duration::from_millis(duration));
-    tracer
+    let _span = tracer
         .span_builder("test_db")
         .with_kind(SpanKind::Client)
         .with_attributes(vec![
@@ -24,16 +21,14 @@ async fn mock_sql_call(n: u64, duration: u64) {
                 format!("SELECT * FROM test WHERE test_id = {}", n),
             ),
         ])
-        .with_start_time(now)
-        .with_end_time(end_time)
         .start(&tracer);
+    tokio::time::sleep(duration).await;
 }
 
 async fn mock_serve_http_request(n: u64) {
     let tracer = global::tracer("named tracer");
     let now = SystemTime::now();
-    let duration = 10 + (n % 50);
-    let end_time = now.add(Duration::from_millis(duration));
+    let duration = Duration::from_millis(10 + (n % 50));
     let span = tracer
         .span_builder("localhost")
         .with_attributes(vec![
@@ -49,12 +44,13 @@ async fn mock_serve_http_request(n: u64) {
             KeyValue::new("service.name", "test-http-server"),
         ])
         .with_start_time(now)
-        .with_end_time(end_time)
         .with_kind(SpanKind::Server)
         .start(&tracer);
 
     let cx = Context::new().with_span(span);
-    mock_sql_call(n, duration - 5).with_context(cx).await;
+    mock_sql_call(n, duration.saturating_sub(Duration::from_millis(5)))
+        .with_context(cx)
+        .await;
 }
 
 // This example emulates the traces that a typical HTTP server with a SQL server dependency would generate.

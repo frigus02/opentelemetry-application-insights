@@ -106,32 +106,36 @@ fn traces() {
             let span = server_tracer.build_with_context(builder, &cx);
             {
                 let _server_guard = mark_span_as_active(span);
-                get_active_span(|span| {
-                    span.add_event(
-                        "An event!",
-                        vec![
-                            KeyValue::new("happened", true),
-                            // Emulate tracing level
-                            // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#531
-                            KeyValue::new("level", "WARN"),
-                        ],
-                    );
-                    span.add_event(
-                        "ai.custom",
-                        vec![
-                            KeyValue::new(ai::CUSTOM_EVENT_NAME, "A custom event!"),
-                            KeyValue::new("happened", true),
-                        ],
-                    );
-                    let error: Box<dyn std::error::Error> = "An error".into();
-                    span.record_error(error.as_ref());
-                    let async_op_builder = server_tracer
-                        .span_builder("async operation")
-                        .with_links(vec![Link::new(span.span_context().clone(), Vec::new(), 0)]);
-                    let async_op_context = Context::new();
-                    let _span =
-                        server_tracer.build_with_context(async_op_builder, &async_op_context);
-                });
+                // TODO: Use get_active_span once
+                // https://github.com/open-telemetry/opentelemetry-rust/issues/3510 has been fixed.
+                // Just to exercise that API as well.
+                let cx = Context::current();
+                let span = cx.span();
+                //get_active_span(|span| {
+                span.add_event(
+                    "An event!",
+                    vec![
+                        KeyValue::new("happened", true),
+                        // Emulate tracing level
+                        // https://docs.rs/tracing-core/0.1.30/src/tracing_core/metadata.rs.html#531
+                        KeyValue::new("level", "WARN"),
+                    ],
+                );
+                span.add_event(
+                    "ai.custom",
+                    vec![
+                        KeyValue::new(ai::CUSTOM_EVENT_NAME, "A custom event!"),
+                        KeyValue::new("happened", true),
+                    ],
+                );
+                let error: Box<dyn std::error::Error> = "An error".into();
+                span.record_error(error.as_ref());
+                let async_op_builder = server_tracer
+                    .span_builder("async operation")
+                    .with_links(vec![Link::new(span.span_context().clone(), Vec::new(), 0)]);
+                let async_op_context = Context::new();
+                let _span = server_tracer.build_with_context(async_op_builder, &async_op_context);
+                //});
             }
 
             // Force the server span to be sent before the client span. Without this on Jan's PC
@@ -298,16 +302,16 @@ async fn live_metrics() {
                 .span_builder("live-metrics")
                 .with_kind(SpanKind::Server)
                 .start(&tracer);
-            let _span = tracer
+            let mut span = tracer
                 .span_builder("live-metrics")
                 .with_kind(SpanKind::Server)
-                .with_status(Status::error(""))
                 .start(&tracer);
+            span.set_status(Status::error(""));
             let mut span = tracer
                 .span_builder("live-metrics")
                 .with_kind(SpanKind::Client)
-                .with_status(Status::error(""))
                 .start(&tracer);
+            span.set_status(Status::error(""));
             let error: Box<dyn std::error::Error> = "An error".into();
             span.record_error(error.as_ref());
         }

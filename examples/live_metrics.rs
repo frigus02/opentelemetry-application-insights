@@ -24,14 +24,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let mut rng = rng();
     loop {
         let success = rng.random_ratio(9, 10);
-        let _request = tracer
+        let mut request = tracer
             .span_builder("request")
             .with_kind(SpanKind::Server)
-            .with_status(if success {
-                Status::Ok
-            } else {
-                Status::error("")
-            })
             .with_attributes(vec![
                 KeyValue::new(semcov::trace::HTTP_REQUEST_METHOD, "GET"),
                 KeyValue::new(semcov::trace::URL_SCHEME, "https"),
@@ -44,18 +39,22 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             let mut db = tracer
                 .span_builder("db")
                 .with_kind(SpanKind::Client)
-                .with_status(if success {
-                    Status::Ok
-                } else {
-                    Status::error("")
-                })
                 .start(&tracer);
-            if !success {
+            if success {
+                db.set_status(Status::Ok);
+            } else {
                 let err: Box<dyn std::error::Error> = "An error".into();
                 db.record_error(err.as_ref());
+                db.set_status(Status::error(""));
             }
 
             tokio::time::sleep(Duration::from_millis(5)).await;
+
+            request.set_status(if success {
+                Status::Ok
+            } else {
+                Status::error("")
+            });
         }
 
         tokio::time::sleep(Duration::from_millis(100)).await;
