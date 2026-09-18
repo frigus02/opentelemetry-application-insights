@@ -3,7 +3,7 @@ name = "opentelemetry-application-insights"
 version = "0.45.0"
 authors = ["Jan Kuehle <jkuehle90@gmail.com>"]
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.95.0"
 resolver = "2"
 description = "OpenTelemetry exporter for Azure Application Insights"
 readme = "README.md"
@@ -55,7 +55,7 @@ opentelemetry_sdk = "0.33"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_repr = "0.1"
-sysinfo = { version = "0.36", optional = true }
+sysinfo = { version = "0.39", optional = true }
 thiserror = "2"
 tracing = { version = ">=0.1.40", default-features = false, optional = true }
 
@@ -67,7 +67,7 @@ log = { version = "0.4", features = ["kv", "kv_sval"] }
 opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "rt-tokio-current-thread", "experimental_trace_batch_span_processor_with_async_runtime"] }
 opentelemetry-http = { version = "0.33", features = ["reqwest", "reqwest-blocking"] }
 opentelemetry-appender-log = { version = "0.33", features = ["with-serde"] }
-rand = "0.9"
+rand = "0.10"
 regex = "1.10.5"
 reqwest = { version = "0.13.1", features = ["blocking"] }
 test-case = "3.3.1"

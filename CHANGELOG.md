@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Upgrade `opentelemetry` dependencies to `v0.33`.
   - Since the attribute `rpc.system` got deprecated, the new `rpc.system.name` can be used in its place. The deprecated attribute continues to work, too.
+- Upgrade `sysinfo` to `0.39`.
+- Bump MSRV to 1.95 to supported the latest `sysinfo`.
 
 ## [0.45.0] - 2026-05-09
 
