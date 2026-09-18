@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+- Upgrade `opentelemetry` dependencies to `v0.33`.
+  - Since the attribute `rpc.system` got deprecated, the new `rpc.system.name` can be used in its place. The deprecated attribute continues to work, too.
+
 ## [0.45.0] - 2026-05-09
 
 - Upgrade `opentelemetry` dependencies to `v0.32`.

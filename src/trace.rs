@@ -435,7 +435,12 @@ impl<'a> From<SpanAndResource<'a>> for RemoteDependencyData {
             data.type_ = Some(db_system.into());
         } else if let Some(&messaging_system) = attrs.get(semcov::attribute::MESSAGING_SYSTEM) {
             data.type_ = Some(messaging_system.into());
-        } else if let Some(&rpc_system) = attrs.get(semcov::trace::RPC_SYSTEM) {
+        } else if let Some(&rpc_system) = attrs.get(semcov::trace::RPC_SYSTEM_NAME).or_else(|| {
+            attrs.get(
+                #[allow(deprecated)]
+                semcov::trace::RPC_SYSTEM,
+            )
+        }) {
             data.type_ = Some(rpc_system.into());
         } else if let Some(ref properties) = data.properties {
             if properties.keys().any(|x| x.as_ref().starts_with("http.")) {

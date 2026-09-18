@@ -239,7 +239,7 @@ async fn main() {
 //! | `http.response.status_code`                                                | Dependency Result code                                   |
 //! | `db.system.name`                                                           | Dependency Type                                          |
 //! | `messaging.system`                                                         | Dependency Type                                          |
-//! | `rpc.system`                                                               | Dependency Type                                          |
+//! | `rpc.system.name`                                                          | Dependency Type                                          |
 //! | `"HTTP"` if any `http.` attribute exists                                   | Dependency Type                                          |
 //! | `"DB"` if any `db.` attribute exists                                       | Dependency Type                                          |
 //! | `url.full`                                                                 | Request Url                                              |
@@ -282,6 +282,7 @@ async fn main() {
 //! | `server.port`               | `net.peer.port`         (for client spans) |
 //! | `server.address`            | `net.host.name`         (for server spans) |
 //! | `server.port`               | `net.host.port`         (for server spans) |
+//! | `rpc.system.name`           | `rpc.system`                               |
 //!
 //! ## Events
 //!
