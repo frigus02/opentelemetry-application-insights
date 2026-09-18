@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-18
+
 - Upgrade `opentelemetry` dependencies to `v0.33`.
   - Since the attribute `rpc.system` got deprecated, the new `rpc.system.name` can be used in its place. The deprecated attribute continues to work, too.
 - Upgrade `sysinfo` to `0.39`.
@@ -346,7 +348,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - First release.
 
-[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.45.0...HEAD
+[unreleased]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.46.0...HEAD
+[0.46.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.45.0...0.46.0
 [0.45.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.44.0...0.45.0
 [0.44.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.43.0...0.44.0
 [0.43.0]: https://github.com/frigus02/opentelemetry-application-insights/compare/0.42.0...0.43.0
