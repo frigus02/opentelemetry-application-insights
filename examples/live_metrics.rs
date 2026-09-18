@@ -3,7 +3,7 @@ use opentelemetry::{
     KeyValue,
 };
 use opentelemetry_semantic_conventions as semcov;
-use rand::{rng, Rng};
+use rand::{rng, RngExt as _};
 use std::{error::Error, time::Duration};
 
 #[tokio::main]

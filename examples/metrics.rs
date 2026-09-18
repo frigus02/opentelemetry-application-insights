@@ -1,6 +1,6 @@
 use opentelemetry::{global, KeyValue};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
-use rand::{rng, Rng};
+use rand::{rng, RngExt as _};
 use std::{error::Error, time::Duration};
 
 fn main() -> Result<(), Box<dyn Error>> {
